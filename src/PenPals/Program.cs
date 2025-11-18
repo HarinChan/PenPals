@@ -1,8 +1,10 @@
 using Microsoft.UI.Xaml;
+using System;
+using System.Threading;
 
 namespace PenPals
 {
-    public partial class Program
+    public class Program
     {
         [STAThread]
         static void Main(string[] args)
