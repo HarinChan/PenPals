@@ -56,10 +56,37 @@
             "wait-on": "^9.0.3"
       },
       "main": "main.js",
+      "description": "sample descriptoin edit please.",
+      "author": "Harin Chan, Parm, i forgot",
       "scripts": {
             "dev": "vite",
             "start": "electron .",
             "build": "vite build && electron-builder",
             "dev:start": "concurrently \"npm run dev -- --host\" \"wait-on http://localhost:3000 && npm start\""
+      },
+      "build": {
+            "appId": "com.yourapp.id",
+            "productName": "YourAppName",
+            "files": [
+                  "dist/**/*",
+                  "main.js"
+            ],
+            "directories": {
+                  "output": "build"
+            },
+            "mac": {
+                  "category": "public.app-category.utility",
+                  "target": "dmg"
+            },
+            "win": {
+                  "target": [
+                        "nsis"
+                  ]
+            },
+            "linux": {
+                  "target": [
+                        "AppImage"
+                  ]
+            }
       }
 }
