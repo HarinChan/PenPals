@@ -1,8 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "wXsA+AAzW6I=",
+  "dgSpecHash": "LCjmePGCBsU=",
   "success": true,
-  "projectFilePath": "C:\\Users\\asus\\Documents\\GitHub\\PenPals\\PenPals.csproj",
-  "expectedPackageFiles": [],
+  "projectFilePath": "/Users/philippbruhns/Documents/Year2/COMP0016_Systems_Engineering/PenPals/PenPals.csproj",
+  "expectedPackageFiles": [
+    "/Users/philippbruhns/.nuget/packages/microsoft.windows.sdk.buildtools/10.0.26100.1/microsoft.windows.sdk.buildtools.10.0.26100.1.nupkg.sha512",
+    "/Users/philippbruhns/.nuget/packages/microsoft.windowsappsdk/1.4.231008000/microsoft.windowsappsdk.1.4.231008000.nupkg.sha512"
+  ],
   "logs": []
 }
