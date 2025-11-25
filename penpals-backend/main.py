@@ -1,16 +1,57 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+import uuid
 
-app = Flask(__name__)
+application = Flask(__name__)
+CORS(application)
 
-@app.route('/api/data', methods=['GET'])
-def get_data():
-    sample_data = {"message": "Hello from Flask!"}
-    return jsonify(sample_data)
+# In memory databases
+USERS = {}
+CLIQUES = {}
+MESSAGES = []
 
-@app.route('/api/data', methods=['POST'])
-def post_data():
+
+@application.route('/api/users', methods=['POST'])
+def create_user():
     data = request.json
-    return jsonify({"received_data": data}), 201
+    user_id = str(uuid.uuid4())
+    USERS[user_id] = {"id": user_id, "name": data.get("name")}
+    return jsonify(USERS[user_id]), 201
+
+
+@application.route('/api/cliques', methods=['POST'])
+def create_clique():
+    data = request.json
+    clique_id = str(uuid.uuid4())
+    CLIQUES[clique_id] = {"id": clique_id, "name": data.get("name")}
+    return jsonify(CLIQUES[clique_id]), 201
+
+
+@application.route('/api/messages', methods=['POST'])
+def send_message():
+    data = request.json
+    msg = {
+        "id": str(uuid.uuid4()),
+        "senderId": data["senderId"],
+        "cliqueId": data["cliqueId"],
+        "text": data["text"],
+    }
+    MESSAGES.append(msg)
+    return jsonify(msg), 201
+
+@application.route('/api/messages', methods=['GET'])
+def get_messages():
+    return jsonify(MESSAGES), 200
+
+@application.route('/api/users', methods=['GET'])
+def get_users():
+    return jsonify(list(USERS.values())), 200
+
+@application.route('/api/cliques', methods=['GET'])
+def get_cliques():
+    return jsonify(list(CLIQUES.values())), 200
+
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    application.run(host='0.0.0.0', port=5001)
