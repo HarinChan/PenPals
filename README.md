@@ -29,7 +29,7 @@
   ## Dev Device Preparation Instruction (Windows)
   1. Download [Rust](https://rustup.rs/) if you haven't already.
   2. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
-  3. Download `Visual Studio Community 2026` via `Visual Studido Installer`, making sure to include 
+  3. Download `Visual Studio Community 2026` via `Visual Studido Installer`, making sure to include `Desktop Development with C++` in installation.
   3. run `cd penpals-frontend`- `npm i`
 
   
