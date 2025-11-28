@@ -26,24 +26,29 @@
       },
   ```
 
-  ## Preparation Instruction
+  ## Dev Device Preparation Instruction (Windows)
   1. Download [Rust](https://rustup.rs/) if you haven't already.
   2. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
+  3. Download `Visual Studio Community 2026` via `Visual Studido Installer`, making sure to include 
   3. run `cd penpals-frontend`- `npm i`
 
   
 
   When in doubt
-  - run in `penpals-frontend\src-tauri`:
+  - run in `\penpals-frontend\src-tauri`:
     - `cargo clean`
     - `cargo build`
   
   ## Build and Run
 
-  `npx tauri dev`
-  `npx tauri build`
+  Dev: `npx tauri dev`
 
-  Currently Relies on port `http://localhost:3000`. Please keep this port free during development. Will have to make it so it'll find and use free ports. Do not finalize this change until figma frontend is finalized.
+  Build: `npx tauri build`
+
+  Build bundles:
+  - `\penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi`
+  - `\penpals-frontend\src-tauri\target\release\bundle\nsis\penpals-frontend_0.1.0_x64-setup.exe`
+
 
 # Backend Notes
   Relies on `http://localhost:5173`, need to prorga to find free ports themseleves as well
