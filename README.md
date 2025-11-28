@@ -28,62 +28,20 @@
 
   ## Preparation Instruction
   1. Download [Rust](https://rustup.rs/) if you haven't already.
-  2. run `cd penpals-frontend`
-  3. run `npm i`
-  4. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
+  2. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
+  3. run `cd penpals-frontend`- `npm i`
 
   
 
-  `npx tauri dev`
-  `npx tauri build`
+  When in doubt
+  - run in `penpals-frontend\src-tauri`:
+    - `cargo clean`
+    - `cargo build`
   
   ## Build and Run
 
-  To run, type:
-  `npm run dev:start`
-
-
-  to build: BELOW IS OUTDATED
-
-  then `npm install electron-builder --save-dev`
-
-  Add to `package.json`
-  ``` json
-    "build": {
-      "appId": "com.yourapp.id",
-      "productName": "YourAppName",
-      "files": [
-        "dist/**/*",
-        "main.js"
-      ],
-      "directory": "build",
-      "mac": {
-        "category": "public.app-category.utility"
-      },
-      "win": {
-        "target": [
-          "nsis"
-        ]
-      },
-      "linux": {
-        "target": [
-          "AppImage"
-        ]
-      }
-    },
-    "devDependencies": {
-      "electron": "^<latest-version>",
-      "electron-builder": "^<latest-version>"
-    }
-  ```
-
-  To build, execute this command with admin privil `npm run build`.
-  Currently built image is, bleh.
-  distrubtion methods:
-  - build/win-unpacked -> zip it up for distribution
-  - build/App Name Setup.exe -> just that is enough for set up
-
-  does it currently work? no not really bleh.
+  `npx tauri dev`
+  `npx tauri build`
 
   Currently Relies on port `http://localhost:3000`. Please keep this port free during development. Will have to make it so it'll find and use free ports. Do not finalize this change until figma frontend is finalized.
 
