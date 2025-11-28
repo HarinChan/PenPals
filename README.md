@@ -30,6 +30,12 @@
   1. Download [Rust](https://rustup.rs/) if you haven't already.
   2. run `cd penpals-frontend`
   3. run `npm i`
+  4. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
+
+  
+
+  `npx tauri dev`
+  `npx tauri build`
   
   ## Build and Run
 
