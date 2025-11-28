@@ -1,18 +1,46 @@
 # Frontend Notes
 
-  How to turn figma-export into electron vite project:
+  ## Figma Conversion
+
+  How to turn figma-export into electron vite project: (outdated, as we using tauri now)
   - https://poe.com/s/qf77IosIZIAZfqx9eKoI
   - https://poe.com/s/ZPTF7P5ov7KswFbrVOA4
   
-  first go to dir:
-  `cd penpals-frontend`
+  How to turn figma-export into tauri project:
+  1. Download Rust if you haven't already.
+  2. Run `npm install -D @tauri-apps/cli`
+  3. Run `npx tauri init`
+
+
+
+  `package.json` notes
+  ```json
+  "main": "main.js",
+      "description": "sample descriptoin edit please.",
+      "author": "Harin Chan, Parm, i forgot",
+      "scripts": {
+            "dev": "vite",
+            "start": "electron .",
+            "build": "vite build && electron-builder",
+            "dev:start": "concurrently \"npm run dev -- --host\" \"wait-on http://localhost:3000 && npm start\""
+      },
+  ```
+
+  ## Preparation Instruction
+  1. Download [Rust](https://rustup.rs/) if you haven't already.
+  2. run `cd penpals-frontend`
+  3. run `npm i`
+  
+  ## Build and Run
 
   To run, type:
   `npm run dev:start`
-  install dependencies if needed via `npm install` / `npm i`
 
-  ## build set up
+
+  to build: BELOW IS OUTDATED
+
   then `npm install electron-builder --save-dev`
+
   Add to `package.json`
   ``` json
     "build": {
