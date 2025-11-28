@@ -1,8 +1,11 @@
+import React from 'react';
 import { useState } from 'react';
 import MapView from './components/MapView';
 import SidePanel, { Account } from './components/SidePanel';
 import type { Classroom } from './components/MapView';
 import { GraduationCap } from 'lucide-react';
+import { createUser, createClique, sendMessage } from './api';
+
 
 const defaultAccount: Account = {
   id: 'account-1',
@@ -99,6 +102,12 @@ export default function App() {
     setCurrentAccountId(newAccount.id);
   };
 
+  const handleTest = async () => {
+    const user = await createUser("Parn");
+    console.log("Created user:", user);
+  };
+
+
   return (
     <div className="h-screen w-screen bg-slate-50 flex flex-col">
       {/* Header */}
@@ -116,6 +125,9 @@ export default function App() {
               {currentAccount.classroomName.charAt(0)}
             </div>
           </div>
+        </div>
+        <div>
+          <button onClick={handleTest}>Test API</button>
         </div>
       </header>
 
