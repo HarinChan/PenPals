@@ -1,7 +1,8 @@
 """ChromaDB vector storage"""
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import uuid
 import chromadb
+from chromadb.api.types import Metadata
 
 
 class ChromaDBService:
@@ -14,16 +15,16 @@ class ChromaDBService:
             persist_directory: Directory to persist ChromaDB data
             collection_name: Name of the collection to use
         """
-        self.client = chromadb.PersistentClient(path=persist_directory)
-        self.collection_name = collection_name
+        self.client: Any = chromadb.PersistentClient(path=persist_directory)
+        self.collection_name: str = collection_name
         # Get or create collection with default embedding function
-        self.collection = self.client.get_or_create_collection(
+        self.collection: Any = self.client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"}
         )
 
-    def add_documents(self, documents: List[str], metadatas: Optional[List[Dict]] = None,
-                      ids: Optional[List[str]] = None) -> Dict:
+    def add_documents(self, documents: List[str], metadatas: Optional[List[Metadata]] = None,
+                      ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Add documents to the ChromaDB collection
         
@@ -60,7 +61,7 @@ class ChromaDBService:
             }
 
     def query_documents(self, query_text: str, n_results: int = 5,
-                        where: Optional[Dict] = None) -> Dict:
+                        where: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Query the ChromaDB collection for similar documents
         
@@ -74,7 +75,7 @@ class ChromaDBService:
         """
         try:
             # Query the collection (ChromaDB will generate query embedding automatically)
-            results = self.collection.query(
+            results: Any = self.collection.query(
                 query_texts=[query_text],
                 n_results=n_results,
                 where=where,
@@ -102,7 +103,7 @@ class ChromaDBService:
                 "message": str(e)
             }
 
-    def delete_documents(self, ids: List[str]) -> Dict:
+    def delete_documents(self, ids: List[str]) -> Dict[str, Any]:
         """
         Delete documents from the collection
         
@@ -125,7 +126,7 @@ class ChromaDBService:
                 "message": str(e)
             }
 
-    def get_collection_info(self) -> Dict:
+    def get_collection_info(self) -> Dict[str, Any]:
         """
         Get information about the collection
         
@@ -146,7 +147,7 @@ class ChromaDBService:
             }
 
     def update_document(self, document_id: str, document: str,
-                        metadata: Optional[Dict] = None) -> Dict:
+                        metadata: Optional[Metadata] = None) -> Dict[str, Any]:
         """
         Update an existing document
         
@@ -165,7 +166,8 @@ class ChromaDBService:
                 "documents": [document]
             }
             if metadata is not None:
-                update_kwargs["metadatas"] = [metadata]
+                # metadata is guarded by the if-check above, so it's non-None here
+                update_kwargs["metadatas"] = [metadata]  # type: ignore[assignment]
             self.collection.update(**update_kwargs)
             return {
                 "status": "success",
