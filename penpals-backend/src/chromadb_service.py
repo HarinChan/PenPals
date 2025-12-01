@@ -1,12 +1,11 @@
-import chromadb
-from chromadb.config import Settings
+"""ChromaDB vector storage"""
 from typing import List, Dict, Optional
 import uuid
+import chromadb
 
 
 class ChromaDBService:
     """Service for managing document embeddings with ChromaDB"""
-    
     def __init__(self, persist_directory: str = "./chroma_db", collection_name: str = "documents"):
         """
         Initialize ChromaDB client and collection
@@ -17,15 +16,14 @@ class ChromaDBService:
         """
         self.client = chromadb.PersistentClient(path=persist_directory)
         self.collection_name = collection_name
-        
         # Get or create collection with default embedding function
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"}
         )
-    
-    def add_documents(self, documents: List[str], metadatas: Optional[List[Dict]] = None, 
-                     ids: Optional[List[str]] = None) -> Dict:
+
+    def add_documents(self, documents: List[str], metadatas: Optional[List[Dict]] = None,
+                      ids: Optional[List[str]] = None) -> Dict:
         """
         Add documents to the ChromaDB collection
         
@@ -41,18 +39,15 @@ class ChromaDBService:
             # Generate IDs if not provided
             if ids is None:
                 ids = [str(uuid.uuid4()) for _ in documents]
-            
             # Prepare metadatas if not provided
             if metadatas is None:
                 metadatas = [{} for _ in documents]
-            
             # Add to collection (ChromaDB will generate embeddings automatically)
             self.collection.add(
                 documents=documents,
                 metadatas=metadatas,
                 ids=ids
             )
-            
             return {
                 "status": "success",
                 "message": f"Added {len(documents)} documents",
@@ -63,9 +58,9 @@ class ChromaDBService:
                 "status": "error",
                 "message": str(e)
             }
-    
-    def query_documents(self, query_text: str, n_results: int = 5, 
-                       where: Optional[Dict] = None) -> Dict:
+
+    def query_documents(self, query_text: str, n_results: int = 5,
+                        where: Optional[Dict] = None) -> Dict:
         """
         Query the ChromaDB collection for similar documents
         
@@ -85,7 +80,6 @@ class ChromaDBService:
                 where=where,
                 include=["documents", "metadatas", "distances"]
             )
-            
             # Format results
             formatted_results = []
             for i in range(len(results['ids'][0])):
@@ -96,7 +90,6 @@ class ChromaDBService:
                     "distance": results['distances'][0][i],
                     "similarity": 1 - results['distances'][0][i]  # Convert distance to similarity
                 })
-            
             return {
                 "status": "success",
                 "query": query_text,
@@ -108,7 +101,7 @@ class ChromaDBService:
                 "status": "error",
                 "message": str(e)
             }
-    
+
     def delete_documents(self, ids: List[str]) -> Dict:
         """
         Delete documents from the collection
@@ -131,7 +124,7 @@ class ChromaDBService:
                 "status": "error",
                 "message": str(e)
             }
-    
+
     def get_collection_info(self) -> Dict:
         """
         Get information about the collection
@@ -151,9 +144,9 @@ class ChromaDBService:
                 "status": "error",
                 "message": str(e)
             }
-    
-    def update_document(self, document_id: str, document: str, 
-                       metadata: Optional[Dict] = None) -> Dict:
+
+    def update_document(self, document_id: str, document: str,
+                        metadata: Optional[Dict] = None) -> Dict:
         """
         Update an existing document
         
@@ -171,12 +164,9 @@ class ChromaDBService:
                 "ids": [document_id],
                 "documents": [document]
             }
-            
             if metadata is not None:
                 update_kwargs["metadatas"] = [metadata]
-            
             self.collection.update(**update_kwargs)
-            
             return {
                 "status": "success",
                 "message": f"Updated document {document_id}",
