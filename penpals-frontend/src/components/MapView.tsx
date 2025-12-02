@@ -4,6 +4,7 @@ import TimezoneClock from './TimezoneClock';
 import type { Account } from './SidePanel';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { geoMercator } from 'd3-geo';
+import { useTheme } from './ThemeProvider';
 
 export interface Classroom {
   id: string;
@@ -43,6 +44,7 @@ interface MapViewProps {
 export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
   const [hoveredClassroom, setHoveredClassroom] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const { theme } = useTheme();
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
   const schedule = (myClassroom as any).schedule ?? {};
@@ -99,13 +101,17 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     .scale(PROJ_SCALE);
 
   return (
-    <div className="relative w-full h-full bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 rounded-lg overflow-hidden border border-slate-200">
+    <div className={`relative w-full h-full rounded-lg overflow-hidden border ${
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700'
+        : 'bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 border-slate-200'
+    }`}>
       {/* Grid overlay */}
       <div className="absolute inset-0 opacity-20">
         <svg width="100%" height="100%">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="0.5" />
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke={theme === 'dark' ? '#475569' : '#94a3b8'} strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
@@ -116,13 +122,21 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-50">
         <button
           onClick={() => setZoom((z) => Math.min(z + 0.5, 8))}
-          className="px-2 py-1 bg-white shadow rounded hover:bg-slate-100 border"
+          className={`px-2 py-1 rounded border transition-colors ${
+            theme === 'dark'
+              ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
+              : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
+          } shadow`}
         >
           +
         </button>
         <button
           onClick={() => setZoom((z) => Math.max(z - 0.5, 1))}
-          className="px-2 py-1 bg-white shadow rounded hover:bg-slate-100 border"
+          className={`px-2 py-1 rounded border transition-colors ${
+            theme === 'dark'
+              ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
+              : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
+          } shadow`}
         >
           –
         </button>
@@ -145,7 +159,12 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
               {({ geographies }) => (
                 <>
                   {geographies.map((geo) => (
-                    <Geography key={geo.rsmKey} geography={geo} fill="#e6eef8" stroke="#cbd5e1" />
+                    <Geography 
+                      key={geo.rsmKey} 
+                      geography={geo} 
+                      fill={theme === 'dark' ? '#1e293b' : '#e6eef8'}
+                      stroke={theme === 'dark' ? '#475569' : '#cbd5e1'}
+                    />
                   ))}
                 </>
               )}
@@ -223,32 +242,40 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
       {/* Classroom count badge */}
       <div className="absolute top-6 left-6">
-        <Badge variant="secondary" className="bg-slate-900/80 backdrop-blur-sm text-slate-200 border-slate-700">
+        <Badge variant="secondary" className={`backdrop-blur-sm border ${
+          theme === 'dark'
+            ? 'bg-slate-900/80 text-slate-200 border-slate-700'
+            : 'bg-slate-900/80 text-slate-200 border-slate-700'
+        }`}>
           {classrooms.length} Classrooms Available
         </Badge>
       </div>
 
       {/* Compact Legend*/}
-      <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs z-10 shadow-lg">
+      <div className={`absolute bottom-4 left-4 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-10 shadow-lg border ${
+        theme === 'dark'
+          ? 'bg-slate-800/95 border-slate-700'
+          : 'bg-white/95 border-slate-300'
+      }`}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
-            <div className = "w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
-            <span className = "text-slate-700 dark:text-slate-300">Perfect</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
+            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Perfect</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className = "w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
-            <span className = "text-slate-700 dark:text-slate-300">Good</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
+            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Good</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className = "w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
-            <span className = "text-slate-700 dark:text-slate-300">Partial</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
+            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Partial</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className = "w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
-            <span className = "text-slate-700 dark:text-slate-300">You</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
+            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>You</span>
           </div>
         </div>
       </div>
