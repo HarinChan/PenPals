@@ -23,6 +23,11 @@ class MinIOService:
 
     def _create_client(self):
         try:
+            # Ensure required environment variables are present (type-checkers will understand these asserts)
+            assert self.endpoint is not None, "MINIO_ENDPOINT environment variable is not set"
+            assert self.access_key is not None, "MINIO_ACCESS_KEY environment variable is not set"
+            assert self.secret_key is not None, "MINIO_SECRET_KEY environment variable is not set"
+
             client = Minio(
                 self.endpoint,
                 access_key=self.access_key,
@@ -31,7 +36,11 @@ class MinIOService:
                 http_client=None
             )
             return client
+        except AssertionError as ae:
+            print(f"Configuration error creating MinIO client: {ae}")
+            return None
         except Exception as e:
+            print(f"Unexpected error creating MinIO client: {e}")
             return None
     
     def make_bucket(self, bucket_name: str) -> bool:
@@ -50,6 +59,7 @@ class MinIOService:
             return False
         except Exception as e:
             print(f"Unexpected error {e}")
+            return False
 
     def upload_file(self, bucket_name: str, object_name: str, file_path: str, content_type: str = "application/octet-stream"):
         """Uploads a local file to MinIO."""
