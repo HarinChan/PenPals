@@ -103,6 +103,8 @@ export interface Account {
   sentFriendRequests?: FriendRequest[];
   receivedFriendRequests?: FriendRequest[];
   notifications?: Notification[];
+  lat: number;
+  lon: number;
 }
 
 interface SidePanelProps {

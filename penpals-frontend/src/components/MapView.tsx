@@ -22,7 +22,7 @@ export interface Classroom {
 const classrooms: Classroom[] = [
   { id: '1', name: "Lee's Classroom", location: 'New York, USA', lon: -74.0060, lat: 40.7128, interests: ['Math', 'Biology', 'Rock Climbing'], availability: { Mon: [9,10,11,14,15], Tue: [9,10,11], Wed: [14,15,16], Thu: [9,10,11], Fri: [14,15] } },
   { id: '2', name: 'Math Lover House', location: 'Los Angeles, USA', lon: -118.2437, lat: 34.0522, interests: ['Math', 'Physics', 'Chess'], availability: { Mon: [10,11,12,13], Tue: [10,11,12], Wed: [15,16,17], Thu: [10,11], Fri: [14,15,16] } },
-  { id: '3', name: 'The Book Nook', location: 'London, UK', lon: -0.1278, lat: 51.5074, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9,10,11], Tue: [14,15,16], Wed: [9,10,11], Thu: [14,15,16], Fri: [9,10] } },
+  { id: '3', name: 'The Book Nook', location: 'Bangkok, Thailand', lon: 100.518, lat: 13.7563, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9,10,11], Tue: [14,15,16], Wed: [9,10,11], Thu: [14,15,16], Fri: [9,10] } },
   { id: '4', name: "Marie's Language Lab", location: 'Paris, France', lon: 2.3522, lat: 48.8566, interests: ['French', 'Spanish', 'Mandarin'], availability: { Mon: [8,9,10], Tue: [8,9,10,11], Wed: [14,15], Thu: [8,9,10], Fri: [14,15,16] } },
   { id: '5', name: 'Sakura Study Space', location: 'Tokyo, Japan', lon: 139.6917, lat: 35.6895, interests: ['Japanese', 'Anime', 'Calligraphy', 'Math'], availability: { Mon: [13,14,15], Tue: [13,14,15,16], Wed: [13,14], Thu: [14,15,16], Fri: [13,14,15] } },
   { id: '6', name: 'Outback Learning Hub', location: 'Sydney, Australia', lon: 151.2093, lat: -33.8688, interests: ['Biology', 'Geography', 'Surfing'], availability: { Mon: [7,8,9], Tue: [7,8,9,10], Wed: [16,17,18], Thu: [7,8,9], Fri: [16,17,18] } },
@@ -84,8 +84,8 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
   };
 
   // make sure Account has lon/lat fields
-  const myLon = myClassroom.lon ?? 0;
-  const myLat = myClassroom.lat ?? 0;
+  const myLon = myClassroom.lon ?? -0.1273;
+  const myLat = myClassroom.lat ?? 51.2507;
 
   // compute a safe display name for the "You" marker
   const myDisplayName = (myClassroom as any).classroomName ?? (myClassroom as any).name ?? 'You';
