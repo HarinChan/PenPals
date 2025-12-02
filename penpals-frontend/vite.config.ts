@@ -20,6 +20,7 @@
         'embla-carousel-react@8.6.0': 'embla-carousel-react',
         'cmdk@1.1.1': 'cmdk',
         'class-variance-authority@0.7.1': 'class-variance-authority',
+        '@radix-ui/react-visually-hidden@1.1.1': '@radix-ui/react-visually-hidden',
         '@radix-ui/react-tooltip@1.1.8': '@radix-ui/react-tooltip',
         '@radix-ui/react-toggle@1.1.2': '@radix-ui/react-toggle',
         '@radix-ui/react-toggle-group@1.1.2': '@radix-ui/react-toggle-group',

@@ -80,15 +80,15 @@ export default function TimezoneClock() {
   };
 
   return (
-    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg px-4 py-3 shadow-lg">
+    <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 shadow-lg">
       <div className="flex items-center gap-3">
-        <Clock className="text-blue-600" size={18} />
+        <Clock className="text-blue-600 dark:text-blue-400" size={18} />
         
         <div className="flex flex-col">
-          <div className="text-slate-900 text-xl tabular-nums">
+          <div className="text-slate-900 dark:text-slate-100 text-xl tabular-nums">
             {formatTime()}
           </div>
-          <div className="text-slate-600 text-xs flex items-center gap-2">
+          <div className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-2">
             <span>{formatDate()}</span>
             <span>•</span>
             <span>{getTimezoneAbbr()}</span>
@@ -98,15 +98,15 @@ export default function TimezoneClock() {
         {isEditing ? (
           <div className="flex items-center gap-2">
             <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger className="w-[180px] bg-white border-slate-300 text-slate-900 h-8 text-xs">
+              <SelectTrigger className="w-[180px] bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-white border-slate-300 max-h-[300px]">
+              <SelectContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 max-h-[300px]">
                 {TIMEZONES.map((tz) => (
                   <SelectItem
                     key={tz.value}
                     value={tz.value}
-                    className="text-slate-900 text-xs"
+                    className="text-slate-900 dark:text-slate-100 text-xs"
                   >
                     {tz.label}
                   </SelectItem>
@@ -115,7 +115,7 @@ export default function TimezoneClock() {
             </Select>
             <button
               onClick={() => setIsEditing(false)}
-              className="p-1 text-green-600 hover:text-green-700 transition-colors"
+              className="p-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
             >
               <Check size={16} />
             </button>
@@ -123,7 +123,7 @@ export default function TimezoneClock() {
         ) : (
           <button
             onClick={() => setIsEditing(true)}
-            className="p-1 text-slate-600 hover:text-slate-700 transition-colors"
+            className="p-1 text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
           >
             <Edit2 size={14} />
           </button>

@@ -17,7 +17,7 @@ interface ClassroomDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mySchedule: { [day: string]: number[] };
-  isFriend?: boolean;
+  friendshipStatus?: 'none' | 'pending' | 'accepted';
   onToggleFriend?: (classroom: Classroom) => void;
 }
 
@@ -30,7 +30,7 @@ export default function ClassroomDetailDialog({
   open,
   onOpenChange,
   mySchedule,
-  isFriend = false,
+  friendshipStatus = 'none',
   onToggleFriend,
 }: ClassroomDetailDialogProps) {
   const [showScheduleCall, setShowScheduleCall] = useState(false);
@@ -78,10 +78,10 @@ export default function ClassroomDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-white border-slate-200 text-slate-900">
+      <DialogContent className="max-w-2xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-slate-900">{classroom.name}</DialogTitle>
-          <DialogDescription className="text-slate-600">
+          <DialogTitle className="text-2xl text-slate-900 dark:text-slate-100">{classroom.name}</DialogTitle>
+          <DialogDescription className="text-slate-600 dark:text-slate-400">
             Connect with this classroom to learn together
           </DialogDescription>
         </DialogHeader>
@@ -90,12 +90,12 @@ export default function ClassroomDetailDialog({
           <div className="space-y-6 pr-4">
             {/* Basic Info */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-slate-700">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <MapPin size={16} />
                 <span>{classroom.location}</span>
               </div>
               {classroom.size && (
-                <div className="flex items-center gap-2 text-slate-700">
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <Users size={16} />
                   <span>{classroom.size} students</span>
                 </div>
@@ -105,17 +105,17 @@ export default function ClassroomDetailDialog({
             {/* Description */}
             {classroom.description && (
               <div className="space-y-2">
-                <h3 className="text-slate-900">About</h3>
-                <p className="text-slate-700 text-sm">{classroom.description}</p>
+                <h3 className="text-slate-900 dark:text-slate-100">About</h3>
+                <p className="text-slate-700 dark:text-slate-300 text-sm">{classroom.description}</p>
               </div>
             )}
 
             {/* Interests */}
             <div className="space-y-2">
-              <h3 className="text-slate-900">Interests & Subjects</h3>
+              <h3 className="text-slate-900 dark:text-slate-100">Interests & Subjects</h3>
               <div className="flex flex-wrap gap-2">
                 {classroom.interests.map((interest) => (
-                  <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
+                  <Badge key={interest} variant="secondary" className="bg-blue-600 dark:bg-blue-700 text-white">
                     {interest}
                   </Badge>
                 ))}
@@ -124,18 +124,18 @@ export default function ClassroomDetailDialog({
 
             {/* Schedule */}
             <div className="space-y-2">
-              <h3 className="text-slate-900 flex items-center gap-2">
+              <h3 className="text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Calendar size={16} />
                 Availability Schedule
               </h3>
-              <div className="bg-slate-50 rounded-lg p-4 space-y-2 border border-slate-200">
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 space-y-2 border border-slate-200 dark:border-slate-600">
                 {DAYS.map((day) => {
                   const hours = classroom.availability[day] || [];
                   if (hours.length === 0) return null;
                   return (
                     <div key={day} className="flex gap-2 text-sm">
-                      <span className="text-slate-600 w-12">{day}:</span>
-                      <span className="text-slate-900">
+                      <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
+                      <span className="text-slate-900 dark:text-slate-100">
                         {hours[0]}:00 - {hours[hours.length - 1] + 1}:00
                       </span>
                     </div>
@@ -146,13 +146,13 @@ export default function ClassroomDetailDialog({
 
             {/* Schedule Call Interface */}
             {showScheduleCall && (
-              <div className="space-y-4 bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <h3 className="text-slate-900">Schedule a Call</h3>
+              <div className="space-y-4 bg-slate-50 dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                <h3 className="text-slate-900 dark:text-slate-100">Schedule a Call</h3>
                 
                 {daysWithCommonAvailability.length > 0 ? (
                   <>
                     <div className="space-y-2">
-                      <label className="text-sm text-slate-700">Select Day</label>
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Select Day</label>
                       <div className="flex gap-2 flex-wrap">
                         {daysWithCommonAvailability.map((day) => (
                           <button
@@ -163,8 +163,8 @@ export default function ClassroomDetailDialog({
                             }}
                             className={`px-3 py-1 rounded ${
                               selectedDay === day
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+                                ? 'bg-blue-600 dark:bg-blue-700 text-white'
+                                : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
                             }`}
                           >
                             {day}
@@ -175,7 +175,7 @@ export default function ClassroomDetailDialog({
 
                     {selectedDay && (
                       <div className="space-y-2">
-                        <label className="text-sm text-slate-700">
+                        <label className="text-sm text-slate-700 dark:text-slate-300">
                           Select Time (1-12 hours, both available)
                         </label>
                         <div className="grid grid-cols-8 gap-1">
@@ -185,8 +185,8 @@ export default function ClassroomDetailDialog({
                               onClick={() => toggleHour(hour)}
                               className={`p-2 text-xs rounded ${
                                 selectedHours.includes(hour)
-                                  ? 'bg-green-600 text-white'
-                                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
+                                  ? 'bg-green-600 dark:bg-green-700 text-white'
+                                  : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
                               }`}
                             >
                               {hour}:00
@@ -194,7 +194,7 @@ export default function ClassroomDetailDialog({
                           ))}
                         </div>
                         {selectedHours.length > 0 && (
-                          <p className="text-xs text-slate-600">
+                          <p className="text-xs text-slate-600 dark:text-slate-400">
                             Selected: {selectedHours.length} hour(s) - {selectedHours[0]}:00 to {selectedHours[selectedHours.length - 1] + 1}:00
                           </p>
                         )}
@@ -205,7 +205,7 @@ export default function ClassroomDetailDialog({
                       <Button
                         onClick={confirmScheduleCall}
                         disabled={selectedHours.length === 0 || selectedHours.length > 12}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
                       >
                         <Clock size={16} className="mr-2" />
                         Confirm Schedule
@@ -216,14 +216,14 @@ export default function ClassroomDetailDialog({
                           setSelectedHours([]);
                         }}
                         variant="outline"
-                        className="border-slate-300 text-slate-700"
+                        className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                       >
                         Cancel
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-slate-600 text-sm">
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">
                     No common availability found. Please adjust your schedule or interests.
                   </p>
                 )}
@@ -234,20 +234,30 @@ export default function ClassroomDetailDialog({
 
         {/* Action Buttons */}
         {!showScheduleCall && (
-          <div className="flex gap-3 pt-4 border-t border-slate-200">
+          <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
             {onToggleFriend && (
               <Button
                 onClick={() => onToggleFriend(classroom)}
                 variant="outline"
-                className={`border-slate-300 ${isFriend ? 'text-pink-600 border-pink-500' : 'text-slate-700'}`}
+                className={`border-slate-300 ${
+                  friendshipStatus === 'accepted' 
+                    ? 'text-pink-600 border-pink-500 dark:text-pink-400 dark:border-pink-400' 
+                    : friendshipStatus === 'pending'
+                    ? 'text-yellow-600 border-yellow-500 dark:text-yellow-400 dark:border-yellow-400'
+                    : 'text-slate-700 dark:text-slate-300'
+                }`}
               >
-                <Heart size={16} className="mr-2" fill={isFriend ? 'currentColor' : 'none'} />
-                {isFriend ? 'Unfriend' : 'Add Friend'}
+                <Heart size={16} className="mr-2" fill={friendshipStatus === 'accepted' ? 'currentColor' : 'none'} />
+                {friendshipStatus === 'accepted' 
+                  ? 'Unfriend' 
+                  : friendshipStatus === 'pending'
+                  ? 'Cancel Request'
+                  : 'Send Friend Request'}
               </Button>
             )}
             <Button
               onClick={handleScheduleCall}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
             >
               <Calendar size={16} className="mr-2" />
               Schedule Call
