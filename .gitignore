@@ -6,3 +6,4 @@ node_modules
 .venv
 chroma_db
 __pycache__
+.env
