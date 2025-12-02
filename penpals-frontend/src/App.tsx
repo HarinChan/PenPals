@@ -141,7 +141,7 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
     const newPost: Post = {
       id: `post-${Date.now()}`,
       authorId: currentAccountId,
@@ -153,8 +153,32 @@ function AppContent() {
       comments: 0,
       quotedPost,
     };
-    setPosts([newPost, ...posts]);
-    toast.success('Post created successfully!');
+    
+    // Upload to ChromaDB for search functionality
+    try {
+      const { uploadPostToChromaDB } = await import('./services/chromadb');
+      const result = await uploadPostToChromaDB(newPost.id, content, {
+        postId: newPost.id,
+        authorId: newPost.authorId,
+        authorName: newPost.authorName,
+        timestamp: newPost.timestamp.toISOString(),
+        likes: newPost.likes,
+        comments: newPost.comments,
+        imageUrl: newPost.imageUrl,
+      });
+      
+      if (result.status === 'success') {
+        // Only add post to local state if backend upload succeeds
+        setPosts([newPost, ...posts]);
+        toast.success('Post created and indexed successfully!');
+      } else {
+        toast.error('Failed to create post. Backend error: ' + result.message);
+        console.warn('ChromaDB indexing failed:', result.message);
+      }
+    } catch (error) {
+      toast.error('Failed to create post. Cannot connect to backend server.');
+      console.error('Error uploading to ChromaDB:', error);
+    }
   };
 
   const handleLikePost = (postId: string) => {
