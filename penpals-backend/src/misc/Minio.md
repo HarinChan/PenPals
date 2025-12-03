@@ -15,3 +15,8 @@ docker run -p 9000:9000 -p 9001:9001 \
   -e "MINIO_ROOT_PASSWORD=your_password" \
   minio/minio server /data --console-address ":9001"
 ``` 
+
+---
+API calls should go to localhost:9001
+
+There also is a WebUI to inspect the database available at [http://localhost:9000](http://localhost:9000)
