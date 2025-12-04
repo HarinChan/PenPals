@@ -21,18 +21,18 @@ export interface Classroom {
 }
 
 const classrooms: Classroom[] = [
-  { id: '1', name: "Lee's Classroom", location: 'New York, USA', lon: -74.0060, lat: 40.7128, interests: ['Math', 'Biology', 'Rock Climbing'], availability: { Mon: [9,10,11,14,15], Tue: [9,10,11], Wed: [14,15,16], Thu: [9,10,11], Fri: [14,15] } },
-  { id: '2', name: 'Math Lover House', location: 'Los Angeles, USA', lon: -118.2437, lat: 34.0522, interests: ['Math', 'Physics', 'Chess'], availability: { Mon: [10,11,12,13], Tue: [10,11,12], Wed: [15,16,17], Thu: [10,11], Fri: [14,15,16] } },
-  { id: '3', name: 'The Book Nook', location: 'Bangkok, Thailand', lon: 100.518, lat: 13.7563, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9,10,11], Tue: [14,15,16], Wed: [9,10,11], Thu: [14,15,16], Fri: [9,10] } },
-  { id: '4', name: "Marie's Language Lab", location: 'Paris, France', lon: 2.3522, lat: 48.8566, interests: ['French', 'Spanish', 'Mandarin'], availability: { Mon: [8,9,10], Tue: [8,9,10,11], Wed: [14,15], Thu: [8,9,10], Fri: [14,15,16] } },
-  { id: '5', name: 'Sakura Study Space', location: 'Tokyo, Japan', lon: 139.6917, lat: 35.6895, interests: ['Japanese', 'Anime', 'Calligraphy', 'Math'], availability: { Mon: [13,14,15], Tue: [13,14,15,16], Wed: [13,14], Thu: [14,15,16], Fri: [13,14,15] } },
-  { id: '6', name: 'Outback Learning Hub', location: 'Sydney, Australia', lon: 151.2093, lat: -33.8688, interests: ['Biology', 'Geography', 'Surfing'], availability: { Mon: [7,8,9], Tue: [7,8,9,10], Wed: [16,17,18], Thu: [7,8,9], Fri: [16,17,18] } },
-  { id: '7', name: 'TechHub Singapore', location: 'Singapore', lon: 103.8198, lat: 1.3521, interests: ['Computer Science', 'Robotics', 'Math'], availability: { Mon: [10,11,12,13], Tue: [10,11,12], Wed: [14,15,16], Thu: [10,11,12], Fri: [14,15] } },
-  { id: '8', name: "Priya's Practice Room", location: 'Mumbai, India', lon: 72.8777, lat: 19.0760, interests: ['Hindi', 'Music', 'Dance', 'Math'], availability: { Mon: [15,16,17], Tue: [15,16,17], Wed: [9,10,11], Thu: [15,16,17], Fri: [9,10,11] } },
-  { id: '9', name: 'Samba Study Circle', location: 'São Paulo, Brazil', lon: -46.6333, lat: -23.5505, interests: ['Portuguese', 'Music', 'Dance', 'Biology'], availability: { Mon: [11,12,13], Tue: [11,12,13,14], Wed: [16,17,18], Thu: [11,12,13], Fri: [16,17] } },
-  { id: '10', name: 'Alpine Academic Circle', location: 'Frankfurt, Germany', lon: 8.6821, lat: 50.1109, interests: ['German', 'Chemistry', 'Physics', 'Hiking'], availability: { Mon: [8,9,10,11], Tue: [14,15,16], Wed: [8,9,10], Thu: [14,15,16], Fri: [8,9,10] } },
-  { id: '11', name: 'The Knit & Wit', location: 'Stockholm, Sweden', lon: 18.0686, lat: 59.3293, interests: ['Knitting', 'Crafts', 'Design', 'Swedish'], availability: { Mon: [13,14,15], Tue: [9,10,11], Wed: [13,14,15], Thu: [9,10,11], Fri: [13,14,15] } },
-  { id: '12', name: 'Seoul Study Station', location: 'Seoul, South Korea', lon: 126.9780, lat: 37.5665, interests: ['Korean', 'K-Pop', 'Art', 'Math'], availability: { Mon: [16,17,18], Tue: [10,11,12], Wed: [16,17,18], Thu: [10,11,12], Fri: [16,17] } },
+  { id: '1', name: "Lee's Classroom", location: 'New York, USA', lon: -74.0060, lat: 40.7128, interests: ['Math', 'Biology', 'Rock Climbing'], availability: { Mon: [9, 10, 11, 14, 15], Tue: [9, 10, 11], Wed: [14, 15, 16], Thu: [9, 10, 11], Fri: [14, 15] } },
+  { id: '2', name: 'Math Lover House', location: 'Los Angeles, USA', lon: -118.2437, lat: 34.0522, interests: ['Math', 'Physics', 'Chess'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [15, 16, 17], Thu: [10, 11], Fri: [14, 15, 16] } },
+  { id: '3', name: 'The Book Nook', location: 'Bangkok, Thailand', lon: 100.518, lat: 13.7563, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9, 10, 11], Tue: [14, 15, 16], Wed: [9, 10, 11], Thu: [14, 15, 16], Fri: [9, 10] } },
+  { id: '4', name: "Marie's Language Lab", location: 'Paris, France', lon: 2.3522, lat: 48.8566, interests: ['French', 'Spanish', 'Mandarin'], availability: { Mon: [8, 9, 10], Tue: [8, 9, 10, 11], Wed: [14, 15], Thu: [8, 9, 10], Fri: [14, 15, 16] } },
+  { id: '5', name: 'Sakura Study Space', location: 'Tokyo, Japan', lon: 139.6917, lat: 35.6895, interests: ['Japanese', 'Anime', 'Calligraphy', 'Math'], availability: { Mon: [13, 14, 15], Tue: [13, 14, 15, 16], Wed: [13, 14], Thu: [14, 15, 16], Fri: [13, 14, 15] } },
+  { id: '6', name: 'Outback Learning Hub', location: 'Sydney, Australia', lon: 151.2093, lat: -33.8688, interests: ['Biology', 'Geography', 'Surfing'], availability: { Mon: [7, 8, 9], Tue: [7, 8, 9, 10], Wed: [16, 17, 18], Thu: [7, 8, 9], Fri: [16, 17, 18] } },
+  { id: '7', name: 'TechHub Singapore', location: 'Singapore', lon: 103.8198, lat: 1.3521, interests: ['Computer Science', 'Robotics', 'Math'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [14, 15, 16], Thu: [10, 11, 12], Fri: [14, 15] } },
+  { id: '8', name: "Priya's Practice Room", location: 'Mumbai, India', lon: 72.8777, lat: 19.0760, interests: ['Hindi', 'Music', 'Dance', 'Math'], availability: { Mon: [15, 16, 17], Tue: [15, 16, 17], Wed: [9, 10, 11], Thu: [15, 16, 17], Fri: [9, 10, 11] } },
+  { id: '9', name: 'Samba Study Circle', location: 'São Paulo, Brazil', lon: -46.6333, lat: -23.5505, interests: ['Portuguese', 'Music', 'Dance', 'Biology'], availability: { Mon: [11, 12, 13], Tue: [11, 12, 13, 14], Wed: [16, 17, 18], Thu: [11, 12, 13], Fri: [16, 17] } },
+  { id: '10', name: 'Alpine Academic Circle', location: 'Frankfurt, Germany', lon: 8.6821, lat: 50.1109, interests: ['German', 'Chemistry', 'Physics', 'Hiking'], availability: { Mon: [8, 9, 10, 11], Tue: [14, 15, 16], Wed: [8, 9, 10], Thu: [14, 15, 16], Fri: [8, 9, 10] } },
+  { id: '11', name: 'The Knit & Wit', location: 'Stockholm, Sweden', lon: 18.0686, lat: 59.3293, interests: ['Knitting', 'Crafts', 'Design', 'Swedish'], availability: { Mon: [13, 14, 15], Tue: [9, 10, 11], Wed: [13, 14, 15], Thu: [9, 10, 11], Fri: [13, 14, 15] } },
+  { id: '12', name: 'Seoul Study Station', location: 'Seoul, South Korea', lon: 126.9780, lat: 37.5665, interests: ['Korean', 'K-Pop', 'Art', 'Math'], availability: { Mon: [16, 17, 18], Tue: [10, 11, 12], Wed: [16, 17, 18], Thu: [10, 11, 12], Fri: [16, 17] } },
 ];
 
 interface MapViewProps {
@@ -72,11 +72,11 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     // green for perfect matches
     if (scheduleMatches && interestMatchRatio === 1) {
       return '#10b981';
-    } 
+    }
     // yellow for good schedule/partial interest matches
     else if (scheduleMatches && interestMatchRatio > 0) {
       return '#eab308';
-    } 
+    }
     // red for partial interest/no schedule matches
     else if (!scheduleMatches && interestMatchRatio > 0) {
       return '#ef4444';
@@ -101,11 +101,10 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     .scale(PROJ_SCALE);
 
   return (
-    <div className={`relative w-full h-full rounded-lg overflow-hidden border ${
-      theme === 'dark'
-        ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700'
-        : 'bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 border-slate-200'
-    }`}>
+    <div className={`relative w-full h-full rounded-lg overflow-hidden border ${theme === 'dark'
+      ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700'
+      : 'bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 border-slate-200'
+      }`}>
       {/* Grid overlay */}
       <div className="absolute inset-0 opacity-20">
         <svg width="100%" height="100%">
@@ -117,33 +116,31 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
-      
+
       {/* Zoom Controls */}
       <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-50">
         <button
           onClick={() => setZoom((z) => Math.min(z + 0.5, 8))}
-          className={`px-2 py-1 rounded border transition-colors ${
-            theme === 'dark'
-              ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
-              : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
-          } shadow`}
+          className={`px-2 py-1 rounded border transition-colors ${theme === 'dark'
+            ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
+            : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
+            } shadow`}
         >
           +
         </button>
         <button
           onClick={() => setZoom((z) => Math.max(z - 0.5, 1))}
-          className={`px-2 py-1 rounded border transition-colors ${
-            theme === 'dark'
-              ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
-              : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
-          } shadow`}
+          className={`px-2 py-1 rounded border transition-colors ${theme === 'dark'
+            ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
+            : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
+            } shadow`}
         >
           –
         </button>
       </div>
 
       {/* World map with classroom markers using react-simple-maps */}
-      <div className="absolute inset-0"> 
+      <div className="absolute inset-0">
         <ComposableMap
           projectionConfig={{ scale: PROJ_SCALE }}
           width={MAP_WIDTH}
@@ -159,52 +156,28 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
               {({ geographies }) => (
                 <>
                   {geographies.map((geo) => (
-                    <Geography 
-                      key={geo.rsmKey} 
-                      geography={geo} 
+                    <Geography
+                      key={geo.rsmKey}
+                      geography={geo}
                       fill={theme === 'dark' ? '#1e293b' : '#e6eef8'}
                       stroke={theme === 'dark' ? '#475569' : '#cbd5e1'}
+                      strokeWidth={0.5 / zoom}
                     />
                   ))}
                 </>
               )}
             </Geographies>
 
-            {/* Draw connection line in projected screen coordinates if selection exists */}
-            {selectedClassroom && (() => {
-              try {
-                const selLon = selectedClassroom.lon;
-                const selLat = selectedClassroom.lat;
-                const p1 = projection([myLon, myLat]);
-                const p2 = projection([selLon, selLat]);
-                if (p1 && p2) {
-                  return (
-                    <line
-                      x1={p1[0]}
-                      y1={p1[1]}
-                      x2={p2[0]}
-                      y2={p2[1]}
-                      stroke="#3b82f6"
-                      strokeWidth={1}
-                      opacity={0.6}
-                      strokeDasharray="4 2"
-                    />
-                  );
-                }
-              } catch (e) {
-                // projection might fail in some server-side render contexts; fail gracefully
-              }
-              return null;
-            })()}
+
 
             {/* My classroom marker */}
             {(() => {
               return (
                 <Marker key={myClassroom.id || 'me'} coordinates={[myLon, myLat]}>
                   <g>
-                    <circle r={8} fill="#a855f7" opacity={0.18} className="animate-ping" />
-                    <circle r={4} fill="#a855f7" style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
-                    <text x={10} y={4} fontSize={10} fill="#a855f7" className="pointer-events-none">
+                    <circle r={8 / zoom} fill="#a855f7" opacity={0.18} className="animate-ping" />
+                    <circle r={4 / zoom} fill="#a855f7" style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
+                    <text x={10 / zoom} y={4 / zoom} fontSize={10 / zoom} fill="#a855f7" className="pointer-events-none">
                       {myDisplayName} (You)
                     </text>
                   </g>
@@ -217,6 +190,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
               const isSelected = selectedClassroom?.id === classroom.id;
               const isHovered = hoveredClassroom === classroom.id;
               const nodeColor = calculateRelevancy(classroom);
+              const baseRadius = isSelected ? 4.5 : isHovered ? 3.5 : 2.8;
               return (
                 <Marker key={classroom.id} coordinates={[classroom.lon, classroom.lat]}>
                   <g
@@ -225,10 +199,10 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
                     onClick={() => onClassroomSelect(classroom)}
                     className="cursor-pointer"
                   >
-                    {isSelected && <circle r={8} fill="#3b82f6" opacity={0.18} className="animate-ping" />}
-                    <circle r={isSelected ? 4.5 : isHovered ? 3.5 : 2.8} fill={isSelected ? '#3b82f6' : nodeColor} style={{ filter: isSelected || isHovered ? 'drop-shadow(0 0 6px currentColor)' : 'none' }} />
+                    {isSelected && <circle r={8 / zoom} fill="#3b82f6" opacity={0.18} className="animate-ping" />}
+                    <circle r={baseRadius / zoom} fill={isSelected ? '#3b82f6' : nodeColor} style={{ filter: isSelected || isHovered ? 'drop-shadow(0 0 6px currentColor)' : 'none' }} />
                     {(isHovered || isSelected) && (
-                      <text x={8} y={4} fontSize={10} fill="white" className="pointer-events-none" style={{ background: '#0f172a' }}>
+                      <text x={8 / zoom} y={4 / zoom} fontSize={10 / zoom} fill="white" className="pointer-events-none" style={{ background: '#0f172a' }}>
                         {classroom.name}
                       </text>
                     )}
@@ -242,21 +216,19 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
       {/* Classroom count badge */}
       <div className="absolute top-6 left-6">
-        <Badge variant="secondary" className={`backdrop-blur-sm border ${
-          theme === 'dark'
-            ? 'bg-slate-900/80 text-slate-200 border-slate-700'
-            : 'bg-slate-900/80 text-slate-200 border-slate-700'
-        }`}>
+        <Badge variant="secondary" className={`backdrop-blur-sm border ${theme === 'dark'
+          ? 'bg-slate-900/80 text-slate-200 border-slate-700'
+          : 'bg-slate-900/80 text-slate-200 border-slate-700'
+          }`}>
           {classrooms.length} Classrooms Available
         </Badge>
       </div>
 
       {/* Compact Legend*/}
-      <div className={`absolute bottom-4 left-4 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-10 shadow-lg border ${
-        theme === 'dark'
-          ? 'bg-slate-800/95 border-slate-700'
-          : 'bg-white/95 border-slate-300'
-      }`}>
+      <div className={`absolute bottom-4 left-4 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-10 shadow-lg border ${theme === 'dark'
+        ? 'bg-slate-800/95 border-slate-700'
+        : 'bg-white/95 border-slate-300'
+        }`}>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
