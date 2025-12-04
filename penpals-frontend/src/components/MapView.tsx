@@ -44,6 +44,7 @@ interface MapViewProps {
 export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
   const [hoveredClassroom, setHoveredClassroom] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [center, setCenter] = useState<[number, number]>([0, 0]);
   const { theme } = useTheme();
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
@@ -150,7 +151,11 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
           <ZoomableGroup
             zoom={zoom}
-            onMoveEnd={({ zoom: newZoom }) => setZoom(newZoom)}
+            center={center}
+            onMoveEnd={({ coordinates, zoom: newZoom }) => {
+              setZoom(newZoom);
+              setCenter(coordinates);
+            }}
           >
             <Geographies geography="https://unpkg.com/world-atlas@2/countries-110m.json">
               {({ geographies }) => (
