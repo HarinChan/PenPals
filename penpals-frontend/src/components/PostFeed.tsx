@@ -18,9 +18,10 @@ interface PostFeedProps {
   onLikePost?: (postId: string) => void;
   likedPosts?: Set<string>;
   onQuotePost?: (post: Post) => void;
+  onAuthorClick?: (authorId: string) => void;
 }
 
-export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }: PostFeedProps) {
+export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost, onAuthorClick }: PostFeedProps) {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
@@ -45,12 +46,12 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
 
   const copyPostContent = () => {
     if (!selectedPost) return;
-    
+
     let content = `${selectedPost.authorName}\n\n${selectedPost.content}`;
     if (selectedPost.imageUrl) {
       content += `\n\nImage: ${selectedPost.imageUrl}`;
     }
-    
+
     navigator.clipboard.writeText(content);
     toast.success('Post content copied to clipboard!');
     setShareDialogOpen(false);
@@ -58,7 +59,7 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
 
   const copyPostLink = () => {
     if (!selectedPost) return;
-    
+
     const link = `https://mirrormirror.app/post/${selectedPost.id}`;
     navigator.clipboard.writeText(link);
     toast.success('Post link copied to clipboard!');
@@ -78,11 +79,14 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
       <div className="space-y-4">
         {posts.map((post) => {
           const isLiked = likedPosts?.has(post.id) || false;
-          
+
           return (
             <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
+                <div
+                  className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => onAuthorClick?.(post.authorId)}
+                >
                   {post.authorName.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -95,7 +99,7 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                   <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words mb-3">
                     {post.content}
                   </p>
-                  
+
                   {/* Quoted Post Display */}
                   {post.quotedPost && (
                     <div className="mb-3 p-3 border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-700/50 rounded-r-lg">
@@ -116,7 +120,7 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                       )}
                     </div>
                   )}
-                  
+
                   {post.imageUrl && (
                     <div className="relative w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mb-3">
                       <ImageWithFallback
@@ -131,11 +135,10 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                       variant="ghost"
                       size="sm"
                       onClick={() => onLikePost?.(post.id)}
-                      className={`-ml-2 ${
-                        isLiked
+                      className={`-ml-2 ${isLiked
                           ? 'text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-600'
                           : 'text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400'
-                      }`}
+                        }`}
                     >
                       <Heart className={`w-4 h-4 mr-1 ${isLiked ? 'fill-current' : ''}`} />
                       {post.likes > 0 && <span>{post.likes}</span>}

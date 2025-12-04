@@ -13,6 +13,7 @@ interface FeedPanelProps {
   onCreatePost: (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
+  onAuthorClick?: (authorId: string) => void;
 }
 
 export default function FeedPanel({
@@ -23,13 +24,14 @@ export default function FeedPanel({
   onCreatePost,
   onLikePost,
   likedPosts,
+  onAuthorClick,
 }: FeedPanelProps) {
   const postCreatorRef = useRef<HTMLDivElement>(null);
 
   const handleQuotePost = (post: Post) => {
     // Scroll to post creator
     postCreatorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    
+
     // The quote will be added via the post link functionality in PostCreator
     // For now we just scroll to it - user can manually add the link
   };
@@ -37,8 +39,8 @@ export default function FeedPanel({
   return (
     <div className="space-y-4">
       <div ref={postCreatorRef}>
-        <PostCreator 
-          onCreatePost={onCreatePost} 
+        <PostCreator
+          onCreatePost={onCreatePost}
           authorName={currentUserName}
           allPosts={allPosts}
         />
@@ -59,20 +61,22 @@ export default function FeedPanel({
           </TabsList>
 
           <TabsContent value="all" className="p-4">
-            <PostFeed 
-              posts={allPosts} 
-              onLikePost={onLikePost} 
+            <PostFeed
+              posts={allPosts}
+              onLikePost={onLikePost}
               likedPosts={likedPosts}
               onQuotePost={handleQuotePost}
+              onAuthorClick={onAuthorClick}
             />
           </TabsContent>
 
           <TabsContent value="my" className="p-4">
-            <PostFeed 
-              posts={myPosts} 
-              onLikePost={onLikePost} 
+            <PostFeed
+              posts={myPosts}
+              onLikePost={onLikePost}
               likedPosts={likedPosts}
               onQuotePost={handleQuotePost}
+              onAuthorClick={onAuthorClick}
             />
           </TabsContent>
 
