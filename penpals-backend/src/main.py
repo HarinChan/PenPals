@@ -1,4 +1,3 @@
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -11,19 +10,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from models import db, Account, Profile, Relation, Post
+
+# Ensure models are registered with SQLAlchemy
+def print_tables():
+    with application.app_context():
+        print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
+
+
 from chromadb_service import ChromaDBService
 
 application = Flask(__name__)
 CORS(application)
+print_tables()
 
 # Configuration
 application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-# Database configuration
-application.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///penpals.db')
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
+# If using a relative SQLite URI, convert to absolute path
+if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
+    rel_path = db_uri.replace('sqlite:///', '', 1)
+    abs_path = os.path.abspath(rel_path)
+    db_uri = f'sqlite:///{abs_path}'
+application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+
+# Lists of capital letters, lowercase letters, and digits
+capital_letters = [chr(i) for i in range(ord('A'), ord('Z')+1)]
+lowercase_letters = [chr(i) for i in range(ord('a'), ord('z')+1)]
+digits = [str(i) for i in range(10)]
 
 # Initialize extensions
 db.init_app(application)
@@ -46,6 +64,19 @@ def register():
     
     if not email or not password or not name:
         return jsonify({"msg": "Missing required fields"}), 400
+    
+    # Password validation: at least 8 chars, one uppercase, one lowercase, one digit, one special char
+    has_upper = any(c in capital_letters for c in password)
+    has_lower = any(c in lowercase_letters for c in password)
+    has_digit = any(c in digits for c in password)
+    has_special = any(
+        c not in capital_letters and c not in lowercase_letters and c not in digits
+        for c in password
+    )
+    if not (len(password) >= 8 and has_upper and has_lower and has_digit and has_special):
+        return jsonify({
+            "msg": "Password must be at least 8 characters and include one uppercase, one lowercase, one digit, and one special character."
+        }), 400
     
     # Check if account exists
     if Account.query.filter_by(email=email).first():
@@ -89,7 +120,7 @@ def login():
         return jsonify({"msg": "Invalid credentials"}), 401
     
     # Create JWT token with account ID as identity
-    access_token = create_access_token(identity=account.id)
+    access_token = create_access_token(identity=str(account.id))
     
     return jsonify({
         "access_token": access_token,
@@ -125,6 +156,62 @@ def get_current_user():
             "interests": profile.interests
         } if profile else None
     }), 200
+
+@application.route('/api/profiles/get', methods=["GET"])
+def get_profile():
+    """Get profile by ID"""
+    data = request.json
+
+    id = data.get('id')
+
+    if not id:
+        return jsonify({"msg": "Profile not found"}), 404
+    
+    profile = Profile.query.filter_by(id=id).first()
+
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+    
+    return jsonify({
+        "id": profile.id,
+        "account_id": profile.account_id,
+        "name": profile.name,
+        "location": profile.location,
+        "lattitude": profile.lattitude,
+        "longitude": profile.longitude,
+        "class_size": profile.class_size,
+        "availability": profile.availability,
+        "interests": profile.interests
+    }), 200
+
+# Create a new profile from JSON
+@application.route('/api/profiles/create', methods=["POST"])
+def create_profile():
+    """Create a new profile from JSON"""
+    data = request.json
+
+    required_fields = ["account_id", "name"]
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"msg": f"Missing required field: {field}"}), 400
+
+    profile = Profile(
+        account_id=data.get("account_id"),
+        name=data.get("name"),
+        location=data.get("location"),
+        lattitude=data.get("lattitude"),
+        longitude=data.get("longitude"),
+        class_size=data.get("class_size"),
+        availability=data.get("availability"),
+        interests=data.get("interests")
+    )
+    db.session.add(profile)
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Profile created successfully",
+        "id": profile.id
+    }), 201
 
 
 # ChromaDB Document Endpoints
