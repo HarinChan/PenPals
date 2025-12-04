@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -323,6 +323,12 @@ export default function SidePanel({
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
   };
+
+  useEffect(() => {
+    if (selectedClassroom) {
+      handleClassroomClick(selectedClassroom);
+    }
+  }, [selectedClassroom]);
 
   const removeFriend = (friendId: string) => {
     const friend = (currentAccount.friends || []).find(f => f.id === friendId);
