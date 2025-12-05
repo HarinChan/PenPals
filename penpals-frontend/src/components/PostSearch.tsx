@@ -11,7 +11,7 @@ interface SearchResult {
   content: string;
   authorName: string;
   timestamp: string;
-  similarity: number;
+  similarity?: number | null;
   imageUrl?: string;
 }
 
@@ -38,7 +38,7 @@ export default function PostSearch() {
           content: result.document,
           authorName: result.metadata.authorName || 'Unknown',
           timestamp: result.metadata.timestamp || new Date().toISOString(),
-          similarity: result.similarity,
+          similarity: typeof result.similarity === 'number' ? result.similarity : null,
           imageUrl: result.metadata.imageUrl,
         }));
         setResults(searchResults);
@@ -69,7 +69,8 @@ export default function PostSearch() {
     }
   };
 
-  const getSimilarityColor = (similarity: number) => {
+  const getSimilarityColor = (similarity?: number | null) => {
+    if (typeof similarity !== 'number') return 'bg-gray-500';
     if (similarity >= 0.8) return 'bg-green-500';
     if (similarity >= 0.6) return 'bg-blue-500';
     if (similarity >= 0.4) return 'bg-yellow-500';
@@ -168,11 +169,15 @@ export default function PostSearch() {
                             </div>
                           </div>
                         </div>
-                        <Badge
-                          className={`${getSimilarityColor(result.similarity)} text-white text-xs shrink-0`}
-                        >
-                          {(result.similarity * 100).toFixed(0)}% match
-                        </Badge>
+                        {typeof result.similarity === 'number' ? (
+                          <Badge
+                            className={`${getSimilarityColor(result.similarity)} text-white text-xs shrink-0`}
+                          >
+                            {(result.similarity * 100).toFixed(0)}% match
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-slate-500 dark:text-slate-400">No similarity data</span>
+                        )}
                       </div>
                       <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
                         {result.content}

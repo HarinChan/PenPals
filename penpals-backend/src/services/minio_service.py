@@ -122,7 +122,21 @@ class MinIOService:
 
     def get_presigned_url(self, bucket_name: str, object_name: str, expiry_seconds: int = 3600) -> str | None:
         """Generate a presigned GET URL for an object if possible."""
-        if not self.client: 
+        if not self.client:
+            return None
+
+        try:
+            url = self.client.presigned_get_object(
+                bucket_name,
+                object_name,
+                expires=timedelta(seconds=expiry_seconds)
+            )
+            return url
+        except S3Error as err:
+            print(f"Error generating presigned URL for {bucket_name}/{object_name}: {err}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error generating presigned URL: {e}")
             return None
 
     def read_object_bytes(self, bucket_name: str, object_name: str) -> Optional[bytes]:

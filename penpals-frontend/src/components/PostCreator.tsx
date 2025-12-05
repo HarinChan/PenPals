@@ -5,6 +5,7 @@ import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ImagePlus, X, Quote } from 'lucide-react';
 import { Input } from './ui/input';
+import { useRef, useEffect } from 'react';
 
 export interface Post {
   id: string;
@@ -24,7 +25,7 @@ export interface Post {
 }
 
 interface PostCreatorProps {
-  onCreatePost: (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
+  onCreatePost: (content: string, file?: File | null, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
   authorName: string;
   allPosts?: Post[];
 }
@@ -32,6 +33,7 @@ interface PostCreatorProps {
 export default function PostCreator({ onCreatePost, authorName, allPosts = [] }: PostCreatorProps) {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [showImageInput, setShowImageInput] = useState(false);
   const [quoteLinkInput, setQuoteLinkInput] = useState('');
   const [quotedPost, setQuotedPost] = useState<Post['quotedPost'] | null>(null);
@@ -40,9 +42,10 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (content.trim()) {
-      onCreatePost(content, imageUrl || undefined, quotedPost || undefined);
+      onCreatePost(content, file || undefined, imageUrl || undefined, quotedPost || undefined);
       setContent('');
       setImageUrl('');
+      setFile(null);
       setQuoteLinkInput('');
       setQuotedPost(null);
       setShowImageInput(false);
@@ -69,7 +72,21 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
   const handleRemoveImage = () => {
     setImageUrl('');
     setShowImageInput(false);
+    if (file) {
+      URL.revokeObjectURL((file as any).__preview || '');
+      setFile(null);
+    }
   };
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (file) {
+        URL.revokeObjectURL((file as any).__preview || '');
+      }
+    };
+  }, [file]);
 
   return (
     <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
@@ -96,6 +113,19 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
                     onChange={(e) => setImageUrl(e.target.value)}
                     className="flex-1 bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                   />
+                  <input
+                    type="file"
+                    accept="image/*,video/*,application/pdf"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (f) {
+                        // attach preview url for cleanup
+                        (f as any).__preview = URL.createObjectURL(f);
+                      }
+                      setFile(f);
+                    }}
+                    className="ml-2"
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -106,13 +136,20 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
-                {imageUrl && (
+                {(imageUrl || file) && (
                   <div className="relative w-full h-48 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900">
-                    <ImageWithFallback
-                      src={imageUrl}
-                      alt="Post preview"
-                      className="w-full h-full object-cover"
-                    />
+                    {file ? (
+                      // preview local file
+                      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                      // @ts-ignore
+                      <img src={(file as any).__preview || URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageWithFallback
+                        src={imageUrl}
+                        alt="Post preview"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 )}
               </div>

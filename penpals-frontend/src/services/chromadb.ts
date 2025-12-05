@@ -1,6 +1,6 @@
 // API Service for ChromaDB operations
 
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'http://localhost:5001';
 
 export interface ChromaDBUploadResponse {
   status: 'success' | 'error';
@@ -75,22 +75,38 @@ export async function queryPostsFromChromaDB(
   nResults: number = 5
 ): Promise<ChromaDBQueryResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        n_results: nResults,
-      }),
+    // Backend exposes a /search endpoint that returns posts
+    const params = new URLSearchParams({ q: query, n: String(nResults) });
+    const response = await fetch(`${API_BASE_URL}/search?${params.toString()}`, {
+      method: 'GET',
     });
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return await response.json();
+    const json = await response.json();
+
+    // Map backend /search response to the previous chroma-like shape expected by UI
+    // Backend returns: { status: 'success', count, posts: [ { id, authorId, content, timestamp, imageUrl, media_url, media_mimetype } ] }
+    if (json.status !== 'success' || !Array.isArray(json.posts)) {
+      return { status: 'error', message: json.message || 'Invalid response' };
+    }
+
+    const results = json.posts.map((p: any) => ({
+      id: p.id,
+      document: p.content,
+      metadata: {
+        authorName: p.authorId || p.metadata?.authorName,
+        timestamp: p.timestamp,
+        imageUrl: p.imageUrl || p.media_url,
+      },
+      // If the backend included similarity/distance (future-proof), use it.
+      distance: typeof p.distance === 'number' ? p.distance : (typeof p.media_distance === 'number' ? p.media_distance : null),
+      similarity: typeof p.similarity === 'number' ? p.similarity : (typeof p.distance === 'number' ? 1 - p.distance : null),
+    }));
+
+    return { status: 'success', results, count: results.length };
   } catch (error) {
     console.error('Error querying ChromaDB:', error);
     return {

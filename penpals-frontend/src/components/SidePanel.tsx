@@ -117,7 +117,7 @@ interface SidePanelProps {
   // Feed props
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string) => void;
+  onCreatePost: (content: string, file?: File | null, imageUrl?: string) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
 }

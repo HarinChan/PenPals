@@ -141,7 +141,12 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (
+    content: string,
+    file?: File | null,
+    imageUrl?: string,
+    quotedPost?: Post['quotedPost']
+  ) => {
     const newPost: Post = {
       id: `post-${Date.now()}`,
       authorId: currentAccountId,
@@ -153,31 +158,47 @@ function AppContent() {
       comments: 0,
       quotedPost,
     };
-    
-    // Upload to ChromaDB for search functionality
+
+    const API_BASE = 'http://localhost:5001';
+
     try {
-      const { uploadPostToChromaDB } = await import('./services/chromadb');
-      const result = await uploadPostToChromaDB(newPost.id, content, {
-        postId: newPost.id,
-        authorId: newPost.authorId,
-        authorName: newPost.authorName,
-        timestamp: newPost.timestamp.toISOString(),
-        likes: newPost.likes,
-        comments: newPost.comments,
-        imageUrl: newPost.imageUrl,
+      const form = new FormData();
+      form.append('id', newPost.id);
+      form.append('authorId', newPost.authorId);
+      form.append('content', newPost.content);
+      if (imageUrl) form.append('imageUrl', imageUrl);
+      form.append('timestamp', newPost.timestamp.toISOString());
+      if (file) {
+        form.append('file', file, file.name);
+      }
+
+      const resp = await fetch(`${API_BASE}/posts`, {
+        method: 'POST',
+        body: form,
       });
-      
-      if (result.status === 'success') {
-        // Only add post to local state if backend upload succeeds
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: 'Unknown error' }));
+        toast.error('Failed to create post: ' + (err.message || resp.statusText));
+        console.error('Backend returned error creating post:', err);
+        return;
+      }
+
+      const json = await resp.json();
+
+      // backend returns media_url for uploaded attachment and media_mimetype
+      if (json.status === 'success') {
+        if (json.media_url) {
+          newPost.imageUrl = json.media_url;
+        }
         setPosts([newPost, ...posts]);
-        toast.success('Post created and indexed successfully!');
+        toast.success('Post created successfully');
       } else {
-        toast.error('Failed to create post. Backend error: ' + result.message);
-        console.warn('ChromaDB indexing failed:', result.message);
+        toast.error('Failed to create post: ' + (json.message || 'unknown'));
       }
     } catch (error) {
       toast.error('Failed to create post. Cannot connect to backend server.');
-      console.error('Error uploading to ChromaDB:', error);
+      console.error('Error creating post:', error);
     }
   };
 

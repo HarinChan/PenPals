@@ -2,7 +2,6 @@ from flask import Blueprint, jsonify, request
 from datetime import datetime, timezone
 from werkzeug.utils import secure_filename
 import uuid
-import json
 
 # Services will be injected from app context
 bp_posts = Blueprint('posts', __name__)
@@ -11,6 +10,7 @@ bp_posts = Blueprint('posts', __name__)
 def create_post():
     minio_service = request.environ['minio_service']
     chroma_service = request.environ['chroma_service']
+    post_service = request.environ['post_service']
     POSTS_BUCKET = request.environ.get('posts_bucket', 'posts')
 
     try:
@@ -20,26 +20,16 @@ def create_post():
             data = {
                 "id": form.get("id"),
                 "authorId": form.get("authorId"),
-                "authorName": form.get("authorName"),
                 "content": form.get("content"),
                 "imageUrl": form.get("imageUrl"),
                 "timestamp": form.get("timestamp"),
-                "likes": int(form.get("likes", 0)) if form.get("likes") else 0,
-                "comments": int(form.get("comments", 0)) if form.get("comments") else 0,
-                "quotedPost": None,
             }
-            quoted_post_raw = form.get("quotedPost")
-            if quoted_post_raw:
-                try:
-                    data["quotedPost"] = json.loads(quoted_post_raw)
-                except Exception:
-                    data["quotedPost"] = None
             upload_file = files.get('file')
         else:
             data = request.json or {}
             upload_file = None
 
-        missing = [k for k in ["authorId", "authorName", "content"] if not data.get(k)]
+        missing = [k for k in ["authorId", "content"] if not data.get(k)]
         if missing:
             return jsonify({"status": "error", "message": f"Missing required field(s): {', '.join(missing)}"}), 400
 
@@ -50,63 +40,56 @@ def create_post():
 
         attachment_url = None
         media_object_name = None
+        media_mimetype = None
+        
+        # Upload media file to MinIO if present
         if upload_file and upload_file.filename:
             filename = secure_filename(upload_file.filename)
             media_object_name = f"media/{post_id}/{filename}"
             file_bytes = upload_file.read()
-            if not minio_service.upload_bytes(POSTS_BUCKET, media_object_name, file_bytes, content_type=upload_file.mimetype or "application/octet-stream"):
-                return jsonify({"status": "error", "message": "Failed to upload attachment to object storage"}), 500
-            attachment_url = minio_service.get_presigned_url(POSTS_BUCKET, media_object_name)
             media_mimetype = upload_file.mimetype or "application/octet-stream"
-        else:
-            media_mimetype = None
+            
+            if not minio_service.upload_bytes(POSTS_BUCKET, media_object_name, file_bytes, content_type=media_mimetype):
+                return jsonify({"status": "error", "message": "Failed to upload attachment to object storage"}), 500
+            
+            attachment_url = minio_service.get_presigned_url(POSTS_BUCKET, media_object_name)
 
-        post = {
+        # Prepare post data for database
+        post_data = {
             "id": post_id,
             "authorId": data.get("authorId"),
-            "authorName": data.get("authorName"),
             "content": data.get("content"),
             "imageUrl": data.get("imageUrl") or (attachment_url if upload_file and (upload_file.mimetype or '').startswith('image/') else None),
-            "attachmentUrl": attachment_url if attachment_url else None,
             "timestamp": ts,
-            "likes": data.get("likes", 0),
-            "comments": data.get("comments", 0),
-            "quotedPost": data.get("quotedPost"),
             "media_object_name": media_object_name,
             "media_mimetype": media_mimetype
         }
 
-        ts_key = ts.replace(":", "-")
-        object_name = f"posts/{ts_key}-{post_id}.json"
-        ok = minio_service.upload_json(POSTS_BUCKET, object_name, post)
-        if not ok:
-            return jsonify({"status": "error", "message": "Failed to upload post to object storage"}), 500
+        # Save post metadata to database
+        post = post_service.create_post(post_data)
 
+        # Add to ChromaDB for search
         embed_meta = {
-            "bucket": POSTS_BUCKET,
-            "object_name": object_name,
-            "authorId": post["authorId"],
-            "authorName": post["authorName"],
-            "timestamp": ts,
+            "postId": post_id,
+            "authorId": post_data["authorId"],
         }
         if media_object_name:
             embed_meta["media_object_name"] = media_object_name
         if media_mimetype:
             embed_meta["media_mimetype"] = media_mimetype
 
-        embed_result = chroma_service.add_documents(documents=[post["content"]], metadatas=[embed_meta], ids=[post_id])
+        embed_result = chroma_service.add_documents(
+            documents=[post_data["content"]], 
+            metadatas=[embed_meta], 
+            ids=[post_id]
+        )
         if embed_result.get("status") != "success":
             return jsonify({"status": "error", "message": f"Embedding failed: {embed_result.get('message', 'unknown error')}"}), 500
 
-        presigned_url = minio_service.get_presigned_url(POSTS_BUCKET, object_name) or None
-
         return jsonify({
             "status": "success",
-            "message": "Post uploaded and embedded successfully",
+            "message": "Post created successfully",
             "id": post_id,
-            "bucket": POSTS_BUCKET,
-            "object_name": object_name,
-            "url": presigned_url,
             "media_object_name": media_object_name,
             "media_url": attachment_url,
             "media_mimetype": media_mimetype
@@ -118,44 +101,36 @@ def create_post():
 @bp_posts.route('/posts', methods=['GET'])
 def get_feed():
     minio_service = request.environ['minio_service']
+    post_service = request.environ['post_service']
     POSTS_BUCKET = request.environ.get('posts_bucket', 'posts')
 
     try:
         limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
         author_id = request.args.get('authorId')
 
-        names = minio_service.list_objects(POSTS_BUCKET, prefix='posts/', recursive=True)
-        names = [n for n in names if n.endswith('.json')]
-        names.sort(reverse=True)
+        # Get posts from database
+        posts = post_service.get_posts(limit=limit, author_id=author_id, offset=offset)
 
         feed = []
-        for name in names:
-            post = minio_service.get_object_json(POSTS_BUCKET, name)
-            if not post:
-                continue
-            if author_id and post.get('authorId') != author_id:
-                continue
-
-            url = minio_service.get_presigned_url(POSTS_BUCKET, name)
+        for post in posts:
+            post_dict = post.to_dict()
+            
+            # Generate presigned URL for media if it exists
             media_url = None
-            if post.get('media_object_name'):
-                media_url = minio_service.get_presigned_url(POSTS_BUCKET, post['media_object_name'])
+            if post.media_object_name:
+                media_url = minio_service.get_presigned_url(POSTS_BUCKET, post.media_object_name)
+                print(f"returned media url: {media_url}")
 
             feed.append({
-                "id": post.get("id"),
-                "authorId": post.get("authorId"),
-                "authorName": post.get("authorName"),
-                "content": post.get("content"),
-                "timestamp": post.get("timestamp"),
-                "likes": post.get("likes", 0),
-                "comments": post.get("comments", 0),
-                "url": url,
+                "id": post_dict["id"],
+                "authorId": post_dict["authorId"],
+                "content": post_dict["content"],
+                "timestamp": post_dict["timestamp"],
+                "imageUrl": post_dict["imageUrl"],
                 "media_url": media_url,
-                "media_mimetype": post.get("media_mimetype")
+                "media_mimetype": post_dict["media_mimetype"]
             })
-
-            if len(feed) >= limit:
-                break
 
         return jsonify({"status": "success", "count": len(feed), "posts": feed}), 200
     except Exception as e:

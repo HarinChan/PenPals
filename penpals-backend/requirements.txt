@@ -4,3 +4,4 @@ chromadb
 requests==2.31.0
 python-dotenv==1.0.0
 minio
+sqlalchemy>=2.0.35

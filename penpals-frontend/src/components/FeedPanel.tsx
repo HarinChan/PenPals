@@ -10,7 +10,7 @@ interface FeedPanelProps {
   currentUserId: string;
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
+  onCreatePost: (content: string, file?: File | null, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
 }

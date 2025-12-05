@@ -2,6 +2,7 @@ from flask import Flask, request
 from flask_cors import CORS
 from services.chromadb_service import ChromaDBService
 from services.minio_service import MinIOService
+from services.post_service import PostService
 from api.posts import bp_posts
 from api.search import bp_search
 
@@ -11,6 +12,7 @@ CORS(application)
 # Initialize services
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 minio_service = MinIOService()
+post_service = PostService()  # Uses SQLite by default: posts.db in backend root
 POSTS_BUCKET = "posts"
 
 # Inject services into request context for blueprints
@@ -18,6 +20,7 @@ POSTS_BUCKET = "posts"
 def inject_services():
     request.environ['chroma_service'] = chroma_service
     request.environ['minio_service'] = minio_service
+    request.environ['post_service'] = post_service
     request.environ['posts_bucket'] = POSTS_BUCKET
 
 # Register blueprints
