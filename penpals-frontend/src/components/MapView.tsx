@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
 import TimezoneClock from './TimezoneClock';
 import type { Account } from './SidePanel';
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
-import { geoMercator } from 'd3-geo';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useTheme } from './ThemeProvider';
+
+// Fix Leaflet's default icon path issues in Vite/Webpack
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+});
 
 export interface Classroom {
   id: string;
@@ -41,10 +50,16 @@ interface MapViewProps {
   myClassroom: Account;
 }
 
+// Component to handle map view updates when selectedClassroom changes
+function MapController({ center, zoom }: { center: [number, number], zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo(center, zoom, { duration: 1.5 });
+  }, [center, zoom, map]);
+  return null;
+}
+
 export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
-  const [hoveredClassroom, setHoveredClassroom] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [center, setCenter] = useState<[number, number]>([0, 0]);
   const { theme } = useTheme();
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
@@ -93,144 +108,106 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
   // compute a safe display name for the "You" marker
   const myDisplayName = (myClassroom as any).classroomName ?? (myClassroom as any).name ?? 'You';
 
-  // Projection settings used both for map rendering and drawing an SVG connection line.
-  const MAP_WIDTH = 800;
-  const MAP_HEIGHT = 450;
-  const PROJ_SCALE = 160;
-  const projection = geoMercator()
-    .translate([MAP_WIDTH / 2, MAP_HEIGHT / 2])
-    .scale(PROJ_SCALE);
+  const createMarkerIcon = (color: string, isSelected: boolean) => {
+    return L.divIcon({
+      className: 'bg-transparent',
+      html: `<div style="
+        background-color: ${color};
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 4px rgba(0,0,0,0.4);
+      "></div>`,
+      iconSize: isSelected ? [24, 24] : [16, 16],
+      iconAnchor: isSelected ? [12, 12] : [8, 8],
+    });
+  };
+
+  const myIcon = L.divIcon({
+    className: 'bg-transparent',
+    html: `<div style="
+       background-color: #a855f7;
+       width: 100%;
+       height: 100%;
+       border-radius: 50%;
+       border: 2px solid white;
+       box-shadow: 0 0 8px #a855f7;
+     "></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+
+  // Center map on selected classroom or user defaults
+  const mapCenter: [number, number] = selectedClassroom
+    ? [selectedClassroom.lat, selectedClassroom.lon]
+    : [myLat, myLon];
+
+  const mapZoom = selectedClassroom ? 13 : 2;
 
   return (
     <div className={`relative w-full h-full rounded-lg overflow-hidden border ${theme === 'dark'
-      ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-slate-700'
-      : 'bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 border-slate-200'
+      ? 'bg-slate-900 border-slate-700'
+      : 'bg-white border-slate-200'
       }`}>
-      {/* Grid overlay */}
-      <div className="absolute inset-0 opacity-20">
-        <svg width="100%" height="100%">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke={theme === 'dark' ? '#475569' : '#94a3b8'} strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
 
-      {/* Zoom Controls */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-50">
-        <button
-          onClick={() => setZoom((z) => Math.min(z + 0.5, 8))}
-          className={`px-2 py-1 rounded border transition-colors ${theme === 'dark'
-            ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
-            : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
-            } shadow`}
-        >
-          +
-        </button>
-        <button
-          onClick={() => setZoom((z) => Math.max(z - 0.5, 1))}
-          className={`px-2 py-1 rounded border transition-colors ${theme === 'dark'
-            ? 'bg-slate-800 border-slate-600 hover:bg-slate-700 text-slate-100'
-            : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-900'
-            } shadow`}
-        >
-          –
-        </button>
-      </div>
+      <MapContainer
+        center={[myLat, myLon]}
+        zoom={2}
+        style={{ height: '100%', width: '100%' }}
+        scrollWheelZoom={true}
+        className="z-0"
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url={theme === 'dark'
+            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
+        />
 
-      {/* World map with classroom markers using react-simple-maps */}
-      <div className="absolute inset-0">
-        <ComposableMap
-          projectionConfig={{ scale: PROJ_SCALE }}
-          width={MAP_WIDTH}
-          height={MAP_HEIGHT}
-          className="w-full h-full"
-        >
+        <MapController center={mapCenter} zoom={mapZoom} />
 
-          <ZoomableGroup
-            zoom={zoom}
-            center={center}
-            onMoveEnd={({ coordinates, zoom: newZoom }) => {
-              setZoom(newZoom);
-              setCenter(coordinates);
-            }}
-          >
-            <Geographies geography="https://unpkg.com/world-atlas@2/countries-110m.json">
-              {({ geographies }) => (
-                <>
-                  {geographies.map((geo) => (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill={theme === 'dark' ? '#1e293b' : '#e6eef8'}
-                      stroke={theme === 'dark' ? '#475569' : '#cbd5e1'}
-                      strokeWidth={0.5 / zoom}
-                    />
-                  ))}
-                </>
-              )}
-            </Geographies>
+        {/* My Marker */}
+        <Marker position={[myLat, myLon]} icon={myIcon}>
+          <Popup>
+            <strong>{myDisplayName}</strong> <br /> (You)
+          </Popup>
+        </Marker>
 
-
-
-            {/* My classroom marker */}
-            {(() => {
-              return (
-                <Marker key={myClassroom.id || 'me'} coordinates={[myLon, myLat]}>
-                  <g>
-                    <circle r={8 / zoom} fill="#a855f7" opacity={0.18} className="animate-ping" />
-                    <circle r={4 / zoom} fill="#a855f7" style={{ filter: 'drop-shadow(0 0 6px #a855f7)' }} />
-                    <text x={10 / zoom} y={4 / zoom} fontSize={10 / zoom} fill="#a855f7" className="pointer-events-none">
-                      {myDisplayName} (You)
-                    </text>
-                  </g>
-                </Marker>
-              );
-            })()}
-
-            {/* Other classroom markers */}
-            {classrooms.map((classroom) => {
-              const isSelected = selectedClassroom?.id === classroom.id;
-              const isHovered = hoveredClassroom === classroom.id;
-              const nodeColor = calculateRelevancy(classroom);
-              const baseRadius = isSelected ? 4.5 : isHovered ? 3.5 : 2.8;
-              return (
-                <Marker key={classroom.id} coordinates={[classroom.lon, classroom.lat]}>
-                  <g
-                    onMouseEnter={() => setHoveredClassroom(classroom.id)}
-                    onMouseLeave={() => setHoveredClassroom(null)}
-                    onClick={() => onClassroomSelect(classroom)}
-                    className="cursor-pointer"
-                  >
-                    {isSelected && <circle r={8 / zoom} fill="#3b82f6" opacity={0.18} className="animate-ping" />}
-                    <circle r={baseRadius / zoom} fill={isSelected ? '#3b82f6' : nodeColor} style={{ filter: isSelected || isHovered ? 'drop-shadow(0 0 6px currentColor)' : 'none' }} />
-                    {(isHovered || isSelected) && (
-                      <text x={8 / zoom} y={4 / zoom} fontSize={10 / zoom} fill="white" className="pointer-events-none" style={{ background: '#0f172a' }}>
-                        {classroom.name}
-                      </text>
-                    )}
-                  </g>
-                </Marker>
-              );
-            })}
-          </ZoomableGroup>
-        </ComposableMap>
-      </div>
+        {/* Classroom Markers */}
+        {classrooms.map((classroom) => {
+          const isSelected = selectedClassroom?.id === classroom.id;
+          const nodeColor = calculateRelevancy(classroom);
+          return (
+            <Marker
+              key={classroom.id}
+              position={[classroom.lat, classroom.lon]}
+              icon={createMarkerIcon(nodeColor, isSelected)}
+              eventHandlers={{
+                click: () => onClassroomSelect(classroom),
+              }}
+            >
+              <Popup>
+                <strong>{classroom.name}</strong><br />
+                {classroom.location}
+              </Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
 
       {/* Classroom count badge */}
-      <div className="absolute top-6 left-6">
-        <Badge variant="secondary" className={`backdrop-blur-sm border ${theme === 'dark'
+      <div className="absolute top-4 left-14 z-[1000]">
+        <Badge variant="secondary" className={`backdrop-blur-sm border shadow-lg ${theme === 'dark'
           ? 'bg-slate-900/80 text-slate-200 border-slate-700'
-          : 'bg-slate-900/80 text-slate-200 border-slate-700'
+          : 'bg-white/90 text-slate-900 border-slate-200'
           }`}>
           {classrooms.length} Classrooms Available
         </Badge>
       </div>
 
-      {/* Compact Legend*/}
-      <div className={`absolute bottom-4 left-4 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-10 shadow-lg border ${theme === 'dark'
+      {/* Legend */}
+      <div className={`absolute bottom-6 left-6 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-[1000] shadow-lg border ${theme === 'dark'
         ? 'bg-slate-800/95 border-slate-700'
         : 'bg-white/95 border-slate-300'
         }`}>
@@ -239,25 +216,24 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
             <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
             <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Perfect</span>
           </div>
-
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
             <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Good</span>
           </div>
-
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
             <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Partial</span>
           </div>
-
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
             <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>You</span>
           </div>
         </div>
       </div>
-      {/* Timezone Clock */}
-      <TimezoneClock />
+
+      <div className="absolute top-4 right-4 z-[1000]">
+        <TimezoneClock />
+      </div>
     </div>
   );
 }
