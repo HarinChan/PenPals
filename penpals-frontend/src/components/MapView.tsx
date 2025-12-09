@@ -146,7 +146,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
   const mapZoom = selectedClassroom ? 13 : 2;
 
   return (
-    <div className={`relative w-full h-full rounded-lg overflow-hidden border ${theme === 'dark'
+    <div className={`relative w-full h-full rounded-lg overflow-hidden border isolate ${theme === 'dark'
       ? 'bg-slate-900 border-slate-700'
       : 'bg-white border-slate-200'
       }`}>
@@ -154,7 +154,11 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       <MapContainer
         center={[myLat, myLon]}
         zoom={2}
-        style={{ height: '100%', width: '100%' }}
+        minZoom={2}
+        maxBounds={[[-90, -180], [90, 180]]}
+        maxBoundsViscosity={1.0}
+        zoomControl={false}
+        style={{ height: '100%', width: '100%', zIndex: 0 }}
         scrollWheelZoom={true}
         className="z-0"
       >
@@ -166,6 +170,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         />
 
         <MapController center={mapCenter} zoom={mapZoom} />
+
 
         {/* My Marker */}
         <Marker position={[myLat, myLon]} icon={myIcon}>
@@ -196,43 +201,48 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         })}
       </MapContainer>
 
-      {/* Classroom count badge */}
-      <div className="absolute top-4 left-14 z-[1000]">
-        <Badge variant="secondary" className={`backdrop-blur-sm border shadow-lg ${theme === 'dark'
-          ? 'bg-slate-900/80 text-slate-200 border-slate-700'
-          : 'bg-white/90 text-slate-900 border-slate-200'
-          }`}>
-          {classrooms.length} Classrooms Available
-        </Badge>
-      </div>
+      {/* Overlays Container - forced high z-index */}
+      <div className="absolute inset-0 pointer-events-none z-[1000]">
 
-      {/* Legend */}
-      <div className={`absolute bottom-6 left-6 backdrop-blur-sm rounded-lg px-3 py-2 text-xs z-[1000] shadow-lg border ${theme === 'dark'
-        ? 'bg-slate-800/95 border-slate-700'
-        : 'bg-white/95 border-slate-300'
-        }`}>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
-            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Perfect</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
-            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Good</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
-            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Partial</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
-            <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>You</span>
+        {/* Classroom count badge */}
+        <div className="absolute bottom-4 right-4 pointer-events-auto">
+          <Badge variant="secondary" className={`backdrop-blur-sm border shadow-lg ${theme === 'dark'
+            ? 'bg-slate-900/80 text-slate-200 border-slate-700'
+            : 'bg-white/90 text-slate-900 border-slate-200'
+            }`}>
+            {classrooms.length} Classrooms Available
+          </Badge>
+        </div>
+
+        {/* Legend */}
+        <div className={`absolute bottom-6 left-6 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg border pointer-events-auto ${theme === 'dark'
+          ? 'bg-slate-800/95 border-slate-700'
+          : 'bg-white/95 border-slate-300'
+          }`}>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Perfect</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Good</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Partial</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>You</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="absolute top-4 right-4 z-[1000]">
-        <TimezoneClock />
+        {/* Timezone Clock */}
+        <div className="absolute top-4 right-4 pointer-events-auto">
+          <TimezoneClock />
+        </div>
       </div>
     </div>
   );

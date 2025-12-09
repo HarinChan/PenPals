@@ -83,7 +83,7 @@ export default function TimezoneClock() {
     <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 shadow-lg">
       <div className="flex items-center gap-3">
         <Clock className="text-blue-600 dark:text-blue-400" size={18} />
-        
+
         <div className="flex flex-col">
           <div className="text-slate-900 dark:text-slate-100 text-xl tabular-nums">
             {formatTime()}

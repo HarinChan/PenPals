@@ -157,6 +157,44 @@ export default function SidePanel({
   const [friendsOpen, setFriendsOpen] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
 
+  // Resize logic
+  const [width, setWidth] = useState(384);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+
+      if (newWidth >= 256 && newWidth <= 800) {
+        setWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+    };
+  }, [isResizing]);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
   const [accountForm, setAccountForm] = useState({
     classroomName: currentAccount.classroomName,
     location: currentAccount.location,
@@ -426,8 +464,24 @@ export default function SidePanel({
     onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
   };
 
+
+
   return (
-    <div className={`h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-96'}`}>
+    <div
+      className={`h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col relative ${sidebarCollapsed ? 'transition-all duration-300' : isResizing ? 'transition-none' : 'transition-[width] duration-300'}`}
+      style={{ width: sidebarCollapsed ? '4rem' : width }}
+    >
+      {/* Drag Handle */}
+      {!sidebarCollapsed && (
+        <div
+          className="absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize z-50 group flex items-center justify-center"
+          onMouseDown={startResizing}
+        >
+          {/* Visual line on hover/active */}
+          <div className="w-[1px] h-full bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+      )}
+
       {sidebarCollapsed ? (
         // Collapsed view with icons only
         <div className="p-4 space-y-4 flex flex-col items-center overflow-y-auto">
