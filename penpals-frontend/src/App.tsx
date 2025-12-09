@@ -25,7 +25,7 @@ function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  
+
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([defaultAccount]);
   const [currentAccountId, setCurrentAccountId] = useState(defaultAccount.id);
@@ -64,7 +64,7 @@ function AppContent() {
   };
 
   const handleAccountUpdate = (updatedAccount: Account) => {
-    setAccounts(accounts.map(acc => 
+    setAccounts(accounts.map(acc =>
       acc.id === updatedAccount.id ? updatedAccount : acc
     ));
   };
@@ -76,7 +76,7 @@ function AppContent() {
 
   const handleAccountDelete = (accountId: string) => {
     const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
-    
+
     // If we're deleting the last classroom, create a new empty one
     if (filteredAccounts.length === 0) {
       const newAccount: Account = {
@@ -95,7 +95,7 @@ function AppContent() {
       toast.success('Classroom deleted. New classroom created.');
     } else {
       // Sort remaining classrooms alphabetically and switch to the first one
-      const sortedAccounts = [...filteredAccounts].sort((a, b) => 
+      const sortedAccounts = [...filteredAccounts].sort((a, b) =>
         a.classroomName.localeCompare(b.classroomName)
       );
       setAccounts(filteredAccounts);
@@ -153,7 +153,7 @@ function AppContent() {
       comments: 0,
       quotedPost,
     };
-    
+
     // Upload to ChromaDB for search functionality
     try {
       const { uploadPostToChromaDB } = await import('./services/chromadb');
@@ -166,7 +166,7 @@ function AppContent() {
         comments: newPost.comments,
         imageUrl: newPost.imageUrl,
       });
-      
+
       if (result.status === 'success') {
         // Only add post to local state if backend upload succeeds
         setPosts([newPost, ...posts]);
@@ -183,14 +183,14 @@ function AppContent() {
 
   const handleLikePost = (postId: string) => {
     const isLiked = likedPosts.has(postId);
-    
-    setPosts(posts.map(post => 
-      post.id === postId ? { 
-        ...post, 
-        likes: isLiked ? post.likes - 1 : post.likes + 1 
+
+    setPosts(posts.map(post =>
+      post.id === postId ? {
+        ...post,
+        likes: isLiked ? post.likes - 1 : post.likes + 1
       } : post
     ));
-    
+
     if (isLiked) {
       const newLikedPosts = new Set(likedPosts);
       newLikedPosts.delete(postId);
@@ -206,9 +206,9 @@ function AppContent() {
   if (!isAuthenticated) {
     return (
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <LoginDialog 
-          open={true} 
-          onOpenChange={() => {}}
+        <LoginDialog
+          open={true}
+          onOpenChange={() => { }}
           onLogin={handleLogin}
           onSignup={handleSignup}
         />
@@ -267,8 +267,8 @@ function AppContent() {
       <div className="flex-1 flex overflow-hidden flex-col lg:flex-row">
         {/* Map Area */}
         <div className="flex-1 p-3 md:p-6 overflow-hidden">
-          <MapView 
-            onClassroomSelect={handleClassroomSelect} 
+          <MapView
+            onClassroomSelect={handleClassroomSelect}
             selectedClassroom={selectedClassroom}
             myClassroom={currentAccount}
             theme={theme}
@@ -277,7 +277,7 @@ function AppContent() {
 
         {/* Side Panel */}
         <div className="hidden md:block">
-          <SidePanel 
+          <SidePanel
             selectedClassroom={selectedClassroom}
             onClassroomSelect={handleClassroomSelect}
             currentAccount={currentAccount}
@@ -306,7 +306,7 @@ function AppContent() {
               <SheetTitle className="sr-only">Classroom Settings</SheetTitle>
               <SheetDescription className="sr-only">Manage your classroom settings, interests, schedule, and account information</SheetDescription>
               <div className="mt-6">
-                <SidePanel 
+                <SidePanel
                   selectedClassroom={selectedClassroom}
                   onClassroomSelect={handleClassroomSelect}
                   currentAccount={currentAccount}

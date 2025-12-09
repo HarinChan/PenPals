@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -16,7 +16,7 @@ import { classrooms } from './MapView';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
 import { Post } from './PostCreator';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import NotificationWidget from './NotificationWidget';
 import {
   Select,
@@ -96,8 +96,6 @@ export interface Account {
   description: string;
   interests: string[];
   schedule: { [day: string]: number[] };
-  x: number;
-  y: number;
   recentCalls?: RecentCall[];
   friends?: Friend[];
   sentFriendRequests?: FriendRequest[];
@@ -149,7 +147,7 @@ export default function SidePanel({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
-  
+
   // Collapsible widget states
   const [accountInfoOpen, setAccountInfoOpen] = useState(true);
   const [interestsOpen, setInterestsOpen] = useState(true);
@@ -158,6 +156,44 @@ export default function SidePanel({
   const [recentCallsOpen, setRecentCallsOpen] = useState(true);
   const [friendsOpen, setFriendsOpen] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
+
+  // Resize logic
+  const [width, setWidth] = useState(384);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+
+      if (newWidth >= 256 && newWidth <= 800) {
+        setWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+    };
+  }, [isResizing]);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
 
   const [accountForm, setAccountForm] = useState({
     classroomName: currentAccount.classroomName,
@@ -172,7 +208,7 @@ export default function SidePanel({
     const newInterests = currentAccount.interests.includes(interest)
       ? currentAccount.interests.filter(i => i !== interest)
       : [...currentAccount.interests, interest];
-    
+
     onAccountUpdate({ ...currentAccount, interests: newInterests });
   };
 
@@ -189,7 +225,7 @@ export default function SidePanel({
     const newSchedule = daySchedule.includes(hour)
       ? daySchedule.filter(h => h !== hour)
       : [...daySchedule, hour].sort((a, b) => a - b);
-    
+
     onAccountUpdate({
       ...currentAccount,
       schedule: { ...currentAccount.schedule, [day]: newSchedule },
@@ -201,12 +237,12 @@ export default function SidePanel({
     const duplicateName = accounts.some(
       acc => acc.id !== currentAccount.id && acc.classroomName === accountForm.classroomName
     );
-    
+
     if (duplicateName) {
       toast.error('A classroom with this name already exists. Please choose a different name.');
       return;
     }
-    
+
     onAccountUpdate({
       ...currentAccount,
       ...accountForm,
@@ -218,11 +254,11 @@ export default function SidePanel({
     if (accounts.length >= 12) {
       return; // Don't create if at limit
     }
-    
+
     // Find a unique classroom name
     const existingNames = accounts.map(acc => acc.classroomName);
     let classroomName = 'New Classroom';
-    
+
     // Try "New Classroom", then "New Classroom 1", "New Classroom 2", etc.
     if (existingNames.includes(classroomName)) {
       let found = false;
@@ -239,7 +275,7 @@ export default function SidePanel({
         classroomName = `New Classroom ${Date.now()}`;
       }
     }
-    
+
     const newAccount: Account = {
       id: `account-${Date.now()}`,
       classroomName,
@@ -248,8 +284,8 @@ export default function SidePanel({
       description: '',
       interests: [],
       schedule: {},
-      x: Math.random() * 80 + 10,
-      y: Math.random() * 60 + 20,
+      lat: 0,
+      lon: 0,
     };
     onAccountCreate(newAccount);
   };
@@ -326,6 +362,12 @@ export default function SidePanel({
     setShowDetailDialog(true);
   };
 
+  useEffect(() => {
+    if (selectedClassroom) {
+      handleClassroomClick(selectedClassroom);
+    }
+  }, [selectedClassroom]);
+
   const removeFriend = (friendId: string) => {
     const friend = (currentAccount.friends || []).find(f => f.id === friendId);
     const updatedFriends = (currentAccount.friends || []).filter(f => f.id !== friendId);
@@ -345,7 +387,7 @@ export default function SidePanel({
       friendshipStatus: 'pending',
     };
     const updatedFriends = [...(currentAccount.friends || []), newFriend];
-    
+
     // Add notification for the other user (simulated)
     const notification: Notification = {
       id: `notif-${Date.now()}`,
@@ -356,7 +398,7 @@ export default function SidePanel({
       relatedId: classroom.id,
     };
     const updatedNotifications = [...(currentAccount.notifications || []), notification];
-    
+
     onAccountUpdate({ ...currentAccount, friends: updatedFriends, notifications: updatedNotifications });
     toast.success(`Friend request sent to ${classroom.name}`);
   };
@@ -369,7 +411,7 @@ export default function SidePanel({
 
   const toggleFriendRequest = (classroom: Classroom) => {
     const status = getFriendshipStatus(classroom.id);
-    
+
     if (status === 'accepted') {
       // Unfriend
       const friendToRemove = currentAccount.friends?.find(f => f.classroomId === classroom.id);
@@ -392,7 +434,7 @@ export default function SidePanel({
     const updatedFriends = (currentAccount.friends || []).map(f =>
       f.classroomId === classroomId ? { ...f, friendshipStatus: 'accepted' as const } : f
     );
-    
+
     // Add notification
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
     if (friend) {
@@ -422,8 +464,24 @@ export default function SidePanel({
     onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
   };
 
+
+
   return (
-    <div className={`h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-96'}`}>
+    <div
+      className={`h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 flex flex-col relative ${sidebarCollapsed ? 'transition-all duration-300' : isResizing ? 'transition-none' : 'transition-[width] duration-300'}`}
+      style={{ width: sidebarCollapsed ? '4rem' : width }}
+    >
+      {/* Drag Handle */}
+      {!sidebarCollapsed && (
+        <div
+          className="absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize z-50 group flex items-center justify-center"
+          onMouseDown={startResizing}
+        >
+          {/* Visual line on hover/active */}
+          <div className="w-[1px] h-full bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+      )}
+
       {sidebarCollapsed ? (
         // Collapsed view with icons only
         <div className="p-4 space-y-4 flex flex-col items-center overflow-y-auto">
@@ -481,14 +539,14 @@ export default function SidePanel({
         <Tabs defaultValue="controls" className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 p-2 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-slate-50 dark:bg-slate-900">
             <TabsList className="flex-1 grid grid-cols-2 h-9 bg-transparent p-0 gap-1">
-              <TabsTrigger 
-                value="controls" 
+              <TabsTrigger
+                value="controls"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
                 Controls
               </TabsTrigger>
-              <TabsTrigger 
-                value="feed" 
+              <TabsTrigger
+                value="feed"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
                 Community Feed
@@ -506,528 +564,525 @@ export default function SidePanel({
           </div>
 
           <TabsContent value="controls" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
-        {/* Classrooms Switcher */}
-        <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="text-purple-600 dark:text-purple-400" size={18} />
-                <h3 className="text-slate-900 dark:text-slate-100">Classrooms</h3>
-                <Badge variant="secondary" className="text-xs">
-                  {accounts.length}/12
-                </Badge>
-              </div>
-              <Button
-                onClick={createNewAccount}
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-                disabled={accounts.length >= 12}
-                title={accounts.length >= 12 ? "Maximum classrooms reached" : "Add new classroom"}
-              >
-                <Plus size={16} />
-              </Button>
-            </div>
-
-            {accounts.length >= 12 && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
-                <AlertTriangle className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" size={16} />
-                <p className="text-xs text-amber-800 dark:text-amber-300">
-                  You've reached the maximum limit of 12 classrooms. Delete a classroom to create a new one.
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
-              <Select value={currentAccount.id} onValueChange={onAccountChange}>
-                <SelectTrigger className="flex-1 bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600">
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id} className="text-slate-900 dark:text-slate-100">
-                      {account.classroomName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={() => handleDeleteClassroom(currentAccount.id)}
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 shrink-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/20"
-                disabled={accounts.length <= 1}
-                title={accounts.length <= 1 ? "Cannot delete last classroom" : "Delete classroom"}
-              >
-                <Trash2 size={16} />
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Account Information - Collapsible */}
-        <Collapsible open={accountInfoOpen} onOpenChange={setAccountInfoOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
-                  <ChevronDown className={`transition-transform ${accountInfoOpen ? '' : '-rotate-90'}`} size={16} />
-                  <h3 className="text-slate-900 dark:text-slate-100">Classroom Information</h3>
-                </CollapsibleTrigger>
-                <button
-                  onClick={() => {
-                    if (editingAccount) {
-                      saveAccountInfo();
-                    } else {
-                      setAccountForm({
-                        classroomName: currentAccount.classroomName,
-                        location: currentAccount.location,
-                        size: currentAccount.size,
-                        description: currentAccount.description,
-                      });
-                      setEditingAccount(true);
-                    }
-                  }}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
-                >
-                  {editingAccount ? 'Save' : <Edit2 size={16} />}
-                </button>
-              </div>
-
-              <CollapsibleContent>
-
-            {editingAccount ? (
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-slate-700 dark:text-slate-300">Classroom Name</Label>
-                  <Input
-                    value={accountForm.classroomName}
-                    onChange={(e) => setAccountForm({ ...accountForm, classroomName: e.target.value })}
-                    className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-slate-700 dark:text-slate-300">Location</Label>
-                  <Input
-                    value={accountForm.location}
-                    onChange={(e) => setAccountForm({ ...accountForm, location: e.target.value })}
-                    className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-slate-700 dark:text-slate-300">Class Size</Label>
-                  <Input
-                    type="number"
-                    value={accountForm.size}
-                    onChange={(e) => setAccountForm({ ...accountForm, size: parseInt(e.target.value) || 0 })}
-                    className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-slate-700 dark:text-slate-300">Description</Label>
-                  <Textarea
-                    value={accountForm.description}
-                    onChange={(e) => setAccountForm({ ...accountForm, description: e.target.value })}
-                    className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <MapPin size={16} />
-                  <span>{currentAccount.location}</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <Users size={16} />
-                  <span>{currentAccount.size} students</span>
-                </div>
-                {currentAccount.description && (
-                  <p className="text-slate-700 dark:text-slate-300 text-sm">{currentAccount.description}</p>
-                )}
-              </div>
-            )}
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
-
-        {/* Interests Widget - Collapsible */}
-        <Collapsible open={interestsOpen} onOpenChange={setInterestsOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                <ChevronDown className={`transition-transform ${interestsOpen ? '' : '-rotate-90'}`} size={16} />
-                <BookOpen className="text-blue-600 dark:text-blue-400" size={18} />
-                <h3 className="text-slate-900 dark:text-slate-100">Your Interests & Subjects</h3>
-              </CollapsibleTrigger>
-
-              <CollapsibleContent>
-
-            <ScrollArea className="h-64">
-              <div className="space-y-3 pr-4">
-                {allInterests.map((subject) => (
-                  <div key={subject} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={subject}
-                      checked={currentAccount.interests.includes(subject)}
-                      onCheckedChange={() => toggleInterest(subject)}
-                    />
-                    <Label
-                      htmlFor={subject}
-                      className="text-slate-900 dark:text-slate-100 cursor-pointer"
-                    >
-                      {subject}
-                    </Label>
+            {/* Classrooms Switcher */}
+            <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="text-purple-600 dark:text-purple-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Classrooms</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {accounts.length}/12
+                    </Badge>
                   </div>
-                ))}
+                  <Button
+                    onClick={createNewAccount}
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                    disabled={accounts.length >= 12}
+                    title={accounts.length >= 12 ? "Maximum classrooms reached" : "Add new classroom"}
+                  >
+                    <Plus size={16} />
+                  </Button>
+                </div>
+
+                {accounts.length >= 12 && (
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <AlertTriangle className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" size={16} />
+                    <p className="text-xs text-amber-800 dark:text-amber-300">
+                      You've reached the maximum limit of 12 classrooms. Delete a classroom to create a new one.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Select value={currentAccount.id} onValueChange={onAccountChange}>
+                    <SelectTrigger className="flex-1 bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600">
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id} className="text-slate-900 dark:text-slate-100">
+                          {account.classroomName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => handleDeleteClassroom(currentAccount.id)}
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    disabled={accounts.length <= 1}
+                    title={accounts.length <= 1 ? "Cannot delete last classroom" : "Delete classroom"}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
               </div>
-            </ScrollArea>
+            </Card>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <Input
-                type="text"
-                value={customInterest}
-                onChange={(e) => setCustomInterest(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addCustomInterest()}
-                placeholder="Add custom interest..."
-                className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-              />
-              <button
-                onClick={addCustomInterest}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-              >
-                <Plus size={16} className="text-white" />
-              </button>
-            </div>
+            {/* Account Information - Collapsible */}
+            <Collapsible open={accountInfoOpen} onOpenChange={setAccountInfoOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
+                      <ChevronDown className={`transition-transform ${accountInfoOpen ? '' : '-rotate-90'}`} size={16} />
+                      <h3 className="text-slate-900 dark:text-slate-100">Classroom Information</h3>
+                    </CollapsibleTrigger>
+                    <button
+                      onClick={() => {
+                        if (editingAccount) {
+                          saveAccountInfo();
+                        } else {
+                          setAccountForm({
+                            classroomName: currentAccount.classroomName,
+                            location: currentAccount.location,
+                            size: currentAccount.size,
+                            description: currentAccount.description,
+                          });
+                          setEditingAccount(true);
+                        }
+                      }}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
+                    >
+                      {editingAccount ? 'Save' : <Edit2 size={16} />}
+                    </button>
+                  </div>
 
-            {currentAccount.interests.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                {currentAccount.interests.map((interest) => (
-                  <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
-                    {interest}
-                  </Badge>
-                ))}
-              </div>
-            )}
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
+                  <CollapsibleContent>
 
-        {/* Schedule Widget - Collapsible */}
-        <Collapsible open={scheduleOpen} onOpenChange={setScheduleOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
-                  <ChevronDown className={`transition-transform ${scheduleOpen ? '' : '-rotate-90'}`} size={16} />
-                  <Calendar className="text-green-600 dark:text-green-400" size={18} />
-                  <h3 className="text-slate-900 dark:text-slate-100">Your Availability</h3>
-                </CollapsibleTrigger>
-                <button
-                  onClick={() => setShowScheduleEditor(!showScheduleEditor)}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
-                >
-                  {showScheduleEditor ? 'Hide' : 'Edit'}
-                </button>
-              </div>
+                    {editingAccount ? (
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Classroom Name</Label>
+                          <Input
+                            value={accountForm.classroomName}
+                            onChange={(e) => setAccountForm({ ...accountForm, classroomName: e.target.value })}
+                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Location</Label>
+                          <Input
+                            value={accountForm.location}
+                            onChange={(e) => setAccountForm({ ...accountForm, location: e.target.value })}
+                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Class Size</Label>
+                          <Input
+                            type="number"
+                            value={accountForm.size}
+                            onChange={(e) => setAccountForm({ ...accountForm, size: parseInt(e.target.value) || 0 })}
+                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Description</Label>
+                          <Textarea
+                            value={accountForm.description}
+                            onChange={(e) => setAccountForm({ ...accountForm, description: e.target.value })}
+                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                            rows={3}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                          <MapPin size={16} />
+                          <span>{currentAccount.location}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                          <Users size={16} />
+                          <span>{currentAccount.size} students</span>
+                        </div>
+                        {currentAccount.description && (
+                          <p className="text-slate-700 dark:text-slate-300 text-sm">{currentAccount.description}</p>
+                        )}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
 
-              <CollapsibleContent>
+            {/* Interests Widget - Collapsible */}
+            <Collapsible open={interestsOpen} onOpenChange={setInterestsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${interestsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <BookOpen className="text-blue-600 dark:text-blue-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Your Interests & Subjects</h3>
+                  </CollapsibleTrigger>
 
-            {showScheduleEditor ? (
-              <ScrollArea className="h-80">
-                <div className="space-y-4 pr-4">
-                  {DAYS.map((day) => (
-                    <div key={day} className="space-y-2">
-                      <div className="text-slate-700 dark:text-slate-300">{day}</div>
-                      <div className="grid grid-cols-8 gap-1">
-                        {HOURS.map((hour) => {
-                          const isSelected = currentAccount.schedule[day]?.includes(hour);
-                          return (
-                            <button
-                              key={hour}
-                              onClick={() => toggleScheduleSlot(day, hour)}
-                              className={`p-1 text-xs rounded transition-colors ${
-                                isSelected
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                              }`}
-                              title={`${hour}:00`}
+                  <CollapsibleContent>
+
+                    <ScrollArea className="h-64">
+                      <div className="space-y-3 pr-4">
+                        {allInterests.map((subject) => (
+                          <div key={subject} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={subject}
+                              checked={currentAccount.interests.includes(subject)}
+                              onCheckedChange={() => toggleInterest(subject)}
+                            />
+                            <Label
+                              htmlFor={subject}
+                              className="text-slate-900 dark:text-slate-100 cursor-pointer"
                             >
-                              {hour}
-                            </button>
+                              {subject}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+
+                    <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <Input
+                        type="text"
+                        value={customInterest}
+                        onChange={(e) => setCustomInterest(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && addCustomInterest()}
+                        placeholder="Add custom interest..."
+                        className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                      />
+                      <button
+                        onClick={addCustomInterest}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                      >
+                        <Plus size={16} className="text-white" />
+                      </button>
+                    </div>
+
+                    {currentAccount.interests.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        {currentAccount.interests.map((interest) => (
+                          <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
+                            {interest}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Schedule Widget - Collapsible */}
+            <Collapsible open={scheduleOpen} onOpenChange={setScheduleOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
+                      <ChevronDown className={`transition-transform ${scheduleOpen ? '' : '-rotate-90'}`} size={16} />
+                      <Calendar className="text-green-600 dark:text-green-400" size={18} />
+                      <h3 className="text-slate-900 dark:text-slate-100">Your Availability</h3>
+                    </CollapsibleTrigger>
+                    <button
+                      onClick={() => setShowScheduleEditor(!showScheduleEditor)}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
+                    >
+                      {showScheduleEditor ? 'Hide' : 'Edit'}
+                    </button>
+                  </div>
+
+                  <CollapsibleContent>
+
+                    {showScheduleEditor ? (
+                      <ScrollArea className="h-80">
+                        <div className="space-y-4 pr-4">
+                          {DAYS.map((day) => (
+                            <div key={day} className="space-y-2">
+                              <div className="text-slate-700 dark:text-slate-300">{day}</div>
+                              <div className="grid grid-cols-8 gap-1">
+                                {HOURS.map((hour) => {
+                                  const isSelected = currentAccount.schedule[day]?.includes(hour);
+                                  return (
+                                    <button
+                                      key={hour}
+                                      onClick={() => toggleScheduleSlot(day, hour)}
+                                      className={`p-1 text-xs rounded transition-colors ${isSelected
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                        }`}
+                                      title={`${hour}:00`}
+                                    >
+                                      {hour}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    ) : (
+                      <div className="space-y-2">
+                        {DAYS.map((day) => {
+                          const hours = currentAccount.schedule[day] || [];
+                          if (hours.length === 0) return null;
+                          return (
+                            <div key={day} className="flex gap-2 text-sm">
+                              <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
+                              <span className="text-slate-900 dark:text-slate-100">
+                                {hours.length > 0 ? `${hours[0]}:00 - ${hours[hours.length - 1] + 1}:00` : 'Not available'}
+                              </span>
+                            </div>
                           );
                         })}
                       </div>
-                    </div>
-                  ))}
+                    )}
+                  </CollapsibleContent>
                 </div>
-              </ScrollArea>
-            ) : (
-              <div className="space-y-2">
-                {DAYS.map((day) => {
-                  const hours = currentAccount.schedule[day] || [];
-                  if (hours.length === 0) return null;
-                  return (
-                    <div key={day} className="flex gap-2 text-sm">
-                      <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
-                      <span className="text-slate-900 dark:text-slate-100">
-                        {hours.length > 0 ? `${hours[0]}:00 - ${hours[hours.length - 1] + 1}:00` : 'Not available'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
+              </Card>
+            </Collapsible>
 
-        {/* Recent Calls Widget - Collapsible */}
-        <Collapsible open={recentCallsOpen} onOpenChange={setRecentCallsOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                <ChevronDown className={`transition-transform ${recentCallsOpen ? '' : '-rotate-90'}`} size={16} />
-                <Phone className="text-orange-600 dark:text-orange-400" size={18} />
-                <h3 className="text-slate-900 dark:text-slate-100">Recent Calls</h3>
-              </CollapsibleTrigger>
+            {/* Recent Calls Widget - Collapsible */}
+            <Collapsible open={recentCallsOpen} onOpenChange={setRecentCallsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${recentCallsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Phone className="text-orange-600 dark:text-orange-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Recent Calls</h3>
+                  </CollapsibleTrigger>
 
-              <CollapsibleContent>
-                <ScrollArea className="h-64">
-                  <div className="space-y-2 pr-4">
-                    {(currentAccount.recentCalls || []).length === 0 ? (
-                      <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                        No recent calls
-                      </div>
-                    ) : (
-                      (currentAccount.recentCalls || []).map((call) => {
-                        // Find the full classroom data
-                        const callClassroom = classrooms.find(c => c.id === call.classroomId);
-                        
-                        return (
-                          <div
-                            key={call.id}
-                            className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
-                            onClick={() => {
-                              if (callClassroom) {
-                                handleClassroomClick(callClassroom);
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="text-slate-900 dark:text-slate-100">{call.classroomName}</div>
-                                <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                  <Clock size={12} />
-                                  {new Date(call.timestamp).toLocaleDateString()} at {new Date(call.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                                <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                  {call.duration} min · {call.type}
+                  <CollapsibleContent>
+                    <ScrollArea className="h-64">
+                      <div className="space-y-2 pr-4">
+                        {(currentAccount.recentCalls || []).length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No recent calls
+                          </div>
+                        ) : (
+                          (currentAccount.recentCalls || []).map((call) => {
+                            // Find the full classroom data
+                            const callClassroom = classrooms.find(c => c.id === call.classroomId);
+
+                            return (
+                              <div
+                                key={call.id}
+                                className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
+                                onClick={() => {
+                                  if (callClassroom) {
+                                    handleClassroomClick(callClassroom);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="text-slate-900 dark:text-slate-100">{call.classroomName}</div>
+                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                      <Clock size={12} />
+                                      {new Date(call.timestamp).toLocaleDateString()} at {new Date(call.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                      {call.duration} min · {call.type}
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-xs ${call.type === 'incoming'
+                                      ? 'border-green-600 text-green-600 dark:border-green-400 dark:text-green-400'
+                                      : call.type === 'outgoing'
+                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                                        : 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
+                                      }`}
+                                  >
+                                    {call.type}
+                                  </Badge>
                                 </div>
                               </div>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs ${
-                                  call.type === 'incoming'
-                                    ? 'border-green-600 text-green-600 dark:border-green-400 dark:text-green-400'
-                                    : call.type === 'outgoing'
-                                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                                    : 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
-                                }`}
-                              >
-                                {call.type}
-                              </Badge>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </ScrollArea>
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
-
-        {/* Friend List Widget - Collapsible */}
-        <Collapsible open={friendsOpen} onOpenChange={setFriendsOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                <ChevronDown className={`transition-transform ${friendsOpen ? '' : '-rotate-90'}`} size={16} />
-                <Heart className="text-pink-600 dark:text-pink-400" size={18} />
-                <h3 className="text-slate-900 dark:text-slate-100">Friends</h3>
-              </CollapsibleTrigger>
-
-              <CollapsibleContent>
-                <ScrollArea className="h-64">
-                  <div className="space-y-2 pr-4">
-                    {(currentAccount.friends || []).length === 0 ? (
-                      <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                        No friends added yet
+                            );
+                          })
+                        )}
                       </div>
-                    ) : (
-                      (currentAccount.friends || []).map((friend) => {
-                        // Find the full classroom data
-                        const friendClassroom = classrooms.find(c => c.id === friend.classroomId);
-                        
-                        return (
-                          <div
-                            key={friend.id}
-                            className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors group cursor-pointer"
-                            onClick={() => {
-                              if (friendClassroom) {
-                                handleClassroomClick(friendClassroom);
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="text-slate-900 dark:text-slate-100">{friend.classroomName}</div>
-                                <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-1">
-                                  <MapPin size={12} />
-                                  {friend.location}
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Friend List Widget - Collapsible */}
+            <Collapsible open={friendsOpen} onOpenChange={setFriendsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${friendsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Heart className="text-pink-600 dark:text-pink-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Friends</h3>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <ScrollArea className="h-64">
+                      <div className="space-y-2 pr-4">
+                        {(currentAccount.friends || []).length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No friends added yet
+                          </div>
+                        ) : (
+                          (currentAccount.friends || []).map((friend) => {
+                            // Find the full classroom data
+                            const friendClassroom = classrooms.find(c => c.id === friend.classroomId);
+
+                            return (
+                              <div
+                                key={friend.id}
+                                className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors group cursor-pointer"
+                                onClick={() => {
+                                  if (friendClassroom) {
+                                    handleClassroomClick(friendClassroom);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="text-slate-900 dark:text-slate-100">{friend.classroomName}</div>
+                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-1">
+                                      <MapPin size={12} />
+                                      {friend.location}
+                                    </div>
+                                    {friend.lastConnected && (
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                        Last connected: {new Date(friend.lastConnected).toLocaleDateString()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Prevent opening the dialog when removing
+                                      removeFriend(friend.id);
+                                    }}
+                                    className="text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Remove friend"
+                                  >
+                                    <Heart size={16} fill="currentColor" />
+                                  </button>
                                 </div>
-                                {friend.lastConnected && (
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    Last connected: {new Date(friend.lastConnected).toLocaleDateString()}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Classrooms List Widget - Collapsible */}
+            <Collapsible open={classroomsOpen} onOpenChange={setClassroomsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${classroomsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Search className="text-purple-600 dark:text-purple-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Find Classrooms</h3>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+
+                    <Input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by name, location, or interest..."
+                      className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                    />
+
+                    <ScrollArea className="h-96">
+                      <div className="space-y-3 pr-4">
+                        {filteredClassrooms.map((classroom) => (
+                          <button
+                            key={classroom.id}
+                            onClick={() => handleClassroomClick(classroom)}
+                            className={`w-full p-4 rounded-lg border transition-all ${selectedClassroom?.id === classroom.id
+                              ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-400'
+                              : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 hover:border-slate-300 dark:hover:border-slate-500'
+                              }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              {/* Relevancy Indicator */}
+                              <div
+                                className={`w-3 h-3 rounded-full mt-1 ${classroom.relevancy.color}`}
+                                title={`Relevancy: ${classroom.relevancy.level}`}
+                              ></div>
+
+                              <div className="flex-1 text-left space-y-1">
+                                {/* Name */}
+                                <div className="text-slate-900 dark:text-slate-100">{classroom.name}</div>
+
+                                {/* Location */}
+                                <div className="text-slate-600 dark:text-slate-400 text-xs">{classroom.location}</div>
+
+                                {/* Matching Interests */}
+                                {classroom.relevancy.matchingInterests.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {classroom.relevancy.matchingInterests.map((interest) => (
+                                      <Badge
+                                        key={interest}
+                                        variant="outline"
+                                        className="text-xs border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+                                      >
+                                        {interest}
+                                      </Badge>
+                                    ))}
                                   </div>
                                 )}
                               </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevent opening the dialog when removing
-                                  removeFriend(friend.id);
-                                }}
-                                className="text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Remove friend"
-                              >
-                                <Heart size={16} fill="currentColor" />
-                              </button>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </ScrollArea>
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
+                          </button>
+                        ))}
 
-        {/* Classrooms List Widget - Collapsible */}
-        <Collapsible open={classroomsOpen} onOpenChange={setClassroomsOpen}>
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                <ChevronDown className={`transition-transform ${classroomsOpen ? '' : '-rotate-90'}`} size={16} />
-                <Search className="text-purple-600 dark:text-purple-400" size={18} />
-                <h3 className="text-slate-900 dark:text-slate-100">Find Classrooms</h3>
-              </CollapsibleTrigger>
-
-              <CollapsibleContent>
-
-            <Input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, location, or interest..."
-              className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-            />
-
-            <ScrollArea className="h-96">
-              <div className="space-y-3 pr-4">
-                {filteredClassrooms.map((classroom) => (
-                  <button
-                    key={classroom.id}
-                    onClick={() => handleClassroomClick(classroom)}
-                    className={`w-full p-4 rounded-lg border transition-all ${
-                      selectedClassroom?.id === classroom.id
-                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-400'
-                        : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 hover:border-slate-300 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Relevancy Indicator */}
-                      <div
-                        className={`w-3 h-3 rounded-full mt-1 ${classroom.relevancy.color}`}
-                        title={`Relevancy: ${classroom.relevancy.level}`}
-                      ></div>
-
-                      <div className="flex-1 text-left space-y-1">
-                        {/* Name */}
-                        <div className="text-slate-900 dark:text-slate-100">{classroom.name}</div>
-                        
-                        {/* Location */}
-                        <div className="text-slate-600 dark:text-slate-400 text-xs">{classroom.location}</div>
-
-                        {/* Matching Interests */}
-                        {classroom.relevancy.matchingInterests.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {classroom.relevancy.matchingInterests.map((interest) => (
-                              <Badge
-                                key={interest}
-                                variant="outline"
-                                className="text-xs border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
-                              >
-                                {interest}
-                              </Badge>
-                            ))}
+                        {filteredClassrooms.length === 0 && (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8">
+                            No classrooms found matching your criteria
                           </div>
                         )}
                       </div>
+                    </ScrollArea>
+
+                    {/* Legend */}
+                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="text-slate-600 dark:text-slate-400 text-xs">Relevancy Legend:</div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          <span className="text-slate-700 dark:text-slate-300">Perfect</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                          <span className="text-slate-700 dark:text-slate-300">Good</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          <span className="text-slate-700 dark:text-slate-300">Partial</span>
+                        </div>
+                      </div>
                     </div>
-                  </button>
-                ))}
-
-                {filteredClassrooms.length === 0 && (
-                  <div className="text-center text-slate-500 dark:text-slate-400 py-8">
-                    No classrooms found matching your criteria
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            {/* Legend */}
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="text-slate-600 dark:text-slate-400 text-xs">Relevancy Legend:</div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-slate-700 dark:text-slate-300">Perfect</span>
+                  </CollapsibleContent>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                  <span className="text-slate-700 dark:text-slate-300">Good</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                  <span className="text-slate-700 dark:text-slate-300">Partial</span>
-                </div>
-              </div>
-            </div>
-              </CollapsibleContent>
-            </div>
-          </Card>
-        </Collapsible>
-        </TabsContent>
+              </Card>
+            </Collapsible>
+          </TabsContent>
 
-        <TabsContent value="feed" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
-          <FeedPanel
-            currentUserName={currentAccount.classroomName}
-            currentUserId={currentAccount.id}
-            allPosts={allPosts}
-            myPosts={myPosts}
-            onCreatePost={onCreatePost}
-            onLikePost={onLikePost}
-            likedPosts={likedPosts}
-          />
-        </TabsContent>
+          <TabsContent value="feed" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
+            <FeedPanel
+              currentUserName={currentAccount.classroomName}
+              currentUserId={currentAccount.id}
+              allPosts={allPosts}
+              myPosts={myPosts}
+              onCreatePost={onCreatePost}
+              onLikePost={onLikePost}
+              likedPosts={likedPosts}
+            />
+          </TabsContent>
         </Tabs>
       )}
 
@@ -1054,7 +1109,7 @@ export default function SidePanel({
             <AlertDialogCancel className="bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
             >

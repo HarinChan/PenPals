@@ -149,15 +149,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                       <Quote className="w-4 h-4 mr-1" />
                       Quote
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleShareClick(post)}
-                      className="text-slate-600 dark:text-slate-400 hover:text-green-600 dark:hover:text-green-400"
-                    >
-                      <Share2 className="w-4 h-4 mr-1" />
-                      Share
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -166,45 +157,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
         })}
       </div>
 
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-          <DialogHeader>
-            <DialogTitle className="text-slate-900 dark:text-slate-100">Share Post</DialogTitle>
-            <DialogDescription className="text-slate-600 dark:text-slate-400">
-              Choose how you want to share this post
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Button
-              onClick={copyPostContent}
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-4 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700"
-            >
-              <Copy className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <div className="text-left">
-                <div>Copy Post Content</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Copy formatted text including images
-                </div>
-              </div>
-            </Button>
-            <Button
-              onClick={copyPostLink}
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-4 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700"
-            >
-              <LinkIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-              <div className="text-left">
-                <div>Copy Post Link</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Share a link to this post
-                </div>
-              </div>
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
