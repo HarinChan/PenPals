@@ -12,6 +12,9 @@ class Account(db.Model):
     organization = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
+    # Relationships
+    classrooms = db.relationship('Profile', backref='account', lazy='dynamic', cascade='all, delete-orphan')
+    
     def __repr__(self):
         return f'<Account {self.email}>'
 
@@ -20,7 +23,7 @@ class Profile(db.Model):
     __tablename__ = 'profiles'
     
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False, unique=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('accounts.id'), nullable=False)
     
     name = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(100), nullable=True) # Name of the place eg London
@@ -35,7 +38,6 @@ class Profile(db.Model):
                                      backref='from_profile', lazy='dynamic', cascade='all, delete-orphan')
     received_relations = db.relationship('Relation', foreign_keys='Relation.to_profile_id',
                                          backref='to_profile', lazy='dynamic', cascade='all, delete-orphan')
-    account = db.relationship('Account', foreign_keys='Account.id', backref='id', lazy='dynamic', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Profile {self.name}>'
@@ -57,3 +59,23 @@ class Relation(db.Model):
     
     def __repr__(self):
         return f'<Relation {self.from_profile_id} -> {self.to_profile_id}>'
+
+
+# Alias for classroom - Profile represents a classroom
+Classroom = Profile
+
+
+class Post(db.Model):
+    """Posts/messages between classrooms"""
+    __tablename__ = 'posts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('profiles.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    
+    # Relationships
+    profile = db.relationship('Profile', backref='posts')
+    
+    def __repr__(self):
+        return f'<Post {self.id} by {self.profile_id}>'
