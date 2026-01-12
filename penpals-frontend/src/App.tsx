@@ -26,6 +26,9 @@ function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [loginError, setLoginError] = useState<string>('');
+  const [signupError, setSignupError] = useState<string>('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([defaultAccount]);
@@ -106,6 +109,9 @@ function AppContent() {
   };
 
   const handleLogin = async (email: string, password: string) => {
+    setLoginError(''); // Clear previous errors
+    setAuthLoading(true);
+    
     try {
       // Call real backend authentication
       await AuthService.login({ email, password });
@@ -143,11 +149,24 @@ function AppContent() {
     } catch (error) {
       console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      toast.error(`Login failed: ${errorMessage}`);
+      
+      // Set user-friendly error message
+      if (errorMessage.includes('Invalid credentials') || errorMessage.includes('401')) {
+        setLoginError('Incorrect email or password. Please try again.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        setLoginError('Unable to connect to server. Please check your internet connection.');
+      } else {
+        setLoginError(errorMessage);
+      }
+    } finally {
+      setAuthLoading(false);
     }
   };
 
   const handleSignup = async (email: string, password: string, classroomName: string) => {
+    setSignupError(''); // Clear previous errors
+    setAuthLoading(true);
+    
     try {
       // Register account with backend
       await AuthService.register({ email, password });
@@ -185,7 +204,21 @@ function AppContent() {
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Signup failed';
-      toast.error(`Signup failed: ${errorMessage}`);
+      
+      // Set user-friendly error message
+      if (errorMessage.includes('already exists') || errorMessage.includes('409')) {
+        setSignupError('An account with this email already exists. Please use a different email or try logging in.');
+      } else if (errorMessage.includes('Password must')) {
+        setSignupError('Password must be at least 8 characters with uppercase, lowercase, digit, and special character.');
+      } else if (errorMessage.includes('Invalid email')) {
+        setSignupError('Please enter a valid email address.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        setSignupError('Unable to connect to server. Please check your internet connection.');
+      } else {
+        setSignupError(errorMessage);
+      }
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -269,9 +302,17 @@ function AppContent() {
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <LoginDialog
           open={true}
-          onOpenChange={() => { }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLoginError('');
+              setSignupError('');
+            }
+          }}
           onLogin={handleLogin}
           onSignup={handleSignup}
+          loginError={loginError}
+          signupError={signupError}
+          isLoading={authLoading}
         />
       </div>
     );
