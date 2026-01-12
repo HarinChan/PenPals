@@ -98,7 +98,6 @@ function AppContent() {
           setIsAuthenticated(true);
         } catch (error) {
           // Token is invalid or expired, clear it
-          console.log('Token validation failed:', error);
           AuthService.logout();
           setIsAuthenticated(false);
         } finally {
