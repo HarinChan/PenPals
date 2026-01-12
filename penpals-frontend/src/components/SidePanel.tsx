@@ -18,6 +18,8 @@ import FeedPanel from './FeedPanel';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import NotificationWidget from './NotificationWidget';
+import LocationAutocomplete from './LocationAutocomplete';
+import type { SelectedLocation } from '../services/location';
 import {
   Select,
   SelectContent,
@@ -202,6 +204,8 @@ export default function SidePanel({
     description: currentAccount.description,
   });
 
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+
   const allInterests = [...AVAILABLE_SUBJECTS];
 
   const toggleInterest = (interest: string) => {
@@ -246,8 +250,15 @@ export default function SidePanel({
     onAccountUpdate({
       ...currentAccount,
       ...accountForm,
+      // Update coordinates if a new location was selected
+      ...(selectedLocation && {
+        location: selectedLocation.name,
+        x: selectedLocation.longitude,
+        y: selectedLocation.latitude,
+      }),
     });
     setEditingAccount(false);
+    setSelectedLocation(null); // Reset selected location
   };
 
   const createNewAccount = () => {
@@ -284,8 +295,11 @@ export default function SidePanel({
       description: '',
       interests: [],
       schedule: {},
-      lat: 0,
-      lon: 0,
+      // Inherit coordinates from the current account
+      x: currentAccount.x,
+      y: currentAccount.y,
+      recentCalls: [],
+      friends: [],
     };
     onAccountCreate(newAccount);
   };
@@ -643,6 +657,7 @@ export default function SidePanel({
                             size: currentAccount.size,
                             description: currentAccount.description,
                           });
+                          setSelectedLocation(null); // Reset location selection
                           setEditingAccount(true);
                         }
                       }}
@@ -665,12 +680,16 @@ export default function SidePanel({
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-slate-700 dark:text-slate-300">Location</Label>
-                          <Input
-                            value={accountForm.location}
-                            onChange={(e) => setAccountForm({ ...accountForm, location: e.target.value })}
-                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                          <LocationAutocomplete
+                            label="Location"
+                            placeholder="Search for your classroom location..."
+                            value={selectedLocation}
+                            onChange={setSelectedLocation}
+                            id="classroom-location"
                           />
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Current: {accountForm.location}
+                          </p>
                         </div>
                         <div className="space-y-1">
                           <Label className="text-slate-700 dark:text-slate-300">Class Size</Label>

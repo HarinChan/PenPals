@@ -480,7 +480,7 @@ function AppContent() {
 const defaultAccount: Account = {
   id: 'account-1',
   classroomName: 'My Classroom',
-  location: 'San Francisco, USA',
+  location: 'London, England, United Kingdom',
   size: 25,
   description: 'A friendly learning environment focused on STEM subjects and outdoor activities.',
   interests: ['Math', 'Biology'],
@@ -491,8 +491,8 @@ const defaultAccount: Account = {
     Thu: [9, 10, 11],
     Fri: [14, 15],
   },
-  x: 18,
-  y: 37,
+  x: -0.1278, // London longitude
+  y: 51.5074, // London latitude
   recentCalls: [
     {
       id: 'call-1',
