@@ -74,6 +74,12 @@ export class ApiClient {
           // If we can't parse the error response, use the status text
           errorMessage = response.statusText || errorMessage;
         }
+        
+        // If we get a 401, the token is likely expired
+        if (response.status === 401) {
+          this.clearToken();
+        }
+        
         throw new ApiError(errorMessage, response.status);
       }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
@@ -30,6 +30,7 @@ function AppContent() {
   const [loginError, setLoginError] = useState<string>('');
   const [signupError, setSignupError] = useState<string>('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([defaultAccount]);
@@ -59,6 +60,58 @@ function AppContent() {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || defaultAccount;
+
+  // Check for existing authentication on component mount
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      if (AuthService.isAuthenticated()) {
+        setAuthLoading(true);
+        try {
+          // Try to get user data with existing token
+          const userData = await AuthService.getCurrentUser();
+          
+          // Convert backend classrooms to frontend format
+          const convertedAccounts = userData.classrooms.map(classroom => ({
+            id: classroom.id.toString(),
+            classroomName: classroom.name,
+            location: classroom.location || 'Unknown',
+            size: classroom.class_size || 20,
+            description: `Classroom managed by ${userData.account.email}`,
+            interests: classroom.interests || [],
+            schedule: {}, // TODO: Convert availability to schedule format
+            // Use coordinates from backend if available, otherwise use default location (London)
+            x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
+            y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
+            recentCalls: [],
+            friends: [],
+          }));
+
+          if (convertedAccounts.length > 0) {
+            setAccounts(convertedAccounts);
+            setCurrentAccountId(convertedAccounts[0].id);
+          } else {
+            // No classrooms yet, keep default state
+            setAccounts([defaultAccount]);
+            setCurrentAccountId(defaultAccount.id);
+          }
+
+          setIsAuthenticated(true);
+        } catch (error) {
+          // Token is invalid or expired, clear it
+          console.log('Token validation failed:', error);
+          AuthService.logout();
+          setIsAuthenticated(false);
+        } finally {
+          setAuthLoading(false);
+          setInitialLoading(false);
+        }
+      } else {
+        setInitialLoading(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
 
   const handleClassroomSelect = (classroom: Classroom) => {
     setSelectedClassroom(classroom);
@@ -308,6 +361,20 @@ function AppContent() {
   };
 
   const myPosts = posts.filter(post => post.authorId === currentAccountId);
+
+  // Show loading screen during initial authentication check
+  if (initialLoading) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center animate-pulse">
+            <GraduationCap className="w-6 h-6 text-white" />
+          </div>
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show login dialog if not authenticated
   if (!isAuthenticated) {

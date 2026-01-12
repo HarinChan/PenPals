@@ -92,6 +92,20 @@ export class AuthService {
   }
 
   /**
+   * Validate current token by making a test request
+   */
+  static async validateToken(): Promise<boolean> {
+    try {
+      await this.getCurrentUser();
+      return true;
+    } catch (error) {
+      // Token is invalid, clear it
+      this.logout();
+      return false;
+    }
+  }
+
+  /**
    * Validate password strength
    */
   static validatePassword(password: string): {
