@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { toast } from 'sonner@2.0.3';
 import { Toaster } from './components/Toaster';
+import { AuthService, ClassroomService } from './services';
 
 export default function App() {
   return (
@@ -104,36 +105,96 @@ function AppContent() {
     }
   };
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock login
-    setIsAuthenticated(true);
-    setShowLoginDialog(false);
-    toast.success('Successfully logged in!');
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      // Call real backend authentication
+      await AuthService.login({ email, password });
+      
+      // Get user data after successful login
+      const userData = await AuthService.getCurrentUser();
+      
+      // Convert backend classrooms to frontend format
+      const convertedAccounts = userData.classrooms.map(classroom => ({
+        id: classroom.id.toString(),
+        classroomName: classroom.name,
+        location: classroom.location || 'Unknown',
+        size: classroom.class_size || 20,
+        description: `Classroom managed by ${userData.account.email}`,
+        interests: classroom.interests || [],
+        schedule: {}, // TODO: Convert availability to schedule format
+        x: Math.random() * 80 + 10, // Random position for map
+        y: Math.random() * 60 + 20,
+        recentCalls: [],
+        friends: [],
+      }));
+
+      if (convertedAccounts.length > 0) {
+        setAccounts(convertedAccounts);
+        setCurrentAccountId(convertedAccounts[0].id);
+      } else {
+        // No classrooms yet, keep default state
+        setAccounts([defaultAccount]);
+        setCurrentAccountId(defaultAccount.id);
+      }
+
+      setIsAuthenticated(true);
+      setShowLoginDialog(false);
+      toast.success('Successfully logged in!');
+    } catch (error) {
+      console.error('Login error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      toast.error(`Login failed: ${errorMessage}`);
+    }
   };
 
-  const handleSignup = (email: string, password: string, classroomName: string) => {
-    // Mock signup
-    const newAccount: Account = {
-      id: `account-${Date.now()}`,
-      classroomName,
-      location: 'New Location',
-      size: 20,
-      description: 'A new classroom on MirrorMirror',
-      interests: [],
-      schedule: {},
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      recentCalls: [],
-      friends: [],
-    };
-    handleAccountCreate(newAccount);
-    setIsAuthenticated(true);
-    setShowLoginDialog(false);
-    toast.success('Account created successfully!');
+  const handleSignup = async (email: string, password: string, classroomName: string) => {
+    try {
+      // Register account with backend
+      await AuthService.register({ email, password });
+      
+      // Login with new account
+      await AuthService.login({ email, password });
+      
+      // Create first classroom
+      const classroomResult = await ClassroomService.createClassroom({
+        name: classroomName,
+        location: 'New Location',
+        interests: [],
+      });
+
+      // Convert to frontend format
+      const newAccount: Account = {
+        id: classroomResult.classroom.id.toString(),
+        classroomName: classroomResult.classroom.name,
+        location: classroomResult.classroom.location || 'New Location',
+        size: classroomResult.classroom.class_size || 20,
+        description: 'A new classroom on PenPals',
+        interests: classroomResult.classroom.interests || [],
+        schedule: {},
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        recentCalls: [],
+        friends: [],
+      };
+
+      setAccounts([newAccount]);
+      setCurrentAccountId(newAccount.id);
+      setIsAuthenticated(true);
+      setShowLoginDialog(false);
+      toast.success('Account created successfully!');
+    } catch (error) {
+      console.error('Signup error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Signup failed';
+      toast.error(`Signup failed: ${errorMessage}`);
+    }
   };
 
   const handleLogout = () => {
+    // Clear backend authentication
+    AuthService.logout();
     setIsAuthenticated(false);
+    setAccounts([defaultAccount]);
+    setCurrentAccountId(defaultAccount.id);
     toast.success('Logged out successfully');
   };
 
