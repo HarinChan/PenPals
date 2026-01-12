@@ -205,6 +205,7 @@ export default function SidePanel({
   });
 
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [editingAccountLocation, setEditingAccountLocation] = useState(false);
 
   const allInterests = [...AVAILABLE_SUBJECTS];
 
@@ -250,15 +251,8 @@ export default function SidePanel({
     onAccountUpdate({
       ...currentAccount,
       ...accountForm,
-      // Update coordinates if a new location was selected
-      ...(selectedLocation && {
-        location: selectedLocation.name,
-        x: selectedLocation.longitude,
-        y: selectedLocation.latitude,
-      }),
     });
     setEditingAccount(false);
-    setSelectedLocation(null); // Reset selected location
   };
 
   const createNewAccount = () => {
@@ -552,18 +546,24 @@ export default function SidePanel({
       ) : (
         <Tabs defaultValue="controls" className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 p-2 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-slate-50 dark:bg-slate-900">
-            <TabsList className="flex-1 grid grid-cols-2 h-9 bg-transparent p-0 gap-1">
+            <TabsList className="flex-1 grid grid-cols-3 h-9 bg-transparent p-0 gap-1">
               <TabsTrigger
                 value="controls"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
-                Controls
+                Classrooms
+              </TabsTrigger>
+              <TabsTrigger
+                value="account"
+                className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
+              >
+                Account
               </TabsTrigger>
               <TabsTrigger
                 value="feed"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
-                Community Feed
+                Feed
               </TabsTrigger>
             </TabsList>
             <Button
@@ -657,7 +657,6 @@ export default function SidePanel({
                             size: currentAccount.size,
                             description: currentAccount.description,
                           });
-                          setSelectedLocation(null); // Reset location selection
                           setEditingAccount(true);
                         }
                       }}
@@ -678,18 +677,6 @@ export default function SidePanel({
                             onChange={(e) => setAccountForm({ ...accountForm, classroomName: e.target.value })}
                             className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                           />
-                        </div>
-                        <div className="space-y-1">
-                          <LocationAutocomplete
-                            label="Location"
-                            placeholder="Search for your classroom location..."
-                            value={selectedLocation}
-                            onChange={setSelectedLocation}
-                            id="classroom-location"
-                          />
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Current: {accountForm.location}
-                          </p>
                         </div>
                         <div className="space-y-1">
                           <Label className="text-slate-700 dark:text-slate-300">Class Size</Label>
@@ -715,6 +702,7 @@ export default function SidePanel({
                         <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                           <MapPin size={16} />
                           <span>{currentAccount.location}</span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">(Account location)</span>
                         </div>
                         <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                           <Users size={16} />
@@ -1089,6 +1077,91 @@ export default function SidePanel({
                 </div>
               </Card>
             </Collapsible>
+          </TabsContent>
+
+          <TabsContent value="account" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
+            {/* Account Location Management */}
+            <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-slate-900 dark:text-slate-100 font-medium">Account Location</h3>
+                  <button
+                    onClick={() => {
+                      if (editingAccountLocation) {
+                        // Save location changes
+                        if (selectedLocation) {
+                          // Update all classrooms with new coordinates
+                          const updatedAccounts = accounts.map(account => ({
+                            ...account,
+                            location: selectedLocation.name,
+                            x: selectedLocation.longitude,
+                            y: selectedLocation.latitude,
+                          }));
+                          
+                          // Update each account
+                          updatedAccounts.forEach(account => {
+                            onAccountUpdate(account);
+                          });
+                          
+                          toast.success('Location updated for all classrooms');
+                        }
+                        setEditingAccountLocation(false);
+                        setSelectedLocation(null);
+                      } else {
+                        setEditingAccountLocation(true);
+                      }
+                    }}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
+                  >
+                    {editingAccountLocation ? 'Save' : <Edit2 size={16} />}
+                  </button>
+                </div>
+
+                {editingAccountLocation ? (
+                  <div className="space-y-3">
+                    <LocationAutocomplete
+                      label="Account Location"
+                      placeholder="Search for your location..."
+                      value={selectedLocation}
+                      onChange={setSelectedLocation}
+                      id="account-location"
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      This will update the location for all your classrooms. Current: {currentAccount.location}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <MapPin size={16} />
+                      <span>{currentAccount.location}</span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      All your classrooms are located at this address. Change this to update the location for all classrooms.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Account Statistics */}
+            <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="p-6 space-y-4">
+                <h3 className="text-slate-900 dark:text-slate-100 font-medium">Account Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{accounts.length}</div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">Classrooms</div>
+                  </div>
+                  <div className="text-center p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {accounts.reduce((total, acc) => total + (acc.friends?.length || 0), 0)}
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">Total Friends</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
           </TabsContent>
 
           <TabsContent value="feed" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
