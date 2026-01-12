@@ -36,6 +36,10 @@ application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
     rel_path = db_uri.replace('sqlite:///', '', 1)
+    # Ensure the directory exists
+    db_dir = os.path.dirname(rel_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     abs_path = os.path.abspath(rel_path)
     db_uri = f'sqlite:///{abs_path}'
 application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
@@ -47,6 +51,11 @@ digits = [str(i) for i in range(10)]
 
 db.init_app(application)
 jwt = JWTManager(application)
+
+# Initialize database tables
+with application.app_context():
+    db.create_all()
+    print("Database initialized successfully!")
 
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
