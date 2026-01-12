@@ -74,12 +74,19 @@ function AppContent() {
   };
 
   const handleAccountCreate = (newAccount: Account) => {
+    // If there are existing accounts, inherit coordinates from the first one
+    if (accounts.length > 0) {
+      const firstAccount = accounts[0];
+      newAccount.x = firstAccount.x;
+      newAccount.y = firstAccount.y;
+    }
     setAccounts([...accounts, newAccount]);
     setCurrentAccountId(newAccount.id);
   };
 
   const handleAccountDelete = (accountId: string) => {
     const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
+    const deletedAccount = accounts.find(acc => acc.id === accountId);
 
     // If we're deleting the last classroom, create a new empty one
     if (filteredAccounts.length === 0) {
@@ -91,8 +98,9 @@ function AppContent() {
         description: '',
         interests: [],
         schedule: {},
-        x: Math.random() * 80 + 10,
-        y: Math.random() * 60 + 20,
+        // Inherit coordinates from the deleted account, or use default if not available
+        x: deletedAccount?.x ?? -0.1278,
+        y: deletedAccount?.y ?? 51.5074,
       };
       setAccounts([newAccount]);
       setCurrentAccountId(newAccount.id);
@@ -128,8 +136,9 @@ function AppContent() {
         description: `Classroom managed by ${userData.account.email}`,
         interests: classroom.interests || [],
         schedule: {}, // TODO: Convert availability to schedule format
-        x: Math.random() * 80 + 10, // Random position for map
-        y: Math.random() * 60 + 20,
+        // Use coordinates from backend if available, otherwise use default location (London)
+        x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
+        y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
         recentCalls: [],
         friends: [],
       }));
@@ -163,7 +172,7 @@ function AppContent() {
     }
   };
 
-  const handleSignup = async (email: string, password: string, classroomName: string) => {
+  const handleSignup = async (email: string, password: string, classroomName: string, location?: string) => {
     setSignupError(''); // Clear previous errors
     setAuthLoading(true);
     
@@ -174,24 +183,25 @@ function AppContent() {
       // Login with new account
       await AuthService.login({ email, password });
       
-      // Create first classroom
+      // Create first classroom with provided location
       const classroomResult = await ClassroomService.createClassroom({
         name: classroomName,
-        location: 'New Location',
+        location: location || 'Unknown Location',
         interests: [],
       });
 
-      // Convert to frontend format
+      // Convert to frontend format - use coordinates from first classroom for consistency
       const newAccount: Account = {
         id: classroomResult.classroom.id.toString(),
         classroomName: classroomResult.classroom.name,
-        location: classroomResult.classroom.location || 'New Location',
+        location: classroomResult.classroom.location || 'Unknown Location',
         size: classroomResult.classroom.class_size || 20,
         description: 'A new classroom on PenPals',
         interests: classroomResult.classroom.interests || [],
         schedule: {},
-        x: Math.random() * 100,
-        y: Math.random() * 100,
+        // Use coordinates from backend if available, otherwise use default location (London)
+        x: classroomResult.classroom.longitude ? parseFloat(classroomResult.classroom.longitude) : -0.1278,
+        y: classroomResult.classroom.latitude ? parseFloat(classroomResult.classroom.latitude) : 51.5074,
         recentCalls: [],
         friends: [],
       };

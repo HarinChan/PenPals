@@ -11,7 +11,7 @@ interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogin: (email: string, password: string) => void;
-  onSignup: (email: string, password: string, classroomName: string) => void;
+  onSignup: (email: string, password: string, classroomName: string, location?: string) => void;
   loginError?: string;
   signupError?: string;
   isLoading?: boolean;
@@ -31,6 +31,7 @@ export default function LoginDialog({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupClassroomName, setSignupClassroomName] = useState('');
+  const [signupLocation, setSignupLocation] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
@@ -58,12 +59,13 @@ export default function LoginDialog({
     e.preventDefault();
     setInternalLoading(true);
     try {
-      await onSignup(signupEmail, signupPassword, signupClassroomName);
+      await onSignup(signupEmail, signupPassword, signupClassroomName, signupLocation);
       // Only clear fields on successful signup
       if (!signupError) {
         setSignupEmail('');
         setSignupPassword('');
         setSignupClassroomName('');
+        setSignupLocation('');
       }
     } finally {
       setInternalLoading(false);
@@ -187,6 +189,20 @@ export default function LoginDialog({
                   required
                   className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-location" className="text-slate-900 dark:text-slate-100">Location</Label>
+                <Input
+                  id="signup-location"
+                  type="text"
+                  placeholder="London, UK"
+                  value={signupLocation}
+                  onChange={(e) => setSignupLocation(e.target.value)}
+                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Optional: City and country for your classroom
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-password" className="text-slate-900 dark:text-slate-100">Password</Label>
