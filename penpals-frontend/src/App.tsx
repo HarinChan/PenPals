@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner@2.0.3';
 import { Toaster } from './components/Toaster';
 import { AuthService, ClassroomService } from './services';
+import type { SelectedLocation } from './services/location';
 
 export default function App() {
   return (
@@ -172,7 +173,7 @@ function AppContent() {
     }
   };
 
-  const handleSignup = async (email: string, password: string, classroomName: string, location?: string) => {
+  const handleSignup = async (email: string, password: string, classroomName: string, location?: SelectedLocation) => {
     setSignupError(''); // Clear previous errors
     setAuthLoading(true);
     
@@ -186,7 +187,9 @@ function AppContent() {
       // Create first classroom with provided location
       const classroomResult = await ClassroomService.createClassroom({
         name: classroomName,
-        location: location || 'Unknown Location',
+        location: location?.name || 'Unknown Location',
+        latitude: location?.latitude?.toString(),
+        longitude: location?.longitude?.toString(),
         interests: [],
       });
 

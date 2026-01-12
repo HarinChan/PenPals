@@ -6,12 +6,14 @@ import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import LocationAutocomplete from './LocationAutocomplete';
+import type { SelectedLocation } from '../services/location';
 
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogin: (email: string, password: string) => void;
-  onSignup: (email: string, password: string, classroomName: string, location?: string) => void;
+  onSignup: (email: string, password: string, classroomName: string, location?: SelectedLocation) => void;
   loginError?: string;
   signupError?: string;
   isLoading?: boolean;
@@ -31,7 +33,7 @@ export default function LoginDialog({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupClassroomName, setSignupClassroomName] = useState('');
-  const [signupLocation, setSignupLocation] = useState('');
+  const [signupLocation, setSignupLocation] = useState<SelectedLocation | null>(null);
   const [internalLoading, setInternalLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
@@ -65,7 +67,7 @@ export default function LoginDialog({
         setSignupEmail('');
         setSignupPassword('');
         setSignupClassroomName('');
-        setSignupLocation('');
+        setSignupLocation(null);
       }
     } finally {
       setInternalLoading(false);
@@ -191,18 +193,13 @@ export default function LoginDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-location" className="text-slate-900 dark:text-slate-100">Location</Label>
-                <Input
-                  id="signup-location"
-                  type="text"
-                  placeholder="London, UK"
+                <LocationAutocomplete
+                  label="Location"
+                  placeholder="Search for your city..."
                   value={signupLocation}
-                  onChange={(e) => setSignupLocation(e.target.value)}
-                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                  onChange={setSignupLocation}
+                  id="signup-location"
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Optional: City and country for your classroom
-                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-password" className="text-slate-900 dark:text-slate-100">Password</Label>
