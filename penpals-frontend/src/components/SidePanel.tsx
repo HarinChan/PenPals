@@ -225,16 +225,99 @@ export default function SidePanel({
     }
   };
 
-  const toggleScheduleSlot = (day: string, hour: number) => {
-    const daySchedule = currentAccount.schedule[day] || [];
-    const newSchedule = daySchedule.includes(hour)
-      ? daySchedule.filter(h => h !== hour)
-      : [...daySchedule, hour].sort((a, b) => a - b);
+  // Helper: Format schedule array to string (e.g., [9, 10, 11] -> "9, 10, 11")
+  const formatScheduleToString = (hours: number[] | undefined): string => {
+    if (!hours || hours.length === 0) return '';
+    return hours.sort((a, b) => a - b).join(', ');
+  };
 
+  // Helper: Format schedule for display (e.g. [9, 10, 14] -> "9:00 - 11:00, 14:00 - 15:00")
+  const formatScheduleRanges = (hours: number[] | undefined): string => {
+    if (!hours || hours.length === 0) return 'Not available';
+    
+    const sorted = [...hours].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sorted[0];
+    let prev = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] !== prev + 1) {
+            // End of a range
+            ranges.push(`${start}:00 - ${prev + 1}:00`);
+            start = sorted[i];
+        }
+        prev = sorted[i];
+    }
+    // Push the last range
+    ranges.push(`${start}:00 - ${prev + 1}:00`);
+    
+    return ranges.join(', ');
+  };
+
+  // Helper: Parse string input to schedule array
+  const parseScheduleInput = (input: string): number[] => {
+    const parts = input.split(/[,;\s]+/); // Split by comma, semicolon, or space
+    const hours = new Set<number>();
+
+    parts.forEach(part => {
+      if (!part) return;
+      
+      // Handle ranges like "9-12"
+      if (part.includes('-')) {
+        const [startStr, endStr] = part.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end-1; i++) {
+             if (i >= 0 && i <= 23) hours.add(i);
+          }
+        }
+      } else {
+        // Handle single numbers
+        const num = parseInt(part, 10);
+        if (!isNaN(num) && num >= 0 && num <= 23) {
+          hours.add(num);
+        }
+      }
+    });
+
+    return Array.from(hours).sort((a, b) => a - b);
+  };
+
+  // Local state to handle input values before parsing
+  const [scheduleInputs, setScheduleInputs] = useState<{ [day: string]: string }>({});
+
+  // Initialize inputs when opening editor or account changes
+  useEffect(() => {
+    if (showScheduleEditor) {
+      const inputs: { [day: string]: string } = {};
+      DAYS.forEach(day => {
+        inputs[day] = formatScheduleToString(currentAccount.schedule[day]);
+      });
+      setScheduleInputs(inputs);
+    }
+  }, [showScheduleEditor, currentAccount.id]); // Re-sync if account changes or editor opens
+
+  const handleScheduleInputChange = (day: string, value: string) => {
+    setScheduleInputs(prev => ({ ...prev, [day]: value }));
+  };
+
+  const handleScheduleInputBlur = (day: string) => {
+    const value = scheduleInputs[day] || '';
+    const newSchedule = parseScheduleInput(value);
+    
+    // Update the real data
     onAccountUpdate({
       ...currentAccount,
       schedule: { ...currentAccount.schedule, [day]: newSchedule },
     });
+
+    // Re-format the input to look clean (optional, but good for validation feedback)
+    setScheduleInputs(prev => ({
+      ...prev,
+      [day]: formatScheduleToString(newSchedule)
+    }));
   };
 
   const saveAccountInfo = () => {
@@ -795,7 +878,7 @@ export default function SidePanel({
                       onClick={() => setShowScheduleEditor(!showScheduleEditor)}
                       className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
                     >
-                      {showScheduleEditor ? 'Hide' : 'Edit'}
+                      {showScheduleEditor ? 'Save' : 'Edit'}
                     </button>
                   </div>
 
@@ -804,27 +887,19 @@ export default function SidePanel({
                     {showScheduleEditor ? (
                       <ScrollArea className="h-80">
                         <div className="space-y-4 pr-4">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Enter available hours (0-23) separated by commas or ranges. Example: "9, 10, 14-16"
+                          </p>
                           {DAYS.map((day) => (
-                            <div key={day} className="space-y-2">
-                              <div className="text-slate-700 dark:text-slate-300">{day}</div>
-                              <div className="grid grid-cols-8 gap-1">
-                                {HOURS.map((hour) => {
-                                  const isSelected = currentAccount.schedule[day]?.includes(hour);
-                                  return (
-                                    <button
-                                      key={hour}
-                                      onClick={() => toggleScheduleSlot(day, hour)}
-                                      className={`p-1 text-xs rounded transition-colors ${isSelected
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                                        }`}
-                                      title={`${hour}:00`}
-                                    >
-                                      {hour}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                            <div key={day} className="space-y-1">
+                              <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">{day}</Label>
+                              <Input
+                                value={scheduleInputs[day] ?? ''}
+                                onChange={(e) => handleScheduleInputChange(day, e.target.value)}
+                                onBlur={() => handleScheduleInputBlur(day)}
+                                placeholder="e.g. 9-12, 14, 15"
+                                className="h-8 text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+                              />
                             </div>
                           ))}
                         </div>
@@ -838,7 +913,7 @@ export default function SidePanel({
                             <div key={day} className="flex gap-2 text-sm">
                               <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
                               <span className="text-slate-900 dark:text-slate-100">
-                                {hours.length > 0 ? `${hours[0]}:00 - ${hours[hours.length - 1] + 1}:00` : 'Not available'}
+                                {formatScheduleRanges(hours)}
                               </span>
                             </div>
                           );
