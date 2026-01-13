@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
 import TimezoneClock from './TimezoneClock';
-import type { Account } from './SidePanel';
+import type { Account } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -115,9 +115,9 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     return '#64748b';
   };
 
-  // make sure Account has lon/lat fields
-  const myLon = myClassroom.lon ?? -0.1273;
-  const myLat = myClassroom.lat ?? 51.2507;
+  // make sure Account has x/y fields
+  const myLon = myClassroom.x ?? -0.1273;
+  const myLat = myClassroom.y ?? 51.2507;
 
   // compute a safe display name for the "You" marker
   const myDisplayName = (myClassroom as any).classroomName ?? (myClassroom as any).name ?? 'You';
