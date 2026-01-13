@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { toast } from 'sonner@2.0.3';
 import { Toaster } from './components/Toaster';
+import { AuthService, ClassroomService } from './services';
+import type { SelectedLocation } from './services/location';
 
 export default function App() {
   return (
@@ -25,6 +27,10 @@ function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [loginError, setLoginError] = useState<string>('');
+  const [signupError, setSignupError] = useState<string>('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([defaultAccount]);
@@ -55,6 +61,57 @@ function AppContent() {
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || defaultAccount;
 
+  // Check for existing authentication on component mount
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      if (AuthService.isAuthenticated()) {
+        setAuthLoading(true);
+        try {
+          // Try to get user data with existing token
+          const userData = await AuthService.getCurrentUser();
+          
+          // Convert backend classrooms to frontend format
+          const convertedAccounts = userData.classrooms.map(classroom => ({
+            id: classroom.id.toString(),
+            classroomName: classroom.name,
+            location: classroom.location || 'Unknown',
+            size: classroom.class_size || 20,
+            description: `Classroom managed by ${userData.account.email}`,
+            interests: classroom.interests || [],
+            schedule: {}, // TODO: Convert availability to schedule format
+            // Use coordinates from backend if available, otherwise use default location (London)
+            x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
+            y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
+            recentCalls: [],
+            friends: [],
+          }));
+
+          if (convertedAccounts.length > 0) {
+            setAccounts(convertedAccounts);
+            setCurrentAccountId(convertedAccounts[0].id);
+          } else {
+            // No classrooms yet, keep default state
+            setAccounts([defaultAccount]);
+            setCurrentAccountId(defaultAccount.id);
+          }
+
+          setIsAuthenticated(true);
+        } catch (error) {
+          // Token is invalid or expired, clear it
+          AuthService.logout();
+          setIsAuthenticated(false);
+        } finally {
+          setAuthLoading(false);
+          setInitialLoading(false);
+        }
+      } else {
+        setInitialLoading(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
   const handleClassroomSelect = (classroom: Classroom) => {
     setSelectedClassroom(classroom);
   };
@@ -70,12 +127,19 @@ function AppContent() {
   };
 
   const handleAccountCreate = (newAccount: Account) => {
+    // If there are existing accounts, inherit coordinates from the first one
+    if (accounts.length > 0) {
+      const firstAccount = accounts[0];
+      newAccount.x = firstAccount.x;
+      newAccount.y = firstAccount.y;
+    }
     setAccounts([...accounts, newAccount]);
     setCurrentAccountId(newAccount.id);
   };
 
   const handleAccountDelete = (accountId: string) => {
     const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
+    const deletedAccount = accounts.find(acc => acc.id === accountId);
 
     // If we're deleting the last classroom, create a new empty one
     if (filteredAccounts.length === 0) {
@@ -87,8 +151,9 @@ function AppContent() {
         description: '',
         interests: [],
         schedule: {},
-        x: Math.random() * 80 + 10,
-        y: Math.random() * 60 + 20,
+        // Inherit coordinates from the deleted account, or use default if not available
+        x: deletedAccount?.x ?? -0.1278,
+        y: deletedAccount?.y ?? 51.5074,
       };
       setAccounts([newAccount]);
       setCurrentAccountId(newAccount.id);
@@ -104,36 +169,130 @@ function AppContent() {
     }
   };
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock login
-    setIsAuthenticated(true);
-    setShowLoginDialog(false);
-    toast.success('Successfully logged in!');
+  const handleLogin = async (email: string, password: string) => {
+    setLoginError(''); // Clear previous errors
+    setAuthLoading(true);
+    
+    try {
+      // Call real backend authentication
+      await AuthService.login({ email, password });
+      
+      // Get user data after successful login
+      const userData = await AuthService.getCurrentUser();
+      
+      // Convert backend classrooms to frontend format
+      const convertedAccounts = userData.classrooms.map(classroom => ({
+        id: classroom.id.toString(),
+        classroomName: classroom.name,
+        location: classroom.location || 'Unknown',
+        size: classroom.class_size || 20,
+        description: `Classroom managed by ${userData.account.email}`,
+        interests: classroom.interests || [],
+        schedule: {}, // TODO: Convert availability to schedule format
+        // Use coordinates from backend if available, otherwise use default location (London)
+        x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
+        y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
+        recentCalls: [],
+        friends: [],
+      }));
+
+      if (convertedAccounts.length > 0) {
+        setAccounts(convertedAccounts);
+        setCurrentAccountId(convertedAccounts[0].id);
+      } else {
+        // No classrooms yet, keep default state
+        setAccounts([defaultAccount]);
+        setCurrentAccountId(defaultAccount.id);
+      }
+
+      setIsAuthenticated(true);
+      setShowLoginDialog(false);
+      toast.success('Successfully logged in!');
+    } catch (error) {
+      console.error('Login error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      
+      // Set user-friendly error message
+      if (errorMessage.includes('Invalid credentials') || errorMessage.includes('401')) {
+        setLoginError('Incorrect email or password. Please try again.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        setLoginError('Unable to connect to server. Please check your internet connection.');
+      } else {
+        setLoginError(errorMessage);
+      }
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const handleSignup = (email: string, password: string, classroomName: string) => {
-    // Mock signup
-    const newAccount: Account = {
-      id: `account-${Date.now()}`,
-      classroomName,
-      location: 'New Location',
-      size: 20,
-      description: 'A new classroom on MirrorMirror',
-      interests: [],
-      schedule: {},
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      recentCalls: [],
-      friends: [],
-    };
-    handleAccountCreate(newAccount);
-    setIsAuthenticated(true);
-    setShowLoginDialog(false);
-    toast.success('Account created successfully!');
+  const handleSignup = async (email: string, password: string, classroomName: string, location?: SelectedLocation) => {
+    setSignupError(''); // Clear previous errors
+    setAuthLoading(true);
+    
+    try {
+      // Register account with backend
+      await AuthService.register({ email, password });
+      
+      // Login with new account
+      await AuthService.login({ email, password });
+      
+      // Create first classroom with provided location
+      const classroomResult = await ClassroomService.createClassroom({
+        name: classroomName,
+        location: location?.name || 'Unknown Location',
+        latitude: location?.latitude?.toString(),
+        longitude: location?.longitude?.toString(),
+        interests: [],
+      });
+
+      // Convert to frontend format - use coordinates from first classroom for consistency
+      const newAccount: Account = {
+        id: classroomResult.classroom.id.toString(),
+        classroomName: classroomResult.classroom.name,
+        location: classroomResult.classroom.location || 'Unknown Location',
+        size: classroomResult.classroom.class_size || 20,
+        description: 'A new classroom on PenPals',
+        interests: classroomResult.classroom.interests || [],
+        schedule: {},
+        // Use coordinates from backend if available, otherwise use default location (London)
+        x: classroomResult.classroom.longitude ? parseFloat(classroomResult.classroom.longitude) : -0.1278,
+        y: classroomResult.classroom.latitude ? parseFloat(classroomResult.classroom.latitude) : 51.5074,
+        recentCalls: [],
+        friends: [],
+      };
+
+      setAccounts([newAccount]);
+      setCurrentAccountId(newAccount.id);
+      setIsAuthenticated(true);
+      setShowLoginDialog(false);
+      toast.success('Account created successfully!');
+    } catch (error) {
+      console.error('Signup error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Signup failed';
+      
+      // Set user-friendly error message
+      if (errorMessage.includes('already exists') || errorMessage.includes('409')) {
+        setSignupError('An account with this email already exists. Please use a different email or try logging in.');
+      } else if (errorMessage.includes('Password must')) {
+        setSignupError('Password must be at least 8 characters with uppercase, lowercase, digit, and special character.');
+      } else if (errorMessage.includes('Invalid email')) {
+        setSignupError('Please enter a valid email address.');
+      } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        setSignupError('Unable to connect to server. Please check your internet connection.');
+      } else {
+        setSignupError(errorMessage);
+      }
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const handleLogout = () => {
+    // Clear backend authentication
+    AuthService.logout();
     setIsAuthenticated(false);
+    setAccounts([defaultAccount]);
+    setCurrentAccountId(defaultAccount.id);
     toast.success('Logged out successfully');
   };
 
@@ -202,15 +361,37 @@ function AppContent() {
 
   const myPosts = posts.filter(post => post.authorId === currentAccountId);
 
+  // Show loading screen during initial authentication check
+  if (initialLoading) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center animate-pulse">
+            <GraduationCap className="w-6 h-6 text-white" />
+          </div>
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show login dialog if not authenticated
   if (!isAuthenticated) {
     return (
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <LoginDialog
           open={true}
-          onOpenChange={() => { }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLoginError('');
+              setSignupError('');
+            }
+          }}
           onLogin={handleLogin}
           onSignup={handleSignup}
+          loginError={loginError}
+          signupError={signupError}
+          isLoading={authLoading}
         />
       </div>
     );
@@ -365,7 +546,7 @@ function AppContent() {
 const defaultAccount: Account = {
   id: 'account-1',
   classroomName: 'My Classroom',
-  location: 'San Francisco, USA',
+  location: 'London, England, United Kingdom',
   size: 25,
   description: 'A friendly learning environment focused on STEM subjects and outdoor activities.',
   interests: ['Math', 'Biology'],
@@ -376,8 +557,8 @@ const defaultAccount: Account = {
     Thu: [9, 10, 11],
     Fri: [14, 15],
   },
-  x: 18,
-  y: 37,
+  x: -0.1278, // London longitude
+  y: 51.5074, // London latitude
   recentCalls: [
     {
       id: 'call-1',

@@ -1,3 +1,9 @@
+"""
+Main Flask application for PenPals backend.
+Handles authentication, basic profile operations, and ChromaDB document management.
+Account and classroom management is handled by separate blueprints.
+"""
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -5,17 +11,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta
 import os
 
-# Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv()
 
 from models import db, Account, Profile, Relation, Post
 
-# Ensure models are registered with SQLAlchemy
+from account import account_bp
+from classroom import classroom_bp
+
 def print_tables():
     with application.app_context():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
-
 
 from chromadb_service import ChromaDBService
 
@@ -23,34 +29,38 @@ application = Flask(__name__)
 CORS(application)
 print_tables()
 
-# Configuration
 application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
 db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
-# If using a relative SQLite URI, convert to absolute path
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
     rel_path = db_uri.replace('sqlite:///', '', 1)
+    # Ensure the directory exists
+    db_dir = os.path.dirname(rel_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     abs_path = os.path.abspath(rel_path)
     db_uri = f'sqlite:///{abs_path}'
 application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-
-# Lists of capital letters, lowercase letters, and digits
 capital_letters = [chr(i) for i in range(ord('A'), ord('Z')+1)]
 lowercase_letters = [chr(i) for i in range(ord('a'), ord('z')+1)]
 digits = [str(i) for i in range(10)]
 
-# Initialize extensions
 db.init_app(application)
 jwt = JWTManager(application)
 
-# Initialize ChromaDB service
-chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
+# Initialize database tables
+with application.app_context():
+    db.create_all()
+    print("Database initialized successfully!")
 
-# Note: Table creation is handled by src/init_db.py (avoid doing it at runtime)
+application.register_blueprint(account_bp)
+application.register_blueprint(classroom_bp)
+
+chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 
 @application.route('/api/auth/register', methods=['POST'])
 def register():
@@ -60,9 +70,8 @@ def register():
     email = data.get('email')
     password = data.get('password')
     organization = data.get('organization')
-    name = data.get('name')
     
-    if not email or not password or not name:
+    if not email or not password:
         return jsonify({"msg": "Missing required fields"}), 400
     
     # Password validation: at least 8 chars, one uppercase, one lowercase, one digit, one special char
@@ -85,21 +94,14 @@ def register():
     # Hash password using werkzeug
     password_hash = generate_password_hash(password)
     
-    # Create account
+    # Create account (no automatic profile creation)
     account = Account(email=email, password_hash=password_hash, organization=organization)
     db.session.add(account)
-    db.session.flush()  # Get account.id before committing
-    
-    # Create associated profile
-    profile = Profile(account_id=account.id, name=name)
-    db.session.add(profile)
-    
     db.session.commit()
     
     return jsonify({
         "msg": "Account created successfully",
-        "account_id": account.id,
-        "profile_id": profile.id
+        "account_id": account.id
     }), 201
 
 
@@ -124,8 +126,7 @@ def login():
     
     return jsonify({
         "access_token": access_token,
-        "account_id": account.id,
-        "profile_id": account.profile.id if account.profile else None
+        "account_id": account.id
     }), 200
 
 
@@ -139,7 +140,18 @@ def get_current_user():
     if not account:
         return jsonify({"msg": "Account not found"}), 404
     
-    profile = account.profile
+    # Get all classrooms for this account
+    classrooms = []
+    for classroom in account.classrooms:
+        classrooms.append({
+            "id": classroom.id,
+            "name": classroom.name,
+            "location": classroom.location,
+            "latitude": classroom.lattitude,  # Note: keeping original typo for consistency
+            "longitude": classroom.longitude,
+            "class_size": classroom.class_size,
+            "interests": classroom.interests
+        })
     
     return jsonify({
         "account": {
@@ -147,14 +159,7 @@ def get_current_user():
             "email": account.email,
             "organization": account.organization
         },
-        "profile": {
-            "id": profile.id,
-            "name": profile.name,
-            "location": profile.location,
-            "class_size": profile.class_size,
-            "timezone": profile.timezone,
-            "interests": profile.interests
-        } if profile else None
+        "classrooms": classrooms
     }), 200
 
 @application.route('/api/profiles/get', methods=["GET"])

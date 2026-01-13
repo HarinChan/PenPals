@@ -51,16 +51,30 @@ interface MapViewProps {
 }
 
 // Component to handle map view updates when selectedClassroom changes
-function MapController({ center, zoom }: { center: [number, number], zoom: number }) {
+function MapController({ center, zoom, animate = true }: { center: [number, number], zoom: number, animate?: boolean }) {
   const map = useMap();
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   useEffect(() => {
-    map.flyTo(center, zoom, { duration: 1.5 });
-  }, [center, zoom, map]);
+    if (!isInitialized) {
+      // On first load, set view immediately without animation
+      map.setView(center, zoom);
+      setIsInitialized(true);
+    } else if (animate) {
+      // On subsequent changes, animate only if requested
+      map.flyTo(center, zoom, { duration: 1.5 });
+    } else {
+      // Set view immediately without animation
+      map.setView(center, zoom);
+    }
+  }, [center, zoom, map, animate, isInitialized]);
+  
   return null;
 }
 
 export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
   const { theme } = useTheme();
+  const [mapInitialized, setMapInitialized] = useState(false);
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
   const schedule = (myClassroom as any).schedule ?? {};
@@ -161,6 +175,10 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         style={{ height: '100%', width: '100%', zIndex: 0 }}
         scrollWheelZoom={true}
         className="z-0"
+        whenReady={() => setMapInitialized(true)}
+        fadeAnimation={false}
+        zoomAnimation={false}
+        markerZoomAnimation={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -169,7 +187,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
             : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
         />
 
-        <MapController center={mapCenter} zoom={mapZoom} />
+        <MapController center={mapCenter} zoom={mapZoom} animate={!!selectedClassroom && mapInitialized} />
 
 
         {/* My Marker */}

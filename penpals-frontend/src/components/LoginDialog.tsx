@@ -6,44 +6,72 @@ import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import LocationAutocomplete from './LocationAutocomplete';
+import type { SelectedLocation } from '../services/location';
 
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogin: (email: string, password: string) => void;
-  onSignup: (email: string, password: string, classroomName: string) => void;
+  onSignup: (email: string, password: string, classroomName: string, location?: SelectedLocation) => void;
+  loginError?: string;
+  signupError?: string;
+  isLoading?: boolean;
 }
 
-export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: LoginDialogProps) {
+export default function LoginDialog({ 
+  open, 
+  onOpenChange, 
+  onLogin, 
+  onSignup, 
+  loginError, 
+  signupError, 
+  isLoading: externalLoading 
+}: LoginDialogProps) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupClassroomName, setSignupClassroomName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [signupLocation, setSignupLocation] = useState<SelectedLocation | null>(null);
+  const [internalLoading, setInternalLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
+
+  const isLoading = externalLoading || internalLoading;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    onLogin(loginEmail, loginPassword);
-    setIsLoading(false);
-    setLoginEmail('');
-    setLoginPassword('');
+    setInternalLoading(true);
+    try {
+      await onLogin(loginEmail, loginPassword);
+      // Only clear fields on successful login (no error)
+      if (!loginError) {
+        setLoginEmail('');
+        setLoginPassword('');
+      } else {
+        // On error, clear only password but keep email
+        setLoginPassword('');
+      }
+    } finally {
+      setInternalLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    onSignup(signupEmail, signupPassword, signupClassroomName);
-    setIsLoading(false);
-    setSignupEmail('');
-    setSignupPassword('');
-    setSignupClassroomName('');
+    setInternalLoading(true);
+    try {
+      await onSignup(signupEmail, signupPassword, signupClassroomName, signupLocation);
+      // Only clear fields on successful signup
+      if (!signupError) {
+        setSignupEmail('');
+        setSignupPassword('');
+        setSignupClassroomName('');
+        setSignupLocation(null);
+      }
+    } finally {
+      setInternalLoading(false);
+    }
   };
 
   return (
@@ -72,13 +100,26 @@ export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: L
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs defaultValue="login" className="w-full" onValueChange={() => {
+          // Clear errors when switching tabs
+          if (loginError || signupError) {
+            // We need to call parent functions to clear errors
+            // For now, errors will persist until next attempt
+          }
+        }}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="signup">Sign Up</TabsTrigger>
           </TabsList>
 
           <TabsContent value="login" className="space-y-4">
+            {loginError && (
+              <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {loginError}
+                </p>
+              </div>
+            )}
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email" className="text-slate-900 dark:text-slate-100">Email</Label>
@@ -101,7 +142,11 @@ export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: L
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   required
-                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                  className={`bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 ${
+                    loginError 
+                      ? 'border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500' 
+                      : 'border-slate-300 dark:border-slate-600'
+                  }`}
                 />
               </div>
               <Button 
@@ -115,6 +160,13 @@ export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: L
           </TabsContent>
 
           <TabsContent value="signup" className="space-y-4">
+            {signupError && (
+              <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {signupError}
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="signup-classroom" className="text-slate-900 dark:text-slate-100">Account Name</Label>
@@ -141,6 +193,15 @@ export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: L
                 />
               </div>
               <div className="space-y-2">
+                <LocationAutocomplete
+                  label="Location"
+                  placeholder="Search for your city..."
+                  value={signupLocation}
+                  onChange={setSignupLocation}
+                  id="signup-location"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="signup-password" className="text-slate-900 dark:text-slate-100">Password</Label>
                 <Input
                   id="signup-password"
@@ -151,6 +212,9 @@ export default function LoginDialog({ open, onOpenChange, onLogin, onSignup }: L
                   required
                   className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                 />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Must be 8+ characters with uppercase, lowercase, digit, and special character
+                </p>
               </div>
               <Button 
                 type="submit" 
