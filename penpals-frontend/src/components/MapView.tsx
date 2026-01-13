@@ -54,7 +54,7 @@ interface MapViewProps {
 function MapController({ center, zoom, animate = true }: { center: [number, number], zoom: number, animate?: boolean }) {
   const map = useMap();
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   useEffect(() => {
     if (!isInitialized) {
       // On first load, set view immediately without animation
@@ -68,7 +68,7 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
       map.setView(center, zoom);
     }
   }, [center, zoom, map, animate, isInitialized]);
-  
+
   return null;
 }
 
@@ -223,7 +223,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       <div className="absolute inset-0 pointer-events-none z-[1000]">
 
         {/* Classroom count badge */}
-        <div className="absolute bottom-4 right-4 pointer-events-auto">
+        <div className="absolute bottom-4 right-4 pointer-events-auto" style={{ pointerEvents: 'auto' }}>
           <Badge variant="secondary" className={`backdrop-blur-sm border shadow-lg ${theme === 'dark'
             ? 'bg-slate-900/80 text-slate-200 border-slate-700'
             : 'bg-white/90 text-slate-900 border-slate-200'
@@ -236,7 +236,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         <div className={`absolute bottom-6 left-6 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg border pointer-events-auto ${theme === 'dark'
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
-          }`}>
+          }`} style={{ pointerEvents: 'auto' }}>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
@@ -258,7 +258,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         </div>
 
         {/* Timezone Clock */}
-        <div className="absolute top-4 right-4 pointer-events-auto">
+        <div className="absolute top-4 right-4 pointer-events-auto" style={{ pointerEvents: 'auto' }}>
           <TimezoneClock />
         </div>
       </div>
