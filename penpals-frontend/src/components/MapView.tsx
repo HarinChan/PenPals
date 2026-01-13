@@ -62,7 +62,7 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
       setIsInitialized(true);
     } else if (animate) {
       // On subsequent changes, animate only if requested
-      map.flyTo(center, zoom, { duration: 1.5 });
+      map.flyTo(center, zoom, { duration: 1.2 });
     } else {
       // Set view immediately without animation
       map.setView(center, zoom);
@@ -99,12 +99,16 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       ? matchingInterests.length / (myClassroom as any).interests.length
       : 0;
 
-    // green for perfect matches
+    // blue for perfect matches in schedule and interests
     if (scheduleMatches && interestMatchRatio === 1) {
+      return '#4382f7';
+    }
+    // green for perfect interest match
+    else if (interestMatchRatio === 1) {
       return '#10b981';
     }
     // yellow for good schedule/partial interest matches
-    else if (scheduleMatches && interestMatchRatio > 0) {
+    else if (interestMatchRatio >= 0.5) {
       return '#eab308';
     }
     // red for partial interest/no schedule matches
