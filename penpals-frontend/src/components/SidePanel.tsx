@@ -105,7 +105,8 @@ export default function SidePanel({
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
   const [newClassroomData, setNewClassroomData] = useState({
     name: '',
-    size: 30,
+    size: 20,
+    description: '',
   });
 
   // Collapsible widget states
@@ -223,7 +224,8 @@ export default function SidePanel({
     // Reset form and open dialog
     setNewClassroomData({
       name: '',
-      size: 30,
+      size: 20,
+      description: '',
     });
     setCreateClassroomDialogOpen(true);
   };
@@ -248,7 +250,7 @@ export default function SidePanel({
       classroomName: newClassroomData.name.trim(),
       location: currentAccount.location, // Inherit location
       size: newClassroomData.size,
-      description: '',
+      description: newClassroomData.description,
       interests: [],
       schedule: {},
       // Inherit coordinates from the current account
@@ -1207,6 +1209,15 @@ export default function SidePanel({
                 value={newClassroomData.size}
                 onChange={(e) => setNewClassroomData({ ...newClassroomData, size: parseInt(e.target.value) || 0 })}
                 min={1}
+                className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-300">Description</Label>
+              <Textarea
+                value={newClassroomData.description}
+                onChange={(e) => setNewClassroomData({ ...newClassroomData, description: e.target.value })}
+                placeholder="Tell us about your classroom..."
                 className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
               />
             </div>
