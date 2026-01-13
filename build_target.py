@@ -1,7 +1,7 @@
 import subprocess
 import time
 
-python_executable = "/penpals-backend/dist/app.exe"
+python_executable = "/dist/app.exe"
 tauri_executable = "/penpals-frontend/src-tauri/target/release/bundle/nsis/penpals-frontend_0.1.0_x64-setup.exe"
 
 # Start the Python application
