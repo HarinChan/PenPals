@@ -62,7 +62,7 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
       setIsInitialized(true);
     } else if (animate) {
       // On subsequent changes, animate only if requested
-      map.flyTo(center, zoom, { duration: 1.5 });
+      map.flyTo(center, zoom, { duration: 1.2 });
     } else {
       // Set view immediately without animation
       map.setView(center, zoom);
@@ -99,12 +99,16 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       ? matchingInterests.length / (myClassroom as any).interests.length
       : 0;
 
-    // green for perfect matches
+    // blue for perfect matches in schedule and interests
     if (scheduleMatches && interestMatchRatio === 1) {
+      return '#4382f7';
+    }
+    // green for perfect interest match
+    else if (interestMatchRatio === 1) {
       return '#10b981';
     }
     // yellow for good schedule/partial interest matches
-    else if (scheduleMatches && interestMatchRatio > 0) {
+    else if (interestMatchRatio >= 0.5) {
       return '#eab308';
     }
     // red for partial interest/no schedule matches
@@ -237,21 +241,26 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
           }`}>
+            Legend for matching interests
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div>
-              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Perfect</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-blue"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Full, with matching schedule</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#eab308]"></div>
-              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Good</span>
+              <div className="w-2.5 h-2.5 rounded-full bg-green"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Full</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow"></div>
               <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Partial</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-red"></div>
+              <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>Low</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-purple"></div>
               <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>You</span>
             </div>
           </div>
