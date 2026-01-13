@@ -7,3 +7,8 @@ node_modules
 chroma_db
 __pycache__
 penpals-backend/penpals_db/penpals.db
+penpals-frontend/src-tauri/Cargo.toml
+penpals-frontend/src-tauri/Cargo.toml
+app.spec
+build_target.spec
+penpals-frontend/src-tauri/Cargo.toml
