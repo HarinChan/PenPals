@@ -1272,19 +1272,23 @@
     border-left-color: #0000;
   }
 
-  .bg-\[\#10b981\] {
+  .bg-blue {
+     background-color: #4382f7;
+  }
+
+  .bg-green {
     background-color: #10b981;
   }
 
-  .bg-\[\#a855f7\] {
+  .bg-purple {
     background-color: #a855f7;
   }
 
-  .bg-\[\#eab308\] {
+  .bg-yellow {
     background-color: #eab308;
   }
 
-  .bg-\[\#ef4444\] {
+  .bg-red {
     background-color: #ef4444;
   }
 
