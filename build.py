@@ -15,7 +15,7 @@ npx tauri build
 """
 cd ..
 pyinstaller --onefile build_target.py
-pyinstaller --onefile --name="PenPals" --icon "asset/image /Penpals.ico" --add-binary "./dist/app.exe;." --add-binary "./penpals-frontend/src-tauri/target/release/bundle/nsis/penpals-frontend_0.1.0_x64-setup.exe;." build_target.py
+pyinstaller --onefile --name="PenPals" --icon "asset/image/Penpals.ico" --add-binary "./dist/app.exe;." --add-binary "./penpals-frontend/src-tauri/target/release/bundle/nsis/penpals-frontend_0.1.0_x64-setup.exe;." build_target.py
 """
 
 python_executable = "/dist/app.exe"
