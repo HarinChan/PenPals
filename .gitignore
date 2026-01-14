@@ -11,4 +11,5 @@ penpals-frontend/src-tauri/Cargo.toml
 penpals-frontend/src-tauri/Cargo.toml
 app.spec
 build_target.spec
+PenPals.spec
 penpals-frontend/src-tauri/Cargo.toml
