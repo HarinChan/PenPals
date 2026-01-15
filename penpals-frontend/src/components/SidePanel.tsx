@@ -881,18 +881,30 @@ export default function SidePanel({
                       </ScrollArea>
                     ) : (
                       <div className="space-y-2">
-                        {DAYS.map((day) => {
-                          const hours = currentAccount.schedule[day] || [];
-                          if (hours.length === 0) return null;
-                          return (
-                            <div key={day} className="flex gap-2 text-sm">
-                              <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
-                              <span className="text-slate-900 dark:text-slate-100">
-                                {formatScheduleRanges(hours)}
-                              </span>
-                            </div>
-                          );
-                        })}
+                        {(() => {
+                          const hasAvailability = Object.values(currentAccount.schedule).some(hours => hours && hours.length > 0);
+                          
+                          if (!hasAvailability) {
+                            return (
+                              <div className="text-center text-slate-500 dark:text-slate-400 py-4 text-sm">
+                                No availability yet
+                              </div>
+                            );
+                          }
+
+                          return DAYS.map((day) => {
+                            const hours = currentAccount.schedule[day] || [];
+                            if (hours.length === 0) return null;
+                            return (
+                              <div key={day} className="flex gap-2 text-sm">
+                                <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
+                                <span className="text-slate-900 dark:text-slate-100">
+                                  {formatScheduleRanges(hours)}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </CollapsibleContent>
