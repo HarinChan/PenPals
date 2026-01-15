@@ -30,6 +30,7 @@ export interface Friend {
   location: string;
   addedDate: Date;
   lastConnected?: Date;
+  friendshipStatus?: 'pending' | 'accepted';
 }
 
 export interface FriendRequest {
@@ -40,11 +41,15 @@ export interface FriendRequest {
   toClassroomName: string;
   timestamp: Date;
   message?: string;
+  classroomId?: string;
+  classroomName?: string;
+  location?: string;
+  status?: 'pending' | 'accepted' | 'rejected';
 }
 
 export interface Notification {
   id: string;
-  type: 'friend-request' | 'call-missed' | 'call-incoming' | 'post-like' | 'post-comment';
+  type: 'friend-request' | 'call-missed' | 'call-incoming' | 'post-like' | 'post-comment' | 'friend_request_received' | 'friend_request_accepted' | 'post_likes' | 'friend_posted' | 'post_quoted';
   title: string;
   message: string;
   timestamp: Date;

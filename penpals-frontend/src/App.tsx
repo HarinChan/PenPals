@@ -121,9 +121,33 @@ function AppContent() {
   };
 
   const handleAccountUpdate = (updatedAccount: Account) => {
-    setAccounts(accounts.map(acc =>
-      acc.id === updatedAccount.id ? updatedAccount : acc
-    ));
+    // Check if location changed
+    const currentAccount = accounts.find(acc => acc.id === updatedAccount.id);
+    const locationChanged = currentAccount && (
+      currentAccount.location !== updatedAccount.location ||
+      currentAccount.x !== updatedAccount.x ||
+      currentAccount.y !== updatedAccount.y
+    );
+
+    if (locationChanged) {
+      // Sync location to all accounts
+      setAccounts(accounts.map(acc => {
+        if (acc.id === updatedAccount.id) {
+          return updatedAccount;
+        }
+        return {
+          ...acc,
+          location: updatedAccount.location,
+          x: updatedAccount.x,
+          y: updatedAccount.y,
+        };
+      }));
+    } else {
+      // Regular update for single account
+      setAccounts(accounts.map(acc =>
+        acc.id === updatedAccount.id ? updatedAccount : acc
+      ));
+    }
   };
 
   const handleAccountCreate = (newAccount: Account) => {

@@ -9,10 +9,13 @@ import { ScrollArea } from './ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle } from 'lucide-react';
 import type { Classroom } from './MapView';
 import { classrooms } from './MapView';
+import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
+
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
 import { Post } from './PostCreator';
@@ -52,60 +55,7 @@ const AVAILABLE_SUBJECTS = [
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export interface RecentCall {
-  id: string;
-  classroomId: string;
-  classroomName: string;
-  timestamp: Date;
-  duration: number; // in minutes
-  type: 'incoming' | 'outgoing' | 'missed';
-}
 
-export interface Friend {
-  id: string;
-  classroomId: string;
-  classroomName: string;
-  location: string;
-  addedDate: Date;
-  lastConnected?: Date;
-  friendshipStatus: 'pending' | 'accepted';
-}
-
-export interface FriendRequest {
-  id: string;
-  classroomId: string;
-  classroomName: string;
-  location: string;
-  timestamp: Date;
-  status: 'pending' | 'accepted' | 'rejected';
-}
-
-export interface Notification {
-  id: string;
-  type: 'friend_request_received' | 'friend_request_accepted' | 'post_likes' | 'friend_posted' | 'post_quoted';
-  message: string;
-  timestamp: Date;
-  read: boolean;
-  relatedId?: string; // postId or classroomId
-  link?: string;
-}
-
-export interface Account {
-  id: string;
-  classroomName: string;
-  location: string;
-  size: number;
-  description: string;
-  interests: string[];
-  schedule: { [day: string]: number[] };
-  recentCalls?: RecentCall[];
-  friends?: Friend[];
-  sentFriendRequests?: FriendRequest[];
-  receivedFriendRequests?: FriendRequest[];
-  notifications?: Notification[];
-  lat: number;
-  lon: number;
-}
 
 interface SidePanelProps {
   selectedClassroom?: Classroom;
@@ -148,7 +98,16 @@ export default function SidePanel({
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+  
+  // Create Classroom Dialog State
+  const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
+  const [newClassroomData, setNewClassroomData] = useState({
+    name: '',
+    size: 20,
+    description: '',
+  });
 
   // Collapsible widget states
   const [accountInfoOpen, setAccountInfoOpen] = useState(true);
@@ -338,38 +297,43 @@ export default function SidePanel({
     setEditingAccount(false);
   };
 
+
+
   const createNewAccount = () => {
     if (accounts.length >= 12) {
       return; // Don't create if at limit
     }
+    
+    // Reset form and open dialog
+    setNewClassroomData({
+      name: '',
+      size: 20,
+      description: '',
+    });
+    setCreateClassroomDialogOpen(true);
+  };
 
-    // Find a unique classroom name
-    const existingNames = accounts.map(acc => acc.classroomName);
-    let classroomName = 'New Classroom';
-
-    // Try "New Classroom", then "New Classroom 1", "New Classroom 2", etc.
-    if (existingNames.includes(classroomName)) {
-      let found = false;
-      for (let i = 1; i <= 12; i++) {
-        const testName = `New Classroom ${i}`;
-        if (!existingNames.includes(testName)) {
-          classroomName = testName;
-          found = true;
-          break;
-        }
-      }
-      // If all names are taken (shouldn't happen with 12 limit), append timestamp
-      if (!found) {
-        classroomName = `New Classroom ${Date.now()}`;
-      }
+  const submitCreateClassroom = () => {
+    toast.info('Attempting to create classroom...'); // DEBUG
+    try {
+    // Validate
+    if (!newClassroomData.name.trim()) {
+      toast.error('Please enter a classroom name');
+      return;
+    }
+    
+    const duplicateName = accounts.some(acc => acc.classroomName === newClassroomData.name.trim());
+    if (duplicateName) {
+      toast.error('A classroom with this name already exists');
+      return;
     }
 
     const newAccount: Account = {
       id: `account-${Date.now()}`,
-      classroomName,
-      location: 'Unknown',
-      size: 10,
-      description: '',
+      classroomName: newClassroomData.name.trim(),
+      location: currentAccount.location, // Inherit location
+      size: newClassroomData.size,
+      description: newClassroomData.description,
       interests: [],
       schedule: {},
       // Inherit coordinates from the current account
@@ -378,8 +342,17 @@ export default function SidePanel({
       recentCalls: [],
       friends: [],
     };
+    
     onAccountCreate(newAccount);
+    setCreateClassroomDialogOpen(false);
+    toast.success('New classroom created!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error creating classroom: ' + err.message);
+    }
   };
+
+
 
   const handleDeleteClassroom = (accountId: string) => {
     if (accounts.length <= 1) {
@@ -483,6 +456,7 @@ export default function SidePanel({
     const notification: Notification = {
       id: `notif-${Date.now()}`,
       type: 'friend_request_received',
+      title: 'New Friend Request',
       message: `${currentAccount.classroomName} sent you a friend request!`,
       timestamp: new Date(),
       read: false,
@@ -497,7 +471,7 @@ export default function SidePanel({
   const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' => {
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
     if (!friend) return 'none';
-    return friend.friendshipStatus;
+    return friend.friendshipStatus || 'none';
   };
 
   const toggleFriendRequest = (classroom: Classroom) => {
@@ -532,6 +506,7 @@ export default function SidePanel({
       const notification: Notification = {
         id: `notif-${Date.now()}`,
         type: 'friend_request_accepted',
+        title: 'Friend Request Accepted',
         message: `${friend.classroomName} accepted your friend request!`,
         timestamp: new Date(),
         read: false,
@@ -1285,6 +1260,64 @@ export default function SidePanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Classroom Dialog */}
+      <Dialog open={createClassroomDialogOpen} onOpenChange={setCreateClassroomDialogOpen}>
+        <DialogContent className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 dark:text-slate-100">Create New Classroom</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-300">Classroom Name</Label>
+              <Input
+                value={newClassroomData.name}
+                onChange={(e) => setNewClassroomData({ ...newClassroomData, name: e.target.value })}
+                placeholder="e.g. Science Class 101"
+                className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-300">Number of Students</Label>
+              <Input
+                type="number"
+                value={newClassroomData.size}
+                onChange={(e) => setNewClassroomData({ ...newClassroomData, size: parseInt(e.target.value) || 0 })}
+                min={1}
+                className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-300">Description</Label>
+              <Textarea
+                value={newClassroomData.description}
+                onChange={(e) => setNewClassroomData({ ...newClassroomData, description: e.target.value })}
+                placeholder="Tell us about your classroom..."
+                className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              Your new classroom will be created at: <span className="font-medium text-slate-700 dark:text-slate-300">{currentAccount.location}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateClassroomDialogOpen(false)}
+              className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={submitCreateClassroom}
+              className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+            >
+              Create Classroom
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
