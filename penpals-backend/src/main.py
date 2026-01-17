@@ -8,13 +8,14 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import timedelta
+from datetime import timedelta, datetime
 import os
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import db, Account, Profile, Relation, Post
+from models import db, Account, Profile, Relation, Post, Meeting
+from webex_service import WebexService
 
 from account import account_bp
 from classroom import classroom_bp
@@ -56,6 +57,9 @@ jwt = JWTManager(application)
 with application.app_context():
     db.create_all()
     print("Database initialized successfully!")
+
+
+webex_service = WebexService()
 
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
@@ -217,6 +221,122 @@ def create_profile():
         "msg": "Profile created successfully",
         "id": profile.id
     }), 201
+
+
+@application.route('/api/webex/meeting', methods=['POST'])
+@jwt_required()
+def create_webex_meeting():
+    """Create a WebEx meeting and save to DB"""
+    current_user_id = get_jwt_identity() # Account ID
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    # Assuming the account has one profile/classroom for now, or we pick the first one
+    # The frontend should ideally send the profile_id, but for now we default to the first one.
+    creator_profile = account.classrooms.first()
+    if not creator_profile:
+         return jsonify({"msg": "No profile found for account"}), 400
+    
+    data = request.json
+    title = data.get('title', 'Classroom Meeting')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+    classroom_id = data.get('classroom_id') # The participant classroom ID (the one we are calling)
+    
+    if not start_time_str or not end_time_str:
+         # Default to instant meeting (now + 1 hour)
+         start_time = datetime.utcnow()
+         end_time = start_time + timedelta(hours=1)
+    else:
+        try:
+            # Handle potential Z suffix
+            if start_time_str.endswith('Z'):
+                start_time_str = start_time_str[:-1]
+            if end_time_str.endswith('Z'):
+                end_time_str = end_time_str[:-1]
+                
+            start_time = datetime.fromisoformat(start_time_str)
+            end_time = datetime.fromisoformat(end_time_str)
+        except ValueError:
+            return jsonify({"msg": "Invalid date format"}), 400
+
+    # Create meeting via WebEx Service
+    try:
+        webex_meeting = webex_service.create_meeting(title, start_time, end_time)
+    except Exception as e:
+        return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
+        
+    # Save to DB
+    new_meeting = Meeting(
+        webex_id=webex_meeting.get('id'),
+        title=webex_meeting.get('title', title),
+        start_time=start_time,
+        end_time=end_time,
+        web_link=webex_meeting.get('webLink'),
+        creator_id=creator_profile.id
+    )
+    
+    # Add participant if provided
+    if classroom_id:
+        participant_profile = Profile.query.get(classroom_id)
+        if participant_profile:
+            new_meeting.participants.append(participant_profile)
+            
+    db.session.add(new_meeting)
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Meeting created successfully",
+        "meeting": {
+            "id": new_meeting.id,
+            "web_link": new_meeting.web_link,
+            "start_time": new_meeting.start_time.isoformat(),
+            "title": new_meeting.title
+        }
+    }), 201
+
+@application.route('/api/meetings', methods=['GET'])
+@jwt_required()
+def get_upcoming_meetings():
+    """Get upcoming meetings for the user"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"meetings": []}), 200
+        
+    now = datetime.utcnow()
+    
+    # Meetings created by me
+    created_meetings = Meeting.query.filter(
+        Meeting.creator_id == profile.id,
+        Meeting.start_time >= now
+    ).all()
+    
+    # Meetings I am participating in
+    participating_meetings = [m for m in profile.meetings if m.start_time >= now]
+    
+    all_meetings = list(set(created_meetings + participating_meetings))
+    all_meetings.sort(key=lambda x: x.start_time)
+    
+    result = []
+    for m in all_meetings:
+        result.append({
+            "id": m.id,
+            "title": m.title,
+            "start_time": m.start_time.isoformat(),
+            "end_time": m.end_time.isoformat(),
+            "web_link": m.web_link,
+            "creator_name": m.creator.name
+        })
+        
+    return jsonify({"meetings": result}), 200
 
 
 # ChromaDB Document Endpoints
