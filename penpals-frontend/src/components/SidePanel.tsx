@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video } from 'lucide-react';
 import type { Classroom } from './MapView';
 import { classrooms } from './MapView';
 import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
@@ -99,8 +99,36 @@ export default function SidePanel({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
+  const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        const token = localStorage.getItem('penpals_token');
+        // Note: In a real app we might get token from a context or prop, assuming localStorage 'token' exists based on typical auth flows.
+        // If not found, we might need to rely on cookie or other mechanism.
+        if (!token) return;
+
+        const response = await fetch('http://127.0.0.1:5001/api/meetings', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUpcomingMeetings(data.meetings);
+        }
+      } catch (err) {
+        console.error("Failed to fetch meetings", err);
+      }
+    };
+    fetchMeetings();
+    // Set up a polling interval to refresh meetings every minute
+    const interval = setInterval(fetchMeetings, 60000);
+    return () => clearInterval(interval);
+  }, [currentAccount.id]);
+
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
-  
+
   // Create Classroom Dialog State
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
   const [newClassroomData, setNewClassroomData] = useState({
@@ -193,23 +221,23 @@ export default function SidePanel({
   // Helper: Format schedule for display (e.g. [9, 10, 14] -> "9:00 - 11:00, 14:00 - 15:00")
   const formatScheduleRanges = (hours: number[] | undefined): string => {
     if (!hours || hours.length === 0) return 'Not available';
-    
+
     const sorted = [...hours].sort((a, b) => a - b);
     const ranges: string[] = [];
     let start = sorted[0];
     let prev = sorted[0];
 
     for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i] !== prev + 1) {
-            // End of a range
-            ranges.push(`${start}:00 - ${prev + 1}:00`);
-            start = sorted[i];
-        }
-        prev = sorted[i];
+      if (sorted[i] !== prev + 1) {
+        // End of a range
+        ranges.push(`${start}:00 - ${prev + 1}:00`);
+        start = sorted[i];
+      }
+      prev = sorted[i];
     }
     // Push the last range
     ranges.push(`${start}:00 - ${prev + 1}:00`);
-    
+
     return ranges.join(', ');
   };
 
@@ -220,16 +248,16 @@ export default function SidePanel({
 
     parts.forEach(part => {
       if (!part) return;
-      
+
       // Handle ranges like "9-12"
       if (part.includes('-')) {
         const [startStr, endStr] = part.split('-');
         const start = parseInt(startStr, 10);
         const end = parseInt(endStr, 10);
-        
+
         if (!isNaN(start) && !isNaN(end) && start <= end) {
-          for (let i = start; i <= end-1; i++) {
-             if (i >= 0 && i <= 23) hours.add(i);
+          for (let i = start; i <= end - 1; i++) {
+            if (i >= 0 && i <= 23) hours.add(i);
           }
         }
       } else {
@@ -265,7 +293,7 @@ export default function SidePanel({
   const handleScheduleInputBlur = (day: string) => {
     const value = scheduleInputs[day] || '';
     const newSchedule = parseScheduleInput(value);
-    
+
     // Update the real data
     onAccountUpdate({
       ...currentAccount,
@@ -303,7 +331,7 @@ export default function SidePanel({
     if (accounts.length >= 12) {
       return; // Don't create if at limit
     }
-    
+
     // Reset form and open dialog
     setNewClassroomData({
       name: '',
@@ -316,36 +344,36 @@ export default function SidePanel({
   const submitCreateClassroom = () => {
     toast.info('Attempting to create classroom...'); // DEBUG
     try {
-    // Validate
-    if (!newClassroomData.name.trim()) {
-      toast.error('Please enter a classroom name');
-      return;
-    }
-    
-    const duplicateName = accounts.some(acc => acc.classroomName === newClassroomData.name.trim());
-    if (duplicateName) {
-      toast.error('A classroom with this name already exists');
-      return;
-    }
+      // Validate
+      if (!newClassroomData.name.trim()) {
+        toast.error('Please enter a classroom name');
+        return;
+      }
 
-    const newAccount: Account = {
-      id: `account-${Date.now()}`,
-      classroomName: newClassroomData.name.trim(),
-      location: currentAccount.location, // Inherit location
-      size: newClassroomData.size,
-      description: newClassroomData.description,
-      interests: [],
-      schedule: {},
-      // Inherit coordinates from the current account
-      x: currentAccount.x,
-      y: currentAccount.y,
-      recentCalls: [],
-      friends: [],
-    };
-    
-    onAccountCreate(newAccount);
-    setCreateClassroomDialogOpen(false);
-    toast.success('New classroom created!');
+      const duplicateName = accounts.some(acc => acc.classroomName === newClassroomData.name.trim());
+      if (duplicateName) {
+        toast.error('A classroom with this name already exists');
+        return;
+      }
+
+      const newAccount: Account = {
+        id: `account-${Date.now()}`,
+        classroomName: newClassroomData.name.trim(),
+        location: currentAccount.location, // Inherit location
+        size: newClassroomData.size,
+        description: newClassroomData.description,
+        interests: [],
+        schedule: {},
+        // Inherit coordinates from the current account
+        x: currentAccount.x,
+        y: currentAccount.y,
+        recentCalls: [],
+        friends: [],
+      };
+
+      onAccountCreate(newAccount);
+      setCreateClassroomDialogOpen(false);
+      toast.success('New classroom created!');
     } catch (err: any) {
       console.error(err);
       toast.error('Error creating classroom: ' + err.message);
@@ -883,7 +911,7 @@ export default function SidePanel({
                       <div className="space-y-2">
                         {(() => {
                           const hasAvailability = Object.values(currentAccount.schedule).some(hours => hours && hours.length > 0);
-                          
+
                           if (!hasAvailability) {
                             return (
                               <div className="text-center text-slate-500 dark:text-slate-400 py-4 text-sm">
@@ -907,6 +935,60 @@ export default function SidePanel({
                         })()}
                       </div>
                     )}
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Upcoming Meetings Widget - Collapsible */}
+            <Collapsible open={upcomingMeetingsOpen} onOpenChange={setUpcomingMeetingsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${upcomingMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Video className="text-purple-600 dark:text-purple-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Upcoming Meetings</h3>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2 pr-4">
+                        {upcomingMeetings.length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No upcoming meetings
+                          </div>
+                        ) : (
+                          upcomingMeetings.map((meeting) => (
+                            <div
+                              key={meeting.id}
+                              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                    <Clock size={12} />
+                                    {new Date(meeting.start_time).toLocaleString(undefined, {
+                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    Host: {meeting.creator_name}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => window.open(meeting.web_link, '_blank')}
+                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2"
+                                >
+                                  Join
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
                   </CollapsibleContent>
                 </div>
               </Card>
@@ -1159,12 +1241,12 @@ export default function SidePanel({
                             x: selectedLocation.longitude,
                             y: selectedLocation.latitude,
                           }));
-                          
+
                           // Update each account
                           updatedAccounts.forEach(account => {
                             onAccountUpdate(account);
                           });
-                          
+
                           toast.success('Location updated for all classrooms');
                         }
                         setEditingAccountLocation(false);
