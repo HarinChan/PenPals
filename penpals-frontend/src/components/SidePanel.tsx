@@ -1322,9 +1322,48 @@ export default function SidePanel({
                   </p>
                   <div className="pt-2">
                     {webexConnected ? (
-                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-100 dark:border-green-800">
-                        <LinkIcon size={16} />
-                        <span>Account Connected Successfully</span>
+                      <div className="flex flex-col gap-2 w-full">
+                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-100 dark:border-green-800 mb-2">
+                          <LinkIcon size={16} />
+                          <span>Account Connected Successfully</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={async () => {
+                              try {
+                                const { url } = await WebexService.getAuthUrl();
+                                if (url) {
+                                  window.location.href = url;
+                                } else {
+                                  toast.error("WebEx configuration missing on server");
+                                }
+                              } catch (e) {
+                                console.error(e);
+                                toast.error("Failed to initiate WebEx reconnection");
+                              }
+                            }}
+                          >
+                            Reconnect
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={async () => {
+                              try {
+                                await WebexService.disconnect();
+                                setWebexConnected(false);
+                                toast.success("Disconnected from WebEx successfully");
+                              } catch (e) {
+                                console.error(e);
+                                toast.error("Failed to disconnect WebEx");
+                              }
+                            }}
+                          >
+                            Disconnect
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <Button

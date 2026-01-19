@@ -272,6 +272,23 @@ def get_webex_status():
     connected = account.webex_access_token is not None
     return jsonify({"connected": connected}), 200
 
+@application.route('/api/webex/disconnect', methods=['POST'])
+@jwt_required()
+def webex_disconnect():
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    account.webex_access_token = None
+    account.webex_refresh_token = None
+    account.webex_token_expires_at = None
+    
+    db.session.commit()
+    
+    return jsonify({"msg": "Disconnected from WebEx successfully"})
+
 @application.route('/api/webex/meeting', methods=['POST'])
 @jwt_required()
 def create_webex_meeting():
@@ -285,8 +302,6 @@ def create_webex_meeting():
     # Check WebEx connection
     if not account.webex_access_token:
         return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
-        
-    # Refresh token if expired
     if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
         try:
              token_data = webex_service.refresh_access_token(account.webex_refresh_token)

@@ -21,4 +21,11 @@ export class WebexService {
     static async getStatus(): Promise<{ connected: boolean }> {
         return ApiClient.get<{ connected: boolean }>('/webex/status');
     }
+
+    /**
+     * Disconnect WebEx account
+     */
+    static async disconnect(): Promise<{ msg: string }> {
+        return ApiClient.post<{ msg: string }>('/webex/disconnect');
+    }
 }
