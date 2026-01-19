@@ -254,7 +254,7 @@ export default function MeetingDetailsDialog({
                                     <div className="flex gap-2 justify-end">
                                         <Button
                                             variant="destructive"
-                                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 border-red-200 dark:border-red-800"
+                                            className="hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 border-red-200 dark:border-red-800"
                                             onClick={handleCancelMeeting}
                                         >
                                             <Trash2 size={16} className="mr-2" /> Cancel Meeting
