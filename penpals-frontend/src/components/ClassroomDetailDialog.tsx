@@ -93,6 +93,10 @@ export default function ClassroomDetailDialog({
 
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 403) {
+          toast.error("Please connect WebEx in Account settings first");
+          return null;
+        }
         throw new Error(error.msg || 'Failed to create meeting');
       }
 

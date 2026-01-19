@@ -12,6 +12,11 @@ class Account(db.Model):
     organization = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
+    # WebEx OAuth Tokens
+    webex_access_token = db.Column(db.String(512), nullable=True)
+    webex_refresh_token = db.Column(db.String(512), nullable=True)
+    webex_token_expires_at = db.Column(db.DateTime, nullable=True)
+    
     # Relationships
     classrooms = db.relationship('Profile', backref='account', lazy='dynamic', cascade='all, delete-orphan')
     

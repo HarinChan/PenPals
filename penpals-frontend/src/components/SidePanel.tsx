@@ -11,10 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video } from 'lucide-react';
+import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
 import type { Classroom } from './MapView';
 import { classrooms } from './MapView';
 import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
+import { WebexService } from '../services';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
@@ -98,6 +99,7 @@ export default function SidePanel({
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [webexConnected, setWebexConnected] = useState(false);
 
   const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
@@ -125,6 +127,18 @@ export default function SidePanel({
     // Set up a polling interval to refresh meetings every minute
     const interval = setInterval(fetchMeetings, 60000);
     return () => clearInterval(interval);
+  }, [currentAccount.id]);
+
+  useEffect(() => {
+    const checkWebexStatus = async () => {
+      try {
+        const status = await WebexService.getStatus();
+        setWebexConnected(status.connected);
+      } catch (e) {
+        console.error("Failed to check WebEx status", e);
+      }
+    };
+    checkWebexStatus();
   }, [currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
@@ -797,6 +811,7 @@ export default function SidePanel({
                         {currentAccount.description && (
                           <p className="text-slate-700 dark:text-slate-300 text-sm">{currentAccount.description}</p>
                         )}
+
                       </div>
                     )}
                   </CollapsibleContent>
@@ -1285,6 +1300,47 @@ export default function SidePanel({
                     </p>
                   </div>
                 )}
+              </div>
+            </Card>
+
+            {/* WebEx Connection */}
+            <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-slate-900 dark:text-slate-100 font-medium">WebEx Integration</h3>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Connect your WebEx account to enable instant and scheduled video meetings with other classrooms.
+                  </p>
+                  <div className="pt-2">
+                    {webexConnected ? (
+                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-100 dark:border-green-800">
+                        <LinkIcon size={16} />
+                        <span>Account Connected Successfully</span>
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={async () => {
+                          try {
+                            const { url } = await WebexService.getAuthUrl();
+                            if (url) {
+                              window.location.href = url;
+                            } else {
+                              toast.error("WebEx configuration missing on server");
+                            }
+                          } catch (e) {
+                            toast.error("Failed to initiate WebEx connection");
+                          }
+                        }}
+                      >
+                        <Video size={16} />
+                        Connect WebEx Account
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </Card>
 

@@ -5,6 +5,7 @@ export * from './auth';
 export * from './account';
 export * from './classroom';
 export * from './chromadb';
+export * from './webex';
 
 // Re-export commonly used types
 export type {

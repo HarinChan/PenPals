@@ -223,6 +223,55 @@ def create_profile():
     }), 201
 
 
+@application.route('/api/webex/auth-url', methods=['GET'])
+@jwt_required()
+def get_webex_auth_url():
+    """Get the WebEx OAuth authorization URL"""
+    url = webex_service.get_auth_url()
+    return jsonify({"url": url}), 200
+
+@application.route('/api/webex/connect', methods=['POST'])
+@jwt_required()
+def connect_webex():
+    """Exchange auth code for tokens and store in account"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    code = request.json.get('code')
+    if not code:
+        return jsonify({"msg": "Missing auth code"}), 400
+        
+    try:
+        token_data = webex_service.exchange_code(code)
+        
+        account.webex_access_token = token_data.get('access_token')
+        account.webex_refresh_token = token_data.get('refresh_token')
+        # Expires in comes in seconds, calculate expiry time
+        expires_in = token_data.get('expires_in')
+        if expires_in:
+            account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            
+        db.session.commit()
+        return jsonify({"msg": "WebEx connected successfully"}), 200
+    except Exception as e:
+        return jsonify({"msg": str(e)}), 500
+
+@application.route('/api/webex/status', methods=['GET'])
+@jwt_required()
+def get_webex_status():
+    """Check if user has connected WebEx"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    connected = account.webex_access_token is not None
+    return jsonify({"connected": connected}), 200
+
 @application.route('/api/webex/meeting', methods=['POST'])
 @jwt_required()
 def create_webex_meeting():
@@ -232,6 +281,23 @@ def create_webex_meeting():
     
     if not account:
         return jsonify({"msg": "User not found"}), 404
+        
+    # Check WebEx connection
+    if not account.webex_access_token:
+        return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
+        
+    # Refresh token if expired
+    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
+        try:
+             token_data = webex_service.refresh_access_token(account.webex_refresh_token)
+             account.webex_access_token = token_data.get('access_token')
+             account.webex_refresh_token = token_data.get('refresh_token', account.webex_refresh_token)
+             expires_in = token_data.get('expires_in')
+             if expires_in:
+                 account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+             db.session.commit()
+        except Exception as e:
+            return jsonify({"msg": "Failed to refresh WebEx session. Please reconnect."}), 403
         
     # Assuming the account has one profile/classroom for now, or we pick the first one
     # The frontend should ideally send the profile_id, but for now we default to the first one.
@@ -264,7 +330,8 @@ def create_webex_meeting():
 
     # Create meeting via WebEx Service
     try:
-        webex_meeting = webex_service.create_meeting(title, start_time, end_time)
+        # Pass the user's access token
+        webex_meeting = webex_service.create_meeting(account.webex_access_token, title, start_time, end_time)
     except Exception as e:
         return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
         

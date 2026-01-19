@@ -9,9 +9,9 @@ import { Post } from './components/PostCreator';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
-import { AuthService, ClassroomService } from './services';
+import { AuthService, ClassroomService, WebexService } from './services';
 import type { SelectedLocation } from './services/location';
 
 export default function App() {
@@ -63,13 +63,35 @@ function AppContent() {
 
   // Check for existing authentication on component mount
   useEffect(() => {
+    const handleWebExCallback = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        try {
+          // Clear URL params immediately
+          window.history.replaceState({}, document.title, window.location.pathname);
+
+          // Show loading toast
+          const toastId = toast.loading("Connecting WebEx...");
+
+          await WebexService.connect(code);
+          toast.success("WebEx connected successfully!", { id: toastId });
+
+          // Refresh full user data? or just let components reload status
+        } catch (error: any) {
+          toast.error(`WebEx connection failed: ${error.message || 'Unknown error'}`);
+        }
+      }
+    };
+    handleWebExCallback();
+
     const checkAuthStatus = async () => {
       if (AuthService.isAuthenticated()) {
         setAuthLoading(true);
         try {
           // Try to get user data with existing token
           const userData = await AuthService.getCurrentUser();
-          
+
           // Convert backend classrooms to frontend format
           const convertedAccounts = userData.classrooms.map(classroom => ({
             id: classroom.id.toString(),
@@ -196,14 +218,14 @@ function AppContent() {
   const handleLogin = async (email: string, password: string) => {
     setLoginError(''); // Clear previous errors
     setAuthLoading(true);
-    
+
     try {
       // Call real backend authentication
       await AuthService.login({ email, password });
-      
+
       // Get user data after successful login
       const userData = await AuthService.getCurrentUser();
-      
+
       // Convert backend classrooms to frontend format
       const convertedAccounts = userData.classrooms.map(classroom => ({
         id: classroom.id.toString(),
@@ -235,7 +257,7 @@ function AppContent() {
     } catch (error) {
       console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      
+
       // Set user-friendly error message
       if (errorMessage.includes('Invalid credentials') || errorMessage.includes('401')) {
         setLoginError('Incorrect email or password. Please try again.');
@@ -252,14 +274,14 @@ function AppContent() {
   const handleSignup = async (email: string, password: string, classroomName: string, location?: SelectedLocation) => {
     setSignupError(''); // Clear previous errors
     setAuthLoading(true);
-    
+
     try {
       // Register account with backend
       await AuthService.register({ email, password });
-      
+
       // Login with new account
       await AuthService.login({ email, password });
-      
+
       // Create first classroom with provided location
       const classroomResult = await ClassroomService.createClassroom({
         name: classroomName,
@@ -293,7 +315,7 @@ function AppContent() {
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Signup failed';
-      
+
       // Set user-friendly error message
       if (errorMessage.includes('already exists') || errorMessage.includes('409')) {
         setSignupError('An account with this email already exists. Please use a different email or try logging in.');
