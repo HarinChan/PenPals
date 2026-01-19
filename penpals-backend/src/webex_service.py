@@ -70,15 +70,7 @@ class WebexService:
         Create a WebEx meeting using a specific user's access token.
         """
         if not access_token:
-            # Mock response only if explicitly testing without token
-            print("No access token provided, mocking WebEx meeting creation")
-            return {
-                "id": f"mock_webex_id_{datetime.now().timestamp()}",
-                "title": title,
-                "start": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                "end": end_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                "webLink": "https://meet.jit.si/PenPalsMockMeeting"
-            }
+            raise ValueError("No access token provided")
 
         url = f"{self.BASE_URL}/meetings"
         
@@ -110,8 +102,7 @@ class WebexService:
         Delete a WebEx meeting.
         """
         if not access_token:
-            print("No access token provided, mocking WebEx meeting deletion")
-            return True
+            raise ValueError("No access token provided")
 
         url = f"{self.BASE_URL}/meetings/{meeting_id}"
         
@@ -132,12 +123,7 @@ class WebexService:
         Update a WebEx meeting (reschedule).
         """
         if not access_token:
-            print("No access token provided, mocking WebEx meeting update")
-            return {
-                "id": meeting_id,
-                "start": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                "end": end_time.strftime('%Y-%m-%dT%H:%M:%S')
-            }
+            raise ValueError("No access token provided")
 
         url = f"{self.BASE_URL}/meetings/{meeting_id}"
         
