@@ -104,3 +104,57 @@ class WebexService:
             if hasattr(e, 'response') and e.response:
                 print(f"Response: {e.response.text}")
             raise e
+
+    def delete_meeting(self, access_token, meeting_id):
+        """
+        Delete a WebEx meeting.
+        """
+        if not access_token:
+            print("No access token provided, mocking WebEx meeting deletion")
+            return True
+
+        url = f"{self.BASE_URL}/meetings/{meeting_id}"
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        try:
+            response = requests.delete(url, headers=headers)
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"Error deleting WebEx meeting: {e}")
+            raise e
+
+    def update_meeting(self, access_token, meeting_id, start_time: datetime, end_time: datetime):
+        """
+        Update a WebEx meeting (reschedule).
+        """
+        if not access_token:
+            print("No access token provided, mocking WebEx meeting update")
+            return {
+                "id": meeting_id,
+                "start": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                "end": end_time.strftime('%Y-%m-%dT%H:%M:%S')
+            }
+
+        url = f"{self.BASE_URL}/meetings/{meeting_id}"
+        
+        payload = {
+            "start": start_time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "end": end_time.strftime('%Y-%m-%dT%H:%M:%S')
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.put(url, headers=headers, json=payload)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error updating WebEx meeting: {e}")
+            raise e

@@ -102,6 +102,7 @@ class Meeting(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     web_link = db.Column(db.String(1000), nullable=False)
+    password = db.Column(db.String(255), nullable=True)
     
     creator_id = db.Column(db.Integer, db.ForeignKey('profiles.id'), nullable=False)
     

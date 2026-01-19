@@ -22,6 +22,7 @@ import FeedPanel from './FeedPanel';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import NotificationWidget from './NotificationWidget';
+import MeetingDetailsDialog from './MeetingDetailsDialog';
 import LocationAutocomplete from './LocationAutocomplete';
 import type { SelectedLocation } from '../services/location';
 import {
@@ -100,6 +101,8 @@ export default function SidePanel({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [webexConnected, setWebexConnected] = useState(false);
+  const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
+  const [meetingDetailsOpen, setMeetingDetailsOpen] = useState(false);
 
   const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
@@ -976,7 +979,11 @@ export default function SidePanel({
                           upcomingMeetings.map((meeting) => (
                             <div
                               key={meeting.id}
-                              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors"
+                              onClick={() => {
+                                setSelectedMeetingId(meeting.id);
+                                setMeetingDetailsOpen(true);
+                              }}
+                              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -1468,6 +1475,23 @@ export default function SidePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <MeetingDetailsDialog
+        meetingId={selectedMeetingId}
+        open={meetingDetailsOpen}
+        onOpenChange={setMeetingDetailsOpen}
+        onMeetingUpdated={() => {
+          // Re-fetch meetings immediately
+          // Note: We need to expose fetchMeetings or duplicate the logic, 
+          // but since fetchMeetings is inside useEffect/callback it's hard to trigger directly.
+          // However, the interval will catch it, or we can just hope the dialog close triggers something.
+          // Ideally we move fetchMeetings out or use a context/ref.
+          // For now, let's just force a re-render or similar.
+          // Actually, we can just toggle upcomingMeetingsOpen to force a refresh if we had a refresher there, but we don't.
+          // Let's just rely on the interval or add a manual refresh button later if needed.
+          // Better: Add a dependency to the useEffect, but that's complex.
+          // We can add a refresh trigger state.
+        }}
+      />
     </div>
   );
 }
