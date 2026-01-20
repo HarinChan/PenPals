@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
 import TimezoneClock from './TimezoneClock';
-import type { Account } from './SidePanel';
+import type { Account } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -54,7 +54,7 @@ interface MapViewProps {
 function MapController({ center, zoom, animate = true }: { center: [number, number], zoom: number, animate?: boolean }) {
   const map = useMap();
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   useEffect(() => {
     if (!isInitialized) {
       // On first load, set view immediately without animation
@@ -68,7 +68,7 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
       map.setView(center, zoom);
     }
   }, [center, zoom, map, animate, isInitialized]);
-  
+
   return null;
 }
 
@@ -119,9 +119,9 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     return '#64748b';
   };
 
-  // make sure Account has lon/lat fields
-  const myLon = myClassroom.lon ?? -0.1273;
-  const myLat = myClassroom.lat ?? 51.2507;
+  // make sure Account has x/y fields
+  const myLon = myClassroom.x ?? -0.1273;
+  const myLat = myClassroom.y ?? 51.2507;
 
   // compute a safe display name for the "You" marker
   const myDisplayName = (myClassroom as any).classroomName ?? (myClassroom as any).name ?? 'You';
@@ -227,7 +227,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       <div className="absolute inset-0 pointer-events-none z-[1000]">
 
         {/* Classroom count badge */}
-        <div className="absolute bottom-4 right-4 pointer-events-auto">
+        <div className="absolute bottom-4 right-4 pointer-events-auto" style={{ pointerEvents: 'auto' }}>
           <Badge variant="secondary" className={`backdrop-blur-sm border shadow-lg ${theme === 'dark'
             ? 'bg-slate-900/80 text-slate-200 border-slate-700'
             : 'bg-white/90 text-slate-900 border-slate-200'
@@ -240,7 +240,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         <div className={`absolute bottom-6 left-6 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg border pointer-events-auto ${theme === 'dark'
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
-          }`}>
+          }`} style={{ pointerEvents: 'auto' }}>
             Legend for matching interests
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
@@ -267,7 +267,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         </div>
 
         {/* Timezone Clock */}
-        <div className="absolute top-4 right-4 pointer-events-auto">
+        <div className="absolute top-4 right-4 pointer-events-auto" style={{ pointerEvents: 'auto' }}>
           <TimezoneClock />
         </div>
       </div>
