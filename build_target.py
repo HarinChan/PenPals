@@ -3,6 +3,7 @@ import time
 
 python_executable = "/dist/app.exe"
 tauri_executable = "/penpals-frontend/src-tauri/target/release/bundle/nsis/penpals-frontend_0.1.0_x64-setup.exe"
+# ok shit just set up. need to setup
 
 # Start the Python application
 python_process = subprocess.Popen([python_executable])

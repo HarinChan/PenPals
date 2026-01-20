@@ -39,15 +39,14 @@
     - `cargo clean`
     - `cargo build`
   
-  ## Build and Run
+  ## Build
 
-  Dev: `npx tauri dev`
+  install `inno` whatever
+  `cd C:/Program Files (x86)/Inno Setup 6/`
+  `ISCC.exe ..PenPals/PenPalInstaller.iss`
 
-  Build: `npx tauri build`
-
-  Build bundles:
-  - `\penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi`
-  - `\penpals-frontend\src-tauri\target\release\bundle\nsis\penpals-frontend_0.1.0_x64-setup.exe`
+  run `build.py`
+  app is located in `
 
 
 # Backend Notes
