@@ -1,3 +1,5 @@
 build/*
 obj/*
 dist/*
+src/build/*
+src/dist/*

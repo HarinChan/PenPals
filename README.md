@@ -41,9 +41,10 @@
   
   ## Build
 
-  install `inno` whatever
-  `cd C:/Program Files (x86)/Inno Setup 6/`
-  `ISCC.exe ..PenPals/PenPalInstaller.iss`
+  ok new build plan
+  KEEP all the backend source code as is
+  
+  frontend and backend both failts to build WHY.
 
   run `build.py`
   app is located in `
