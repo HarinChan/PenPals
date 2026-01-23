@@ -7,3 +7,4 @@ node_modules
 chroma_db
 __pycache__
 penpals-backend/penpals_db/penpals.db
+.env
