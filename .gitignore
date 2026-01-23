@@ -8,3 +8,5 @@ chroma_db
 __pycache__
 .idea
 .vscode
+penpals-backend/penpals_db/penpals.db
+.env
