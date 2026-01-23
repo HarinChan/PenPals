@@ -14,3 +14,4 @@ build_target.spec
 PenPals.spec
 penpals-frontend/src-tauri/Cargo.toml
 penpals_db/penpals.db
+.env
