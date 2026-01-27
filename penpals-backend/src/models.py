@@ -12,6 +12,11 @@ class Account(db.Model):
     organization = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
+    # WebEx OAuth Tokens
+    webex_access_token = db.Column(db.String(512), nullable=True)
+    webex_refresh_token = db.Column(db.String(512), nullable=True)
+    webex_token_expires_at = db.Column(db.DateTime, nullable=True)
+    
     # Relationships
     classrooms = db.relationship('Profile', backref='account', lazy='dynamic', cascade='all, delete-orphan')
     
@@ -79,3 +84,32 @@ class Post(db.Model):
     
     def __repr__(self):
         return f'<Post {self.id} by {self.profile_id}>'
+
+
+meeting_participants = db.Table('meeting_participants',
+    db.Column('meeting_id', db.Integer, db.ForeignKey('meetings.id'), primary_key=True),
+    db.Column('profile_id', db.Integer, db.ForeignKey('profiles.id'), primary_key=True)
+)
+
+
+class Meeting(db.Model):
+    """Video meetings scheduled via WebEx"""
+    __tablename__ = 'meetings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    webex_id = db.Column(db.String(255), nullable=True)
+    title = db.Column(db.String(255), nullable=False)
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
+    web_link = db.Column(db.String(1000), nullable=False)
+    password = db.Column(db.String(255), nullable=True)
+    
+    creator_id = db.Column(db.Integer, db.ForeignKey('profiles.id'), nullable=False)
+    
+    # Relationships
+    creator = db.relationship('Profile', foreign_keys=[creator_id], backref='created_meetings')
+    participants = db.relationship('Profile', secondary=meeting_participants, lazy='subquery',
+        backref=db.backref('meetings', lazy=True))
+    
+    def __repr__(self):
+        return f'<Meeting {self.title}>'

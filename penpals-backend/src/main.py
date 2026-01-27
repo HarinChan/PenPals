@@ -8,13 +8,14 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import timedelta
+from datetime import timedelta, datetime
 import os
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import db, Account, Profile, Relation, Post
+from models import db, Account, Profile, Relation, Post, Meeting
+from webex_service import WebexService
 
 from account import account_bp
 from classroom import classroom_bp
@@ -56,6 +57,9 @@ jwt = JWTManager(application)
 with application.app_context():
     db.create_all()
     print("Database initialized successfully!")
+
+
+webex_service = WebexService()
 
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
@@ -217,6 +221,309 @@ def create_profile():
         "msg": "Profile created successfully",
         "id": profile.id
     }), 201
+
+
+@application.route('/api/webex/auth-url', methods=['GET'])
+@jwt_required()
+def get_webex_auth_url():
+    """Get the WebEx OAuth authorization URL"""
+    url = webex_service.get_auth_url()
+    return jsonify({"url": url}), 200
+
+@application.route('/api/webex/connect', methods=['POST'])
+@jwt_required()
+def connect_webex():
+    """Exchange auth code for tokens and store in account"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    code = request.json.get('code')
+    if not code:
+        return jsonify({"msg": "Missing auth code"}), 400
+        
+    try:
+        token_data = webex_service.exchange_code(code)
+        
+        account.webex_access_token = token_data.get('access_token')
+        account.webex_refresh_token = token_data.get('refresh_token')
+        # Expires in comes in seconds, calculate expiry time
+        expires_in = token_data.get('expires_in')
+        if expires_in:
+            account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            
+        db.session.commit()
+        return jsonify({"msg": "WebEx connected successfully"}), 200
+    except Exception as e:
+        return jsonify({"msg": str(e)}), 500
+
+@application.route('/api/webex/status', methods=['GET'])
+@jwt_required()
+def get_webex_status():
+    """Check if user has connected WebEx"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    connected = account.webex_access_token is not None
+    return jsonify({"connected": connected}), 200
+
+@application.route('/api/webex/disconnect', methods=['POST'])
+@jwt_required()
+def webex_disconnect():
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    account.webex_access_token = None
+    account.webex_refresh_token = None
+    account.webex_token_expires_at = None
+    
+    db.session.commit()
+    
+    return jsonify({"msg": "Disconnected from WebEx successfully"})
+
+@application.route('/api/webex/meeting', methods=['POST'])
+@jwt_required()
+def create_webex_meeting():
+    """Create a WebEx meeting and save to DB"""
+    current_user_id = get_jwt_identity() # Account ID
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    # Check WebEx connection
+    if not account.webex_access_token:
+        return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
+    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
+        try:
+             token_data = webex_service.refresh_access_token(account.webex_refresh_token)
+             account.webex_access_token = token_data.get('access_token')
+             account.webex_refresh_token = token_data.get('refresh_token', account.webex_refresh_token)
+             expires_in = token_data.get('expires_in')
+             if expires_in:
+                 account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+             db.session.commit()
+        except Exception as e:
+            return jsonify({"msg": "Failed to refresh WebEx session. Please reconnect."}), 403
+        
+    # Assuming the account has one profile/classroom for now, or we pick the first one
+    # The frontend should ideally send the profile_id, but for now we default to the first one.
+    creator_profile = account.classrooms.first()
+    if not creator_profile:
+         return jsonify({"msg": "No profile found for account"}), 400
+    
+    data = request.json
+    title = data.get('title', 'Classroom Meeting')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+    classroom_id = data.get('classroom_id') # The participant classroom ID (the one we are calling)
+    
+    if not start_time_str or not end_time_str:
+         # Default to instant meeting (now + 1 hour)
+         start_time = datetime.utcnow()
+         end_time = start_time + timedelta(hours=1)
+    else:
+        try:
+            # Handle potential Z suffix
+            if start_time_str.endswith('Z'):
+                start_time_str = start_time_str[:-1]
+            if end_time_str.endswith('Z'):
+                end_time_str = end_time_str[:-1]
+                
+            start_time = datetime.fromisoformat(start_time_str)
+            end_time = datetime.fromisoformat(end_time_str)
+        except ValueError:
+            return jsonify({"msg": "Invalid date format"}), 400
+
+    # Create meeting via WebEx Service
+    try:
+        # Pass the user's access token
+        webex_meeting = webex_service.create_meeting(account.webex_access_token, title, start_time, end_time)
+    except Exception as e:
+        return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
+        
+    # Save to DB
+    new_meeting = Meeting(
+        webex_id=webex_meeting.get('id'),
+        title=webex_meeting.get('title', title),
+        start_time=start_time,
+        end_time=end_time,
+        web_link=webex_meeting.get('webLink'),
+        password=webex_meeting.get('password'),
+        creator_id=creator_profile.id
+    )
+    
+    # Add participant if provided
+    if classroom_id:
+        participant_profile = Profile.query.get(classroom_id)
+        if participant_profile:
+            new_meeting.participants.append(participant_profile)
+            
+    db.session.add(new_meeting)
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Meeting created successfully",
+        "meeting": {
+            "id": new_meeting.id,
+            "web_link": new_meeting.web_link,
+            "start_time": new_meeting.start_time.isoformat(),
+            "title": new_meeting.title,
+            "password": new_meeting.password
+        }
+    }), 201
+
+@application.route('/api/webex/meeting/<int:meeting_id>', methods=['GET', 'DELETE', 'PUT'])
+@jwt_required()
+def manage_meeting(meeting_id):
+    """Manage a specific meeting (Get Details, Delete, Update)"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    meeting = Meeting.query.get(meeting_id)
+    if not meeting:
+        return jsonify({"msg": "Meeting not found"}), 404
+        
+    # Check authorization (creator or participant)
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+        
+    is_creator = meeting.creator_id == profile.id
+    is_participant = profile in meeting.participants
+    
+    if not (is_creator or is_participant):
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    # Check WebEx connection
+    if not account.webex_access_token:
+        return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
+        
+    # Refresh token logic (simplified reuse)
+    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
+        try:
+             token_data = webex_service.refresh_access_token(account.webex_refresh_token)
+             account.webex_access_token = token_data.get('access_token')
+             account.webex_refresh_token = token_data.get('refresh_token', account.webex_refresh_token)
+             expires_in = token_data.get('expires_in')
+             if expires_in:
+                 account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+             db.session.commit()
+        except Exception as e:
+            return jsonify({"msg": "Failed to refresh WebEx session. Please reconnect."}), 403
+
+    if request.method == 'GET':
+        return jsonify({
+            "id": meeting.id,
+            "title": meeting.title,
+            "start_time": meeting.start_time.isoformat(),
+            "end_time": meeting.end_time.isoformat(),
+            "web_link": meeting.web_link,
+            "password": meeting.password,
+            "creator_name": meeting.creator.name,
+            "is_creator": is_creator
+        }), 200
+
+    if request.method == 'DELETE':
+        if not is_creator:
+            return jsonify({"msg": "Only default creator can delete meetings"}), 403
+            
+        try:
+            # Delete from WebEx
+            if meeting.webex_id:
+                webex_service.delete_meeting(account.webex_access_token, meeting.webex_id)
+            
+            # Delete from DB
+            db.session.delete(meeting)
+            db.session.commit()
+            return jsonify({"msg": "Meeting deleted successfully"}), 200
+        except Exception as e:
+            return jsonify({"msg": f"Failed to delete meeting: {str(e)}"}), 500
+
+    if request.method == 'PUT':
+        if not is_creator:
+            return jsonify({"msg": "Only creator can update meetings"}), 403
+            
+        data = request.json
+        start_time_str = data.get('start_time')
+        end_time_str = data.get('end_time')
+        
+        try:
+            if start_time_str:
+                if start_time_str.endswith('Z'): start_time_str = start_time_str[:-1]
+                meeting.start_time = datetime.fromisoformat(start_time_str)
+            if end_time_str:
+                if end_time_str.endswith('Z'): end_time_str = end_time_str[:-1]
+                meeting.end_time = datetime.fromisoformat(end_time_str)
+                
+            # Update WebEx
+            if meeting.webex_id:
+                webex_service.update_meeting(
+                    account.webex_access_token, 
+                    meeting.webex_id,
+                    meeting.start_time,
+                    meeting.end_time
+                )
+            
+            db.session.commit()
+            return jsonify({"msg": "Meeting updated successfully"}), 200
+        except ValueError:
+             return jsonify({"msg": "Invalid date format"}), 400
+        except Exception as e:
+            return jsonify({"msg": f"Failed to update meeting: {str(e)}"}), 500
+
+@application.route('/api/meetings', methods=['GET'])
+@jwt_required()
+def get_upcoming_meetings():
+    """Get upcoming meetings for the user"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"meetings": []}), 200
+        
+    now = datetime.utcnow()
+    
+    # Meetings created by me
+    created_meetings = Meeting.query.filter(
+        Meeting.creator_id == profile.id,
+        Meeting.start_time >= now
+    ).all()
+    
+    # Meetings I am participating in
+    participating_meetings = [m for m in profile.meetings if m.start_time >= now]
+    
+    all_meetings = list(set(created_meetings + participating_meetings))
+    all_meetings.sort(key=lambda x: x.start_time)
+    
+    result = []
+    for m in all_meetings:
+        result.append({
+            "id": m.id,
+            "title": m.title,
+            "start_time": m.start_time.isoformat(),
+            "end_time": m.end_time.isoformat(),
+            "web_link": m.web_link,
+            "password": m.password,
+            "creator_name": m.creator.name
+        })
+        
+    return jsonify({"meetings": result}), 200
 
 
 # ChromaDB Document Endpoints

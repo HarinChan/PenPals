@@ -11,6 +11,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Calendar, MapPin, Users, Phone, Clock, Heart } from 'lucide-react';
 import type { Classroom } from './MapView';
+import { toast } from 'sonner';
 
 interface ClassroomDetailDialogProps {
   classroom: Classroom | null;
@@ -68,11 +69,82 @@ export default function ClassroomDetailDialog({
     );
   };
 
-  const confirmScheduleCall = () => {
+  const createMeeting = async (title: string, start: Date | null, end: Date | null) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) {
+        toast.error("You must be logged in to make a call");
+        return;
+      }
+
+      const response = await fetch('http://127.0.0.1:5001/api/webex/meeting', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title,
+          start_time: start?.toISOString(),
+          end_time: end?.toISOString(),
+          classroom_id: classroom.id
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        if (response.status === 403) {
+          toast.error("Please connect WebEx in Account settings first");
+          return null;
+        }
+        throw new Error(error.msg || 'Failed to create meeting');
+      }
+
+      const data = await response.json();
+      return data.meeting;
+
+    } catch (error: any) {
+      toast.error(error.message);
+      return null;
+    }
+  };
+
+  const confirmScheduleCall = async () => {
     if (selectedHours.length > 0 && selectedHours.length <= 12) {
-      alert(`Call scheduled for ${selectedDay} from ${selectedHours[0]}:00 to ${selectedHours[selectedHours.length - 1] + 1}:00`);
-      setShowScheduleCall(false);
-      setSelectedHours([]);
+      // Calculate date
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const now = new Date();
+      const currentDayIndex = now.getDay();
+      const targetDayIndex = days.indexOf(selectedDay); // selectedDay is like 'Mon'
+
+      let daysToAdd = targetDayIndex - currentDayIndex;
+      if (daysToAdd <= 0) daysToAdd += 7;
+
+      const targetDate = new Date(now);
+      targetDate.setDate(now.getDate() + daysToAdd);
+
+      // Start time
+      const startTime = new Date(targetDate);
+      startTime.setHours(selectedHours[0], 0, 0, 0);
+
+      // End time (last hour + 1)
+      const endTime = new Date(targetDate);
+      endTime.setHours(selectedHours[selectedHours.length - 1] + 1, 0, 0, 0);
+
+      // Create meeting
+      toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
+        loading: 'Scheduling meeting...',
+        success: (data) => {
+          if (data) {
+            setShowScheduleCall(false);
+            setSelectedHours([]);
+            return `Meeting scheduled! Link: ${data.web_link}`;
+          } else {
+            throw new Error("Failed");
+          }
+        },
+        error: 'Failed to schedule meeting'
+      });
     }
   };
 
@@ -148,7 +220,7 @@ export default function ClassroomDetailDialog({
             {showScheduleCall && (
               <div className="space-y-4 bg-slate-50 dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
                 <h3 className="text-slate-900 dark:text-slate-100">Schedule a Call</h3>
-                
+
                 {daysWithCommonAvailability.length > 0 ? (
                   <>
                     <div className="space-y-2">
@@ -161,11 +233,10 @@ export default function ClassroomDetailDialog({
                               setSelectedDay(day);
                               setSelectedHours([]);
                             }}
-                            className={`px-3 py-1 rounded ${
-                              selectedDay === day
-                                ? 'bg-blue-600 dark:bg-blue-700 text-white'
-                                : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
-                            }`}
+                            className={`px-3 py-1 rounded ${selectedDay === day
+                              ? 'bg-blue-600 dark:bg-blue-700 text-white'
+                              : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
+                              }`}
                           >
                             {day}
                           </button>
@@ -183,11 +254,10 @@ export default function ClassroomDetailDialog({
                             <button
                               key={hour}
                               onClick={() => toggleHour(hour)}
-                              className={`p-2 text-xs rounded ${
-                                selectedHours.includes(hour)
-                                  ? 'bg-green-600 dark:bg-green-700 text-white'
-                                  : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
-                              }`}
+                              className={`p-2 text-xs rounded ${selectedHours.includes(hour)
+                                ? 'bg-green-600 dark:bg-green-700 text-white'
+                                : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
+                                }`}
                             >
                               {hour}:00
                             </button>
@@ -239,20 +309,19 @@ export default function ClassroomDetailDialog({
               <Button
                 onClick={() => onToggleFriend(classroom)}
                 variant="outline"
-                className={`border-slate-300 ${
-                  friendshipStatus === 'accepted' 
-                    ? 'text-pink-600 border-pink-500 dark:text-pink-400 dark:border-pink-400' 
-                    : friendshipStatus === 'pending'
+                className={`border-slate-300 ${friendshipStatus === 'accepted'
+                  ? 'text-pink-600 border-pink-500 dark:text-pink-400 dark:border-pink-400'
+                  : friendshipStatus === 'pending'
                     ? 'text-yellow-600 border-yellow-500 dark:text-yellow-400 dark:border-yellow-400'
                     : 'text-slate-700 dark:text-slate-300'
-                }`}
+                  }`}
               >
                 <Heart size={16} className="mr-2" fill={friendshipStatus === 'accepted' ? 'currentColor' : 'none'} />
-                {friendshipStatus === 'accepted' 
-                  ? 'Unfriend' 
+                {friendshipStatus === 'accepted'
+                  ? 'Unfriend'
                   : friendshipStatus === 'pending'
-                  ? 'Cancel Request'
-                  : 'Send Friend Request'}
+                    ? 'Cancel Request'
+                    : 'Send Friend Request'}
               </Button>
             )}
             <Button
@@ -264,6 +333,19 @@ export default function ClassroomDetailDialog({
             </Button>
             <Button
               disabled={!isCurrentlyAvailable()}
+              onClick={async () => {
+                toast.promise(createMeeting(`Instant Call with ${classroom.name}`, null, null), {
+                  loading: 'Starting call...',
+                  success: (data) => {
+                    if (data) {
+                      window.open(data.web_link, '_blank');
+                      return 'Call started in new tab';
+                    }
+                    throw new Error("Failed");
+                  },
+                  error: 'Failed to start call'
+                });
+              }}
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
             >
               <Phone size={16} className="mr-2" />
