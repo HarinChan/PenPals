@@ -1,54 +1,62 @@
-# Frontend Notes
+# PenPals AI: Video Portral and Social Network for classrooms and SEND
 
-  ## Figma Conversion
+**PenPals AI** is a **video portal and social network** designed for classrooms, enabling instant meaningful conversation betweeen students and teachers worldwide. Built for primary and secondary schools (including SEND), PenPals AI simplifies global collaboration by automating matchmaking, integrating real-time meetings via **Webex**, and providing **live translations powered by Intels OpenVino platform** -- al throgh an intuitive, map-based interface.
 
-  How to turn figma-export into electron vite project: (outdated, as we using tauri now)
-  - https://poe.com/s/qf77IosIZIAZfqx9eKoI
-  - https://poe.com/s/ZPTF7P5ov7KswFbrVOA4
-  
-  How to turn figma-export into tauri project:
-  1. Download Rust if you haven't already.
-  2. Run `npm install -D @tauri-apps/cli`
-  3. Run `npx tauri init`
+Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngine) is the scalable, general-purpose engine that powers PenPals AI. It handles user profiles, friend networks, posts, ands real-time interactions, kaing it adaptable for other collaborative applications.
 
+---
 
+## Key Features
 
-  `package.json` notes
-  ```json
-  "main": "main.js",
-      "description": "sample descriptoin edit please.",
-      "author": "Harin Chan, Parm, i forgot",
-      "scripts": {
-            "dev": "vite",
-            "start": "electron .",
-            "build": "vite build && electron-builder",
-            "dev:start": "concurrently \"npm run dev -- --host\" \"wait-on http://localhost:3000 && npm start\""
-      },
-  ```
+- **Interactive Map:** Visualise and connect with classrooms globally.
+- **Smart Matchmaking:** Pair classrooms based on shared interests and goals.
+- **Real-time Video:** Engage in instant, high-quality video conversations.
+- **Live Translation:** Access real-time translations powered by Intel OpenVino.
+- **Social Network:** Build and maintain relationships with classrooms worldwide.
 
-  ## Dev Device Preparation Instruction (Windows)
-  1. Download [Rust](https://rustup.rs/) if you haven't already.
-  2. Make sure cargo is correctly installed with `cargo --version` and `rustc --version`
-  3. Download `Visual Studio Community 2026` via `Visual Studido Installer`, making sure to include `Desktop Development with C++` in installation.
-  3. run `cd penpals-frontend`- `npm i`
+---
 
-  
+## Why PenPals AI?
 
-  When in doubt
-  - run in `\penpals-frontend\src-tauri`:
-    - `cargo clean`
-    - `cargo build`
-  
-  ## Build and Run
+- **For Teachers:** Reduce administrative workload and enrich lessons with global perspectives.
+- **For Students:** Gain diverse, real-world learning experiences.
+- **For Developers:** Leverage [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngine) to build your own collaborative apps.
 
-  Dev: `npx tauri dev`
+---
 
-  Build: `npx tauri build`
+## Getting Started
 
-  Build bundles:
-  - `\penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi`
-  - `\penpals-frontend\src-tauri\target\release\bundle\nsis\penpals-frontend_0.1.0_x64-setup.exe`
+1. **Clone the repository:**
+```bash
+    git clone https://github.com/HarinChan/PenPals.git
+    cd PenPals
+```
 
+2. **Install dependencies:**
+```bash
+    cd penpals-frontend
+    npm install
+```
 
-# Backend Notes
-  Relies on `http://localhost:5173`, need to prorga to find free ports themseleves as well
+3. **Run the backend (alternatively run MirrorMirror):**
+```bash
+    cd penpals-backend
+    pip install -r requirements.txt
+    python src/app.py
+```
+
+4. **Run the app:**
+```bash
+    cd penpals-frontend
+    npx tauri dev
+```
+
+---
+
+## Roadmap
+
+- [ ] Add live translation
+- [ ] Add support for group calls
+- [x] Add WebEx integration
+- [x] Add real-time video
+- [x] Add matchmaking
