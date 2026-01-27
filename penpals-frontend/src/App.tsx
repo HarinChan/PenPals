@@ -452,8 +452,8 @@ function AppContent() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-slate-900 dark:text-slate-100 text-xl hidden sm:block">Classroom Connect</h1>
-            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block">MirrorMirror</span>
+            <h1 className="text-slate-900 dark:text-slate-100 text-xl hidden sm:block">PenPals AI</h1>
+            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block">powered by MirrorMirror</span>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <Button
