@@ -106,9 +106,9 @@ export default function SidePanel({
 
   const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
-  const [receivedInvitationsOpen, setReceivedInvitationsOpen] = useState(true);
+  const [invitationsOpen, setInvitationsOpen] = useState(true);
+  const [invitationsTab, setInvitationsTab] = useState<'received' | 'sent'>('received');
   const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
-  const [sentInvitationsOpen, setSentInvitationsOpen] = useState(true);
   const [sentInvitations, setSentInvitations] = useState<any[]>([]);
 
   const fetchMeetings = async () => {
@@ -1126,153 +1126,133 @@ export default function SidePanel({
               </Card>
             </Collapsible>
 
-            {/* Received Meeting Invitations Widget - Collapsible */}
-            <Collapsible open={receivedInvitationsOpen} onOpenChange={setReceivedInvitationsOpen}>
+            {/* Meeting Invitations Widget - Unified with Toggle */}
+            <Collapsible open={invitationsOpen} onOpenChange={setInvitationsOpen}>
               <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
                 <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${receivedInvitationsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Phone className="text-green-600 dark:text-green-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Invitations Received</h3>
-                    {receivedInvitations.length > 0 && (
-                      <Badge className="ml-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                        {receivedInvitations.length}
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
+                    <ChevronDown className={`transition-transform ${invitationsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Phone className="text-blue-600 dark:text-blue-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Meeting Invitations</h3>
+                    {(invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length) > 0 && (
+                      <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length}
                       </Badge>
                     )}
                   </CollapsibleTrigger>
 
                   <CollapsibleContent>
+                    {/* Tab Toggle */}
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        size="sm"
+                        variant={invitationsTab === 'received' ? 'default' : 'outline'}
+                        onClick={() => setInvitationsTab('received')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Received
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={invitationsTab === 'sent' ? 'default' : 'outline'}
+                        onClick={() => setInvitationsTab('sent')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Sent
+                      </Button>
+                    </div>
+
                     <ScrollArea className="h-48">
                       <div className="space-y-2 pr-4">
-                        {receivedInvitations.length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No incoming invitations
-                          </div>
-                        ) : (
-                          receivedInvitations.map((invitation) => (
-                            <div
-                              key={invitation.id}
-                              className={`p-3 rounded-lg border ${
-                                invitation.status === 'pending'
-                                  ? 'bg-green-50 dark:bg-slate-700 border-green-200 dark:border-slate-600'
-                                  : 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                    <Clock size={12} />
-                                    {new Date(invitation.start_time).toLocaleString(undefined, {
-                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                    })}
-                                  </div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    From: {invitation.sender_name}
-                                  </div>
-                                  {invitation.status !== 'pending' && (
-                                    <div className="text-slate-500 dark:text-slate-400 text-xs mt-2">
-                                      <Badge variant="outline" className="text-xs capitalize">
-                                        {invitation.status}
-                                      </Badge>
+                        {invitationsTab === 'received' ? (
+                          // Received Invitations
+                          <>
+                            {receivedInvitations.length === 0 ? (
+                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                                No incoming invitations
+                              </div>
+                            ) : (
+                              receivedInvitations.map((invitation) => (
+                                <div
+                                  key={invitation.id}
+                                  className={`p-3 rounded-lg border bg-green-50 dark:bg-slate-700 border-green-200 dark:border-slate-600`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                        <Clock size={12} />
+                                        {new Date(invitation.start_time).toLocaleString(undefined, {
+                                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                        })}
+                                      </div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                        From: {invitation.sender_name}
+                                      </div>
                                     </div>
-                                  )}
+                                  </div>
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleAcceptInvitation(invitation.id)}
+                                      className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+                                    >
+                                      Accept
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="flex-1 h-7 text-xs"
+                                      onClick={() => handleDeclineInvitation(invitation.id)}
+                                    >
+                                      Decline
+                                    </Button>
+                                  </div>
                                 </div>
-                              </div>
-                              {invitation.status === 'pending' && (
-                                <div className="flex gap-2 mt-3">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleAcceptInvitation(invitation.id)}
-                                    className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1 h-7 text-xs"
-                                    onClick={() => handleDeclineInvitation(invitation.id)}
-                                  >
-                                    Decline
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Sent Meeting Invitations Widget - Collapsible */}
-            <Collapsible open={sentInvitationsOpen} onOpenChange={setSentInvitationsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${sentInvitationsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Phone className="text-amber-600 dark:text-amber-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Invitations Sent</h3>
-                    {sentInvitations.length > 0 && (
-                      <Badge className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                        {sentInvitations.length}
-                      </Badge>
-                    )}
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <ScrollArea className="h-48">
-                      <div className="space-y-2 pr-4">
-                        {sentInvitations.length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No pending outgoing invitations
-                          </div>
+                              ))
+                            )}
+                          </>
                         ) : (
-                          sentInvitations.map((invitation) => (
-                            <div
-                              key={invitation.id}
-                              className={`p-3 rounded-lg border ${
-                                invitation.status === 'pending'
-                                  ? 'bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600'
-                                  : 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                    <Clock size={12} />
-                                    {new Date(invitation.start_time).toLocaleString(undefined, {
-                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                    })}
-                                  </div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    To: {invitation.receiver_name}
-                                  </div>
-                                  <div className="text-slate-500 dark:text-slate-400 text-xs mt-2">
-                                    <Badge variant="outline" className="text-xs capitalize">
-                                      {invitation.status}
-                                    </Badge>
-                                  </div>
-                                </div>
+                          // Sent Invitations
+                          <>
+                            {sentInvitations.length === 0 ? (
+                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                                No pending outgoing invitations
                               </div>
-                              {invitation.status === 'pending' && (
-                                <div className="flex gap-2 mt-3">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                    onClick={() => handleCancelInvitation(invitation.id)}
-                                  >
-                                    Cancel
-                                  </Button>
+                            ) : (
+                              sentInvitations.map((invitation) => (
+                                <div
+                                  key={invitation.id}
+                                  className={`p-3 rounded-lg border bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                        <Clock size={12} />
+                                        {new Date(invitation.start_time).toLocaleString(undefined, {
+                                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                        })}
+                                      </div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                        To: {invitation.receiver_name}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      onClick={() => handleCancelInvitation(invitation.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          ))
+                              ))
+                            )}
+                          </>
                         )}
                       </div>
                     </ScrollArea>
