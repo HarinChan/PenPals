@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Heart, Share2, Copy, Link as LinkIcon, Trash2, Edit2 } from 'lucide-react';
+import { Heart, Trash2, Edit2 } from 'lucide-react';
 import { Post } from './PostCreator';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
 import { Textarea } from './ui/textarea';
 
@@ -23,8 +16,6 @@ interface PostFeedProps {
 }
 
 export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, onEditPost, currentUserId }: PostFeedProps) {
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
 
@@ -40,30 +31,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
-  };
-
-  const handleShareClick = (post: Post) => {
-    setSelectedPost(post);
-    setShareDialogOpen(true);
-  };
-
-  const copyPostContent = () => {
-    if (!selectedPost) return;
-    
-    let content = `${selectedPost.authorName}\n\n${selectedPost.content}`;
-    
-    navigator.clipboard.writeText(content);
-    toast.success('Post content copied to clipboard!');
-    setShareDialogOpen(false);
-  };
-
-  const copyPostLink = () => {
-    if (!selectedPost) return;
-    
-    const link = `https://mirrormirror.app/post/${selectedPost.id}`;
-    navigator.clipboard.writeText(link);
-    toast.success('Post link copied to clipboard!');
-    setShareDialogOpen(false);
   };
 
   const handleEditClick = (post: Post) => {
@@ -158,15 +125,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
                       <Heart className={`w-4 h-4 mr-1 ${isLiked ? 'fill-current' : ''}`} />
                       {post.likes > 0 && <span>{post.likes}</span>}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleShareClick(post)}
-                      className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                    >
-                      <Share2 className="w-4 h-4 mr-1" />
-                      Share
-                    </Button>
                     {currentUserId === post.authorId && !editingPostId && (
                       <>
                         <Button
@@ -196,32 +154,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
           );
         })}
       </div>
-
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-800">
-          <DialogHeader>
-            <DialogTitle>Share Post</DialogTitle>
-            <DialogDescription>Choose how you'd like to share this post</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Button
-              onClick={copyPostContent}
-              className="w-full justify-start gap-2 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600"
-            >
-              <Copy className="w-4 h-4" />
-              Copy post content
-            </Button>
-            <Button
-              onClick={copyPostLink}
-              className="w-full justify-start gap-2 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600"
-            >
-              <LinkIcon className="w-4 h-4" />
-              Copy post link
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
