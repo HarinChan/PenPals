@@ -209,6 +209,52 @@ export default function SidePanel({
     }
   };
 
+  const handleDeclineInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/decline`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        toast.success("Invitation declined");
+        fetchInvitations();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to decline invitation");
+      }
+    } catch (err) {
+      console.error("Failed to decline invitation", err);
+      toast.error("Error declining invitation");
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        toast.success("Invitation cancelled");
+        fetchInvitations();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to cancel invitation");
+      }
+    } catch (err) {
+      console.error("Failed to cancel invitation", err);
+      toast.error("Error cancelling invitation");
+    }
+  };
+
   // Create Classroom Dialog State
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
   const [newClassroomData, setNewClassroomData] = useState({
@@ -1106,7 +1152,11 @@ export default function SidePanel({
                           receivedInvitations.map((invitation) => (
                             <div
                               key={invitation.id}
-                              className="p-3 rounded-lg bg-green-50 dark:bg-slate-700 border border-green-200 dark:border-slate-600"
+                              className={`p-3 rounded-lg border ${
+                                invitation.status === 'pending'
+                                  ? 'bg-green-50 dark:bg-slate-700 border-green-200 dark:border-slate-600'
+                                  : 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
+                              }`}
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -1120,27 +1170,34 @@ export default function SidePanel({
                                   <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                     From: {invitation.sender_name}
                                   </div>
+                                  {invitation.status !== 'pending' && (
+                                    <div className="text-slate-500 dark:text-slate-400 text-xs mt-2">
+                                      <Badge variant="outline" className="text-xs capitalize">
+                                        {invitation.status}
+                                      </Badge>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex gap-2 mt-3">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAcceptInvitation(invitation.id)}
-                                  className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
-                                >
-                                  Accept
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex-1 h-7 text-xs"
-                                  onClick={() => {
-                                    toast.info("Decline feature coming soon");
-                                  }}
-                                >
-                                  Decline
-                                </Button>
-                              </div>
+                              {invitation.status === 'pending' && (
+                                <div className="flex gap-2 mt-3">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleAcceptInvitation(invitation.id)}
+                                    className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1 h-7 text-xs"
+                                    onClick={() => handleDeclineInvitation(invitation.id)}
+                                  >
+                                    Decline
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))
                         )}
@@ -1177,7 +1234,11 @@ export default function SidePanel({
                           sentInvitations.map((invitation) => (
                             <div
                               key={invitation.id}
-                              className="p-3 rounded-lg bg-amber-50 dark:bg-slate-700 border border-amber-200 dark:border-slate-600"
+                              className={`p-3 rounded-lg border ${
+                                invitation.status === 'pending'
+                                  ? 'bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600'
+                                  : 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
+                              }`}
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -1192,10 +1253,24 @@ export default function SidePanel({
                                     To: {invitation.receiver_name}
                                   </div>
                                   <div className="text-slate-500 dark:text-slate-400 text-xs mt-2">
-                                    <Badge variant="outline" className="text-xs">Pending</Badge>
+                                    <Badge variant="outline" className="text-xs capitalize">
+                                      {invitation.status}
+                                    </Badge>
                                   </div>
                                 </div>
                               </div>
+                              {invitation.status === 'pending' && (
+                                <div className="flex gap-2 mt-3">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                    onClick={() => handleCancelInvitation(invitation.id)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))
                         )}
