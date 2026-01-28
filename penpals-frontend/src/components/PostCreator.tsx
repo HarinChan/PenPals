@@ -30,7 +30,7 @@ export default function PostCreator({ onCreatePost, authorName }: PostCreatorPro
   };
 
   return (
-    <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+    <div className="p-4">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
@@ -58,6 +58,6 @@ export default function PostCreator({ onCreatePost, authorName }: PostCreatorPro
           </Button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }

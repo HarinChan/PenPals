@@ -3,7 +3,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Heart, Trash2, Edit2 } from 'lucide-react';
 import { Post } from './PostCreator';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Textarea } from './ui/textarea';
 
 interface PostFeedProps {
@@ -56,7 +56,7 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
 
   if (posts.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+      <div className="text-center py-12 px-4 text-slate-500 dark:text-slate-400">
         No posts yet. Be the first to share something!
       </div>
     );
@@ -64,12 +64,12 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="divide-y divide-slate-200 dark:divide-slate-700">
         {posts.map((post) => {
           const isLiked = likedPosts?.has(post.id) || false;
           
           return (
-            <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <div key={post.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
                   {post.authorName.charAt(0)}
@@ -150,7 +150,7 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, 
                   </div>
                 </div>
               </div>
-            </Card>
+            </div>
           );
         })}
       </div>
