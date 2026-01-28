@@ -73,7 +73,7 @@ export default function ClassroomDetailDialog({
     try {
       const token = localStorage.getItem('penpals_token');
       if (!token) {
-        toast.error("You must be logged in to make a call");
+        toast.error("You must be logged in to schedule a meeting");
         return;
       }
 
@@ -97,11 +97,11 @@ export default function ClassroomDetailDialog({
           toast.error("Please connect WebEx in Account settings first");
           return null;
         }
-        throw new Error(error.msg || 'Failed to create meeting');
+        throw new Error(error.msg || 'Failed to schedule meeting');
       }
 
       const data = await response.json();
-      return data.meeting;
+      return data.invitation;
 
     } catch (error: any) {
       toast.error(error.message);
@@ -131,19 +131,19 @@ export default function ClassroomDetailDialog({
       const endTime = new Date(targetDate);
       endTime.setHours(selectedHours[selectedHours.length - 1] + 1, 0, 0, 0);
 
-      // Create meeting
+      // Create meeting invitation
       toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
-        loading: 'Scheduling meeting...',
+        loading: 'Sending meeting invitation...',
         success: (data) => {
           if (data) {
             setShowScheduleCall(false);
             setSelectedHours([]);
-            return `Meeting scheduled! Link: ${data.web_link}`;
+            return `Meeting invitation sent to ${classroom.name}!`;
           } else {
             throw new Error("Failed");
           }
         },
-        error: 'Failed to schedule meeting'
+        error: 'Failed to send meeting invitation'
       });
     }
   };

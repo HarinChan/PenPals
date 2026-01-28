@@ -14,7 +14,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import db, Account, Profile, Relation, Post, Meeting
+from models import db, Account, Profile, Relation, Post, Meeting, MeetingInvitation
 from webex_service import WebexService
 
 from account import account_bp
@@ -299,21 +299,6 @@ def create_webex_meeting():
     if not account:
         return jsonify({"msg": "User not found"}), 404
         
-    # Check WebEx connection
-    if not account.webex_access_token:
-        return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
-    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
-        try:
-             token_data = webex_service.refresh_access_token(account.webex_refresh_token)
-             account.webex_access_token = token_data.get('access_token')
-             account.webex_refresh_token = token_data.get('refresh_token', account.webex_refresh_token)
-             expires_in = token_data.get('expires_in')
-             if expires_in:
-                 account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-             db.session.commit()
-        except Exception as e:
-            return jsonify({"msg": "Failed to refresh WebEx session. Please reconnect."}), 403
-        
     # Assuming the account has one profile/classroom for now, or we pick the first one
     # The frontend should ideally send the profile_id, but for now we default to the first one.
     creator_profile = account.classrooms.first()
@@ -325,6 +310,27 @@ def create_webex_meeting():
     start_time_str = data.get('start_time')
     end_time_str = data.get('end_time')
     classroom_id = data.get('classroom_id') # The participant classroom ID (the one we are calling)
+    
+    if not classroom_id:
+        return jsonify({"msg": "classroom_id is required"}), 400
+    
+    # Check if it's a dummy classroom ID (for development/testing)
+    if isinstance(classroom_id, str) and classroom_id.startswith('dummy_'):
+        return jsonify({"msg": "Cannot invite dummy classrooms. Please use real classrooms from your network."}), 400
+    
+    # Convert to int if it's a numeric string
+    try:
+        classroom_id = int(classroom_id)
+    except (ValueError, TypeError):
+        return jsonify({"msg": "Invalid classroom_id format"}), 400
+    
+    receiver_profile = Profile.query.get(classroom_id)
+    if not receiver_profile:
+        return jsonify({"msg": "Receiver classroom not found"}), 404
+    
+    # Prevent inviting yourself
+    if creator_profile.id == receiver_profile.id:
+        return jsonify({"msg": "You cannot invite your own classroom"}), 400
     
     if not start_time_str or not end_time_str:
          # Default to instant meeting (now + 1 hour)
@@ -343,41 +349,27 @@ def create_webex_meeting():
         except ValueError:
             return jsonify({"msg": "Invalid date format"}), 400
 
-    # Create meeting via WebEx Service
-    try:
-        # Pass the user's access token
-        webex_meeting = webex_service.create_meeting(account.webex_access_token, title, start_time, end_time)
-    except Exception as e:
-        return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
-        
-    # Save to DB
-    new_meeting = Meeting(
-        webex_id=webex_meeting.get('id'),
-        title=webex_meeting.get('title', title),
+    # Create invitation instead of meeting
+    new_invitation = MeetingInvitation(
+        sender_profile_id=creator_profile.id,
+        receiver_profile_id=receiver_profile.id,
+        title=title,
         start_time=start_time,
         end_time=end_time,
-        web_link=webex_meeting.get('webLink'),
-        password=webex_meeting.get('password'),
-        creator_id=creator_profile.id
+        status='pending'
     )
     
-    # Add participant if provided
-    if classroom_id:
-        participant_profile = Profile.query.get(classroom_id)
-        if participant_profile:
-            new_meeting.participants.append(participant_profile)
-            
-    db.session.add(new_meeting)
+    db.session.add(new_invitation)
     db.session.commit()
     
     return jsonify({
-        "msg": "Meeting created successfully",
-        "meeting": {
-            "id": new_meeting.id,
-            "web_link": new_meeting.web_link,
-            "start_time": new_meeting.start_time.isoformat(),
-            "title": new_meeting.title,
-            "password": new_meeting.password
+        "msg": "Meeting invitation sent successfully",
+        "invitation": {
+            "id": new_invitation.id,
+            "title": new_invitation.title,
+            "start_time": new_invitation.start_time.isoformat(),
+            "end_time": new_invitation.end_time.isoformat(),
+            "status": new_invitation.status
         }
     }), 201
 
@@ -524,6 +516,165 @@ def get_upcoming_meetings():
         })
         
     return jsonify({"meetings": result}), 200
+
+
+@application.route('/api/webex/invitations', methods=['GET'])
+@jwt_required()
+def get_pending_invitations():
+    """Get pending invitations for the current user's classroom"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+    
+    receiver_profile = account.classrooms.first()
+    if not receiver_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+    
+    # Get all pending invitations for this classroom
+    invitations = MeetingInvitation.query.filter_by(
+        receiver_profile_id=receiver_profile.id,
+        status='pending'
+    ).order_by(MeetingInvitation.created_at.desc()).all()
+    
+    result = []
+    for inv in invitations:
+        result.append({
+            "id": inv.id,
+            "title": inv.title,
+            "start_time": inv.start_time.isoformat(),
+            "end_time": inv.end_time.isoformat(),
+            "sender_name": inv.sender.name,
+            "status": inv.status,
+            "created_at": inv.created_at.isoformat()
+        })
+    
+    return jsonify({"invitations": result}), 200
+
+
+@application.route('/api/webex/invitations/sent', methods=['GET'])
+@jwt_required()
+def get_sent_invitations():
+    """Get invitations sent by the current user's classroom"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+    
+    sender_profile = account.classrooms.first()
+    if not sender_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+    
+    # Get all pending invitations sent by this classroom
+    invitations = MeetingInvitation.query.filter_by(
+        sender_profile_id=sender_profile.id,
+        status='pending'
+    ).order_by(MeetingInvitation.created_at.desc()).all()
+    
+    result = []
+    for inv in invitations:
+        result.append({
+            "id": inv.id,
+            "title": inv.title,
+            "start_time": inv.start_time.isoformat(),
+            "end_time": inv.end_time.isoformat(),
+            "receiver_name": inv.receiver.name,
+            "status": inv.status,
+            "created_at": inv.created_at.isoformat()
+        })
+    
+    return jsonify({"sent_invitations": result}), 200
+
+
+@application.route('/api/webex/invitations/<int:invitation_id>/accept', methods=['POST'])
+@jwt_required()
+def accept_invitation(invitation_id):
+    """Accept a meeting invitation and create the WebEx meeting"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+    
+    receiver_profile = account.classrooms.first()
+    if not receiver_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+    
+    invitation = MeetingInvitation.query.get(invitation_id)
+    if not invitation:
+        return jsonify({"msg": "Invitation not found"}), 404
+    
+    # Verify the invitation is for this user
+    if invitation.receiver_profile_id != receiver_profile.id:
+        return jsonify({"msg": "This invitation is not for you"}), 403
+    
+    if invitation.status != 'pending':
+        return jsonify({"msg": f"Invitation is already {invitation.status}"}), 400
+    
+    # Check if the sender has WebEx connected
+    sender_account = invitation.sender.account
+    if not sender_account.webex_access_token:
+        return jsonify({"msg": "The meeting organizer's WebEx account is not connected"}), 403
+    
+    # Refresh WebEx token if expired
+    if sender_account.webex_token_expires_at and sender_account.webex_token_expires_at < datetime.utcnow():
+        try:
+            token_data = webex_service.refresh_access_token(sender_account.webex_refresh_token)
+            sender_account.webex_access_token = token_data.get('access_token')
+            sender_account.webex_refresh_token = token_data.get('refresh_token', sender_account.webex_refresh_token)
+            expires_in = token_data.get('expires_in')
+            if expires_in:
+                sender_account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            db.session.commit()
+        except Exception as e:
+            return jsonify({"msg": "Failed to refresh organizer's WebEx session. Please try again later."}), 403
+    
+    # Create meeting via WebEx using the sender's token
+    try:
+        webex_meeting = webex_service.create_meeting(
+            sender_account.webex_access_token,
+            invitation.title,
+            invitation.start_time,
+            invitation.end_time
+        )
+    except Exception as e:
+        return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
+    
+    # Create meeting in database with sender as creator
+    new_meeting = Meeting(
+        webex_id=webex_meeting.get('id'),
+        title=webex_meeting.get('title', invitation.title),
+        start_time=invitation.start_time,
+        end_time=invitation.end_time,
+        web_link=webex_meeting.get('webLink'),
+        password=webex_meeting.get('password'),
+        creator_id=invitation.sender_profile_id
+    )
+    
+    # Add the accepting classroom as a participant
+    new_meeting.participants.append(receiver_profile)
+    
+    db.session.add(new_meeting)
+    
+    # Update invitation status
+    invitation.status = 'accepted'
+    invitation.meeting_id = new_meeting.id
+    
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Invitation accepted. Meeting created successfully!",
+        "meeting": {
+            "id": new_meeting.id,
+            "title": new_meeting.title,
+            "web_link": new_meeting.web_link,
+            "start_time": new_meeting.start_time.isoformat(),
+            "end_time": new_meeting.end_time.isoformat(),
+            "password": new_meeting.password
+        }
+    }), 201
 
 
 # ChromaDB Document Endpoints

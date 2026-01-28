@@ -106,29 +106,63 @@ export default function SidePanel({
 
   const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+  const [receivedInvitationsOpen, setReceivedInvitationsOpen] = useState(true);
+  const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
+  const [sentInvitationsOpen, setSentInvitationsOpen] = useState(true);
+  const [sentInvitations, setSentInvitations] = useState<any[]>([]);
+
+  const fetchMeetings = async () => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch('http://127.0.0.1:5001/api/meetings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUpcomingMeetings(data.meetings);
+      }
+    } catch (err) {
+      console.error("Failed to fetch meetings", err);
+    }
+  };
+
+  const fetchInvitations = async () => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      // Fetch received invitations
+      const receivedResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (receivedResponse.ok) {
+        const data = await receivedResponse.json();
+        setReceivedInvitations(data.invitations);
+      }
+
+      // Fetch sent invitations
+      const sentResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations/sent', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (sentResponse.ok) {
+        const data = await sentResponse.json();
+        setSentInvitations(data.sent_invitations);
+      }
+    } catch (err) {
+      console.error("Failed to fetch invitations", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchMeetings = async () => {
-      try {
-        const token = localStorage.getItem('penpals_token');
-        // Note: In a real app we might get token from a context or prop, assuming localStorage 'token' exists based on typical auth flows.
-        // If not found, we might need to rely on cookie or other mechanism.
-        if (!token) return;
-
-        const response = await fetch('http://127.0.0.1:5001/api/meetings', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUpcomingMeetings(data.meetings);
-        }
-      } catch (err) {
-        console.error("Failed to fetch meetings", err);
-      }
-    };
     fetchMeetings();
-    // Set up a polling interval to refresh meetings every minute
-    const interval = setInterval(fetchMeetings, 60000);
+    fetchInvitations();
+    // Set up a polling interval to refresh meetings and invitations every minute
+    const interval = setInterval(() => {
+      fetchMeetings();
+      fetchInvitations();
+    }, 60000);
     return () => clearInterval(interval);
   }, [currentAccount.id]);
 
@@ -145,6 +179,35 @@ export default function SidePanel({
   }, [currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+
+  const handleAcceptInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/accept`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const message = data.meeting.web_link 
+          ? `Meeting invitation accepted! Meeting link: ${data.meeting.web_link}`
+          : "Meeting invitation accepted! The meeting has been created.";
+        toast.success(message);
+        // Refresh both lists
+        fetchInvitations();
+        fetchMeetings();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to accept invitation");
+      }
+    } catch (err) {
+      console.error("Failed to accept invitation", err);
+      toast.error("Error accepting invitation");
+    }
+  };
 
   // Create Classroom Dialog State
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
@@ -1000,11 +1063,138 @@ export default function SidePanel({
                                 </div>
                                 <Button
                                   size="sm"
-                                  onClick={() => window.open(meeting.web_link, '_blank')}
-                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2"
+                                  onClick={() => meeting.web_link && window.open(meeting.web_link, '_blank')}
+                                  disabled={!meeting.web_link}
+                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Join
                                 </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Received Meeting Invitations Widget - Collapsible */}
+            <Collapsible open={receivedInvitationsOpen} onOpenChange={setReceivedInvitationsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${receivedInvitationsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Phone className="text-green-600 dark:text-green-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Invitations Received</h3>
+                    {receivedInvitations.length > 0 && (
+                      <Badge className="ml-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        {receivedInvitations.length}
+                      </Badge>
+                    )}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2 pr-4">
+                        {receivedInvitations.length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No incoming invitations
+                          </div>
+                        ) : (
+                          receivedInvitations.map((invitation) => (
+                            <div
+                              key={invitation.id}
+                              className="p-3 rounded-lg bg-green-50 dark:bg-slate-700 border border-green-200 dark:border-slate-600"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                    <Clock size={12} />
+                                    {new Date(invitation.start_time).toLocaleString(undefined, {
+                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    From: {invitation.sender_name}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mt-3">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleAcceptInvitation(invitation.id)}
+                                  className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+                                >
+                                  Accept
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 h-7 text-xs"
+                                  onClick={() => {
+                                    toast.info("Decline feature coming soon");
+                                  }}
+                                >
+                                  Decline
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Sent Meeting Invitations Widget - Collapsible */}
+            <Collapsible open={sentInvitationsOpen} onOpenChange={setSentInvitationsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
+                    <ChevronDown className={`transition-transform ${sentInvitationsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Phone className="text-amber-600 dark:text-amber-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Invitations Sent</h3>
+                    {sentInvitations.length > 0 && (
+                      <Badge className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                        {sentInvitations.length}
+                      </Badge>
+                    )}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2 pr-4">
+                        {sentInvitations.length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No pending outgoing invitations
+                          </div>
+                        ) : (
+                          sentInvitations.map((invitation) => (
+                            <div
+                              key={invitation.id}
+                              className="p-3 rounded-lg bg-amber-50 dark:bg-slate-700 border border-amber-200 dark:border-slate-600"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                    <Clock size={12} />
+                                    {new Date(invitation.start_time).toLocaleString(undefined, {
+                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                    })}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    To: {invitation.receiver_name}
+                                  </div>
+                                  <div className="text-slate-500 dark:text-slate-400 text-xs mt-2">
+                                    <Badge variant="outline" className="text-xs">Pending</Badge>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           ))
