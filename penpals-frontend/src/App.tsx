@@ -346,17 +346,15 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (content: string) => {
     const newPost: Post = {
       id: `post-${Date.now()}`,
       authorId: currentAccountId,
       authorName: currentAccount.classroomName,
       content,
-      imageUrl,
       timestamp: new Date(),
       likes: 0,
       comments: 0,
-      quotedPost,
     };
 
     // Upload to ChromaDB for search functionality
@@ -369,7 +367,6 @@ function AppContent() {
         timestamp: newPost.timestamp.toISOString(),
         likes: newPost.likes,
         comments: newPost.comments,
-        imageUrl: newPost.imageUrl,
       });
 
       if (result.status === 'success') {
@@ -383,6 +380,57 @@ function AppContent() {
     } catch (error) {
       toast.error('Failed to create post. Cannot connect to backend server.');
       console.error('Error uploading to ChromaDB:', error);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      const { deletePostFromChromaDB } = await import('./services/chromadb');
+      const result = await deletePostFromChromaDB(postId);
+
+      if (result.status === 'success') {
+        setPosts(posts.filter(post => post.id !== postId));
+        toast.success('Post deleted successfully!');
+      } else {
+        toast.error('Failed to delete post. Backend error: ' + result.message);
+        console.warn('ChromaDB deletion failed:', result.message);
+      }
+    } catch (error) {
+      toast.error('Failed to delete post. Cannot connect to backend server.');
+      console.error('Error deleting from ChromaDB:', error);
+    }
+  };
+
+  const handleEditPost = async (postId: string, newContent: string) => {
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) {
+        toast.error('Post not found');
+        return;
+      }
+
+      const { updateDocument } = await import('./services/chromadb');
+      const result = await updateDocument(postId, newContent, {
+        postId,
+        authorId: post.authorId,
+        authorName: post.authorName,
+        timestamp: post.timestamp.toISOString(),
+        likes: post.likes,
+        comments: post.comments,
+      });
+
+      if (result.status === 'success') {
+        setPosts(posts.map(p =>
+          p.id === postId ? { ...p, content: newContent } : p
+        ));
+        toast.success('Post updated successfully!');
+      } else {
+        toast.error('Failed to update post. Backend error: ' + result.message);
+        console.warn('ChromaDB update failed:', result.message);
+      }
+    } catch (error) {
+      toast.error('Failed to update post. Cannot connect to backend server.');
+      console.error('Error updating ChromaDB:', error);
     }
   };
 
@@ -517,6 +565,8 @@ function AppContent() {
             myPosts={myPosts}
             onCreatePost={handleCreatePost}
             onLikePost={handleLikePost}
+            onDeletePost={handleDeletePost}
+            onEditPost={handleEditPost}
             likedPosts={likedPosts}
           />
         </div>
@@ -546,6 +596,8 @@ function AppContent() {
                   myPosts={myPosts}
                   onCreatePost={handleCreatePost}
                   onLikePost={handleLikePost}
+                  onDeletePost={handleDeletePost}
+                  onEditPost={handleEditPost}
                   likedPosts={likedPosts}
                 />
               </div>

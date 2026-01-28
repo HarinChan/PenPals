@@ -29,7 +29,6 @@ export interface PostMetadata {
   timestamp: string;
   likes: number;
   comments: number;
-  imageUrl?: string;
 }
 
 /**
@@ -126,6 +125,43 @@ export async function deletePostFromChromaDB(postId: string): Promise<{
     return await response.json();
   } catch (error) {
     console.error('Error deleting post from ChromaDB:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+/**
+ * Update a post document in ChromaDB
+ */
+export async function updateDocument(
+  documentId: string,
+  document: string,
+  metadata: Record<string, any>
+): Promise<{
+  status: 'success' | 'error';
+  message: string;
+}> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/documents/update`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: documentId,
+        document,
+        metadata,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating document in ChromaDB:', error);
     return {
       status: 'error',
       message: error instanceof Error ? error.message : 'Unknown error',

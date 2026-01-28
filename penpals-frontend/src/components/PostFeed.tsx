@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Heart, Quote, Share2, Copy, Link as LinkIcon } from 'lucide-react';
+import { Heart, Share2, Copy, Link as LinkIcon, Trash2, Edit2 } from 'lucide-react';
 import { Post } from './PostCreator';
 import {
   Dialog,
@@ -12,17 +11,22 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { toast } from 'sonner@2.0.3';
+import { Textarea } from './ui/textarea';
 
 interface PostFeedProps {
   posts: Post[];
   onLikePost?: (postId: string) => void;
   likedPosts?: Set<string>;
-  onQuotePost?: (post: Post) => void;
+  onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
+  currentUserId?: string;
 }
 
-export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }: PostFeedProps) {
+export default function PostFeed({ posts, onLikePost, likedPosts, onDeletePost, onEditPost, currentUserId }: PostFeedProps) {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   const formatTimestamp = (date: Date) => {
     const now = new Date();
@@ -47,9 +51,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
     if (!selectedPost) return;
     
     let content = `${selectedPost.authorName}\n\n${selectedPost.content}`;
-    if (selectedPost.imageUrl) {
-      content += `\n\nImage: ${selectedPost.imageUrl}`;
-    }
     
     navigator.clipboard.writeText(content);
     toast.success('Post content copied to clipboard!');
@@ -63,6 +64,27 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
     navigator.clipboard.writeText(link);
     toast.success('Post link copied to clipboard!');
     setShareDialogOpen(false);
+  };
+
+  const handleEditClick = (post: Post) => {
+    setEditingPostId(post.id);
+    setEditContent(post.content);
+  };
+
+  const handleSaveEdit = async (postId: string) => {
+    if (!editContent.trim()) {
+      toast.error('Post content cannot be empty');
+      return;
+    }
+    onEditPost?.(postId, editContent);
+    setEditingPostId(null);
+    setEditContent('');
+  };
+
+  const handleDeleteClick = async (postId: string) => {
+    if (window.confirm('Are you sure you want to delete this post?')) {
+      onDeletePost?.(postId);
+    }
   };
 
   if (posts.length === 0) {
@@ -92,39 +114,35 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                       {formatTimestamp(post.timestamp)}
                     </span>
                   </div>
-                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words mb-3">
-                    {post.content}
-                  </p>
-                  
-                  {/* Quoted Post Display */}
-                  {post.quotedPost && (
-                    <div className="mb-3 p-3 border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-700/50 rounded-r-lg">
-                      <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                        @{post.quotedPost.authorName}
-                      </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300">
-                        {post.quotedPost.content}
-                      </p>
-                      {post.quotedPost.imageUrl && (
-                        <div className="mt-2 w-32 h-32 rounded overflow-hidden bg-slate-100 dark:bg-slate-900">
-                          <ImageWithFallback
-                            src={post.quotedPost.imageUrl}
-                            alt="Quoted post"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {post.imageUrl && (
-                    <div className="relative w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mb-3">
-                      <ImageWithFallback
-                        src={post.imageUrl}
-                        alt="Post image"
-                        className="w-full max-h-96 object-cover"
+                  {editingPostId === post.id ? (
+                    <div className="space-y-2 mb-3">
+                      <Textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="min-h-[100px] resize-none bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                       />
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingPostId(null)}
+                          className="border-slate-300 dark:border-slate-600"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(post.id)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          Save
+                        </Button>
+                      </div>
                     </div>
+                  ) : (
+                    <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words mb-3">
+                      {post.content}
+                    </p>
                   )}
                   <div className="flex items-center gap-6 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <Button
@@ -143,12 +161,34 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onQuotePost?.(post)}
+                      onClick={() => handleShareClick(post)}
                       className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
                     >
-                      <Quote className="w-4 h-4 mr-1" />
-                      Quote
+                      <Share2 className="w-4 h-4 mr-1" />
+                      Share
                     </Button>
+                    {currentUserId === post.authorId && !editingPostId && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditClick(post)}
+                          className="text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400"
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(post.id)}
+                          className="text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -157,6 +197,31 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost }:
         })}
       </div>
 
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-800">
+          <DialogHeader>
+            <DialogTitle>Share Post</DialogTitle>
+            <DialogDescription>Choose how you'd like to share this post</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              onClick={copyPostContent}
+              className="w-full justify-start gap-2 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600"
+            >
+              <Copy className="w-4 h-4" />
+              Copy post content
+            </Button>
+            <Button
+              onClick={copyPostLink}
+              className="w-full justify-start gap-2 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600"
+            >
+              <LinkIcon className="w-4 h-4" />
+              Copy post link
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

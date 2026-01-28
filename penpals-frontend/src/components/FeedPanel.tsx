@@ -10,8 +10,10 @@ interface FeedPanelProps {
   currentUserId: string;
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
+  onCreatePost: (content: string) => void;
   onLikePost: (postId: string) => void;
+  onDeletePost: (postId: string) => void;
+  onEditPost: (postId: string, newContent: string) => void;
   likedPosts?: Set<string>;
 }
 
@@ -22,17 +24,11 @@ export default function FeedPanel({
   myPosts,
   onCreatePost,
   onLikePost,
+  onDeletePost,
+  onEditPost,
   likedPosts,
 }: FeedPanelProps) {
   const postCreatorRef = useRef<HTMLDivElement>(null);
-
-  const handleQuotePost = (post: Post) => {
-    // Scroll to post creator
-    postCreatorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    
-    // The quote will be added via the post link functionality in PostCreator
-    // For now we just scroll to it - user can manually add the link
-  };
 
   return (
     <div className="space-y-4">
@@ -40,7 +36,6 @@ export default function FeedPanel({
         <PostCreator 
           onCreatePost={onCreatePost} 
           authorName={currentUserName}
-          allPosts={allPosts}
         />
       </div>
 
@@ -62,8 +57,10 @@ export default function FeedPanel({
             <PostFeed 
               posts={allPosts} 
               onLikePost={onLikePost} 
+              onDeletePost={onDeletePost}
+              onEditPost={onEditPost}
               likedPosts={likedPosts}
-              onQuotePost={handleQuotePost}
+              currentUserId={currentUserId}
             />
           </TabsContent>
 
@@ -71,8 +68,10 @@ export default function FeedPanel({
             <PostFeed 
               posts={myPosts} 
               onLikePost={onLikePost} 
+              onDeletePost={onDeletePost}
+              onEditPost={onEditPost}
               likedPosts={likedPosts}
-              onQuotePost={handleQuotePost}
+              currentUserId={currentUserId}
             />
           </TabsContent>
 
