@@ -641,9 +641,10 @@ def query_documents():
 
 
 @application.route('/api/documents/delete', methods=['DELETE'])
+@jwt_required()
 def delete_documents():
     """
-    Delete documents from ChromaDB
+    Delete documents from ChromaDB and database
     Expected JSON format:
     {
         "ids": ["id1", "id2", ...]
@@ -655,19 +656,44 @@ def delete_documents():
         if not data or 'ids' not in data:
             return jsonify({"status": "error", "message": "Missing 'ids' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         ids = data.get('ids')
         
         if not isinstance(ids, list) or len(ids) == 0:
             return jsonify({"status": "error", "message": "'ids' must be a non-empty list"}), 400
         
+        # Verify ownership and delete from database
+        deleted_ids = []
+        for post_id in ids:
+            post = Post.query.filter_by(id=int(post_id)).first()
+            if post:
+                if post.profile_id != profile.id:
+                    return jsonify({"status": "error", "message": f"Unauthorized to delete post {post_id}"}), 403
+                db.session.delete(post)
+                deleted_ids.append(post_id)
+        
+        db.session.commit()
+        
+        # Delete from ChromaDB
         result = chroma_service.delete_documents(ids)
         
         if result['status'] == 'success':
-            return jsonify(result), 200
+            return jsonify({"status": "success", "message": "Posts deleted", "deleted_ids": deleted_ids}), 200
         else:
             return jsonify(result), 500
             
     except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -689,9 +715,10 @@ def get_collection_info():
 
 
 @application.route('/api/documents/update', methods=['PUT'])
+@jwt_required()
 def update_document():
     """
-    Update an existing document in ChromaDB
+    Update an existing document in ChromaDB and database
     Expected JSON format:
     {
         "id": "document_id",
@@ -705,6 +732,17 @@ def update_document():
         if not data or 'id' not in data or 'document' not in data:
             return jsonify({"status": "error", "message": "Missing 'id' or 'document' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         document_id = data.get('id')
         document = data.get('document')
         metadata = data.get('metadata', None)
@@ -715,14 +753,27 @@ def update_document():
         if not isinstance(document, str) or len(document.strip()) == 0:
             return jsonify({"status": "error", "message": "'document' must be a non-empty string"}), 400
         
+        # Verify ownership and update database
+        post = Post.query.filter_by(id=int(document_id)).first()
+        if not post:
+            return jsonify({"status": "error", "message": "Post not found"}), 404
+        
+        if post.profile_id != profile.id:
+            return jsonify({"status": "error", "message": "Unauthorized to update this post"}), 403
+        
+        post.content = document
+        db.session.commit()
+        
+        # Update ChromaDB
         result = chroma_service.update_document(document_id, document, metadata)
         
         if result['status'] == 'success':
-            return jsonify(result), 200
+            return jsonify({"status": "success", "message": "Post updated"}), 200
         else:
             return jsonify(result), 500
             
     except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 

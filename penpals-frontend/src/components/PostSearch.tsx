@@ -2,24 +2,36 @@ import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Search, Loader2, X } from 'lucide-react';
+import { Search, Loader2, X, Trash2, Edit2 } from 'lucide-react';
 import { queryPostsFromChromaDB, ChromaDBQueryResponse } from '../services/chromadb';
 import { Badge } from './ui/badge';
+import { Textarea } from './ui/textarea';
+import { toast } from 'sonner';
+import { Post } from './PostCreator';
 
 interface SearchResult {
   id: string;
   content: string;
   authorName: string;
+  authorId: string;
   timestamp: string;
   similarity: number;
   imageUrl?: string;
 }
 
-export default function PostSearch() {
+interface PostSearchProps {
+  currentUserId?: string;
+  onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
+}
+
+export default function PostSearch({ currentUserId, onDeletePost, onEditPost }: PostSearchProps) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +49,7 @@ export default function PostSearch() {
           id: result.id,
           content: result.document,
           authorName: result.metadata.authorName || 'Unknown',
+          authorId: result.metadata.authorId || '',
           timestamp: result.metadata.timestamp || new Date().toISOString(),
           similarity: result.similarity,
           imageUrl: result.metadata.imageUrl,
@@ -74,6 +87,39 @@ export default function PostSearch() {
     if (similarity >= 0.6) return 'bg-blue-500';
     if (similarity >= 0.4) return 'bg-yellow-500';
     return 'bg-gray-500';
+  };
+
+  const handleEditClick = (result: SearchResult) => {
+    setEditingPostId(result.id);
+    setEditContent(result.content);
+  };
+
+  const handleSaveEdit = async (postId: string) => {
+    if (!editContent.trim()) {
+      toast.error('Post content cannot be empty');
+      return;
+    }
+
+    if (onEditPost) {
+      await onEditPost(postId, editContent);
+      setEditingPostId(null);
+      setEditContent('');
+      
+      // Update the result in the search results
+      setResults(results.map(r => 
+        r.id === postId ? { ...r, content: editContent } : r
+      ));
+    }
+  };
+
+  const handleDeleteClick = (postId: string) => {
+    if (window.confirm('Are you sure you want to delete this post?')) {
+      if (onDeletePost) {
+        onDeletePost(postId);
+        setResults(results.filter(r => r.id !== postId));
+        toast.success('Post deleted successfully!');
+      }
+    }
   };
 
   return (
@@ -174,13 +220,67 @@ export default function PostSearch() {
                           {(result.similarity * 100).toFixed(0)}% match
                         </Badge>
                       </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                        {result.content}
-                      </p>
-                      {result.imageUrl && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-                          📷 Contains image
+
+                      {editingPostId === result.id ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                            rows={3}
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditingPostId(null)}
+                              className="text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveEdit(result.id)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              Save
+                            </Button>
+                          </div>
                         </div>
+                      ) : (
+                        <>
+                          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
+                            {result.content}
+                          </p>
+                          {result.imageUrl && (
+                            <div className="text-xs text-slate-500 dark:text-slate-400 italic">
+                              📷 Contains image
+                            </div>
+                          )}
+
+                          {currentUserId === result.authorId && (
+                            <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditClick(result)}
+                                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex-1"
+                              >
+                                <Edit2 className="w-4 h-4 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteClick(result.id)}
+                                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex-1"
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Delete
+                              </Button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </Card>

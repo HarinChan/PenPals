@@ -76,7 +76,11 @@ export default function FeedPanel({
           </TabsContent>
 
           <TabsContent value="search" className="p-4">
-            <PostSearch />
+            <PostSearch 
+              currentUserId={currentUserId}
+              onDeletePost={onDeletePost}
+              onEditPost={onEditPost}
+            />
           </TabsContent>
         </Tabs>
       </Card>
