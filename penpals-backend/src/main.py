@@ -521,7 +521,7 @@ def get_upcoming_meetings():
 @application.route('/api/webex/invitations', methods=['GET'])
 @jwt_required()
 def get_pending_invitations():
-    """Get pending invitations for the current user's classroom"""
+    """Get invitations received by the current user's classroom"""
     current_user_id = get_jwt_identity()
     account = Account.query.get(current_user_id)
     
@@ -532,7 +532,7 @@ def get_pending_invitations():
     if not receiver_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
-    # Get all pending invitations for this classroom
+    # Get only pending invitations (accepted ones are already shown in meetings)
     invitations = MeetingInvitation.query.filter_by(
         receiver_profile_id=receiver_profile.id,
         status='pending'
@@ -567,7 +567,7 @@ def get_sent_invitations():
     if not sender_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
-    # Get all pending invitations sent by this classroom
+    # Get only pending invitations (accepted ones are already shown in meetings)
     invitations = MeetingInvitation.query.filter_by(
         sender_profile_id=sender_profile.id,
         status='pending'
@@ -675,6 +675,74 @@ def accept_invitation(invitation_id):
             "password": new_meeting.password
         }
     }), 201
+
+
+@application.route('/api/webex/invitations/<int:invitation_id>/decline', methods=['POST'])
+@jwt_required()
+def decline_invitation(invitation_id):
+    """Decline a meeting invitation"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+    
+    receiver_profile = account.classrooms.first()
+    if not receiver_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+    
+    invitation = MeetingInvitation.query.get(invitation_id)
+    if not invitation:
+        return jsonify({"msg": "Invitation not found"}), 404
+    
+    # Verify the invitation is for this user
+    if invitation.receiver_profile_id != receiver_profile.id:
+        return jsonify({"msg": "This invitation is not for you"}), 403
+    
+    if invitation.status != 'pending':
+        return jsonify({"msg": f"Invitation is already {invitation.status}"}), 400
+    
+    # Update invitation status to declined
+    invitation.status = 'declined'
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Invitation declined successfully"
+    }), 200
+
+
+@application.route('/api/webex/invitations/<int:invitation_id>/cancel', methods=['POST'])
+@jwt_required()
+def cancel_invitation(invitation_id):
+    """Cancel a sent meeting invitation (only sender can cancel)"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+    
+    sender_profile = account.classrooms.first()
+    if not sender_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+    
+    invitation = MeetingInvitation.query.get(invitation_id)
+    if not invitation:
+        return jsonify({"msg": "Invitation not found"}), 404
+    
+    # Verify the invitation was sent by this user
+    if invitation.sender_profile_id != sender_profile.id:
+        return jsonify({"msg": "You can only cancel invitations you sent"}), 403
+    
+    if invitation.status != 'pending':
+        return jsonify({"msg": f"Cannot cancel {invitation.status} invitation"}), 400
+    
+    # Update invitation status to cancelled
+    invitation.status = 'cancelled'
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Invitation cancelled successfully"
+    }), 200
 
 
 # ChromaDB Document Endpoints
@@ -833,6 +901,65 @@ def update_document():
             
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# Migration endpoint - convert old meetings to invitations
+@application.route('/api/admin/migrate-meetings', methods=['POST'])
+def migrate_meetings_to_invitations():
+    """
+    ADMIN ONLY: Migrate old Meeting records to MeetingInvitation records.
+    This is needed for meetings created before the invitation system existed.
+    """
+    try:
+        migration_count = 0
+        
+        # Find all meetings that don't have a corresponding invitation yet
+        meetings_without_invitations = db.session.query(Meeting).outerjoin(
+            MeetingInvitation, Meeting.id == MeetingInvitation.meeting_id
+        ).filter(MeetingInvitation.id == None).all()
+        
+        for meeting in meetings_without_invitations:
+            # Skip if meeting has no creator or participants
+            if not meeting.creator or len(meeting.participants) == 0:
+                continue
+            
+            # Find receiver (a participant who is not the creator)
+            receiver = None
+            for participant in meeting.participants:
+                if participant.id != meeting.creator_id:
+                    receiver = participant
+                    break
+            
+            if not receiver:
+                continue
+            
+            # Create invitation for this meeting
+            invitation = MeetingInvitation(
+                sender_profile_id=meeting.creator_id,
+                receiver_profile_id=receiver.id,
+                title=meeting.title,
+                start_time=meeting.start_time,
+                end_time=meeting.end_time,
+                status='pending',
+                meeting_id=meeting.id
+            )
+            
+            db.session.add(invitation)
+            migration_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Migrated {migration_count} old meetings to invitations"
+        }), 200
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "message": f"Migration failed: {str(e)}"
+        }), 500
 
 
 if __name__ == '__main__':
