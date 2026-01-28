@@ -529,9 +529,11 @@ def get_upcoming_meetings():
 # ChromaDB Document Endpoints
 
 @application.route('/api/documents/upload', methods=['POST'])
+@jwt_required()
 def upload_documents():
     """
     Upload documents to ChromaDB for embedding and storage
+    Also persists posts to database for permanent storage
     Expected JSON format:
     {
         "documents": ["text1", "text2", ...],
@@ -545,6 +547,18 @@ def upload_documents():
         if not data or 'documents' not in data:
             return jsonify({"status": "error", "message": "Missing 'documents' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        # Get user's profile (classroom)
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         documents = data.get('documents')
         metadatas = data.get('metadatas', None)
         ids = data.get('ids', None)
@@ -552,14 +566,42 @@ def upload_documents():
         if not isinstance(documents, list) or len(documents) == 0:
             return jsonify({"status": "error", "message": "'documents' must be a non-empty list"}), 400
         
+        # Save each post to database first
+        saved_post_ids = []
+        for i, doc in enumerate(documents):
+            post = Post(
+                profile_id=profile.id,
+                content=doc
+            )
+            db.session.add(post)
+            db.session.flush()  # Flush to get the auto-generated ID
+            
+            # Update the ID in the ids list to use database ID
+            if ids is None:
+                ids = []
+            if i >= len(ids):
+                ids.append(str(post.id))
+            else:
+                ids[i] = str(post.id)
+            
+            saved_post_ids.append(str(post.id))
+        
+        db.session.commit()
+        
+        # Now add to ChromaDB with database IDs
         result = chroma_service.add_documents(documents, metadatas, ids)
         
         if result['status'] == 'success':
-            return jsonify(result), 201
+            return jsonify({
+                "status": "success",
+                "message": "Documents uploaded and posts saved",
+                "post_ids": saved_post_ids
+            }), 201
         else:
             return jsonify(result), 500
             
     except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -680,6 +722,45 @@ def update_document():
         else:
             return jsonify(result), 500
             
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@application.route('/api/documents/list', methods=['GET'])
+@jwt_required()
+def list_documents():
+    """
+    Get all posts/documents for the authenticated user
+    Returns posts as full objects with timestamps
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"posts": []}), 200
+        
+        # Get all posts for this profile
+        posts = Post.query.filter_by(profile_id=profile.id).order_by(Post.created_at.desc()).all()
+        
+        result_posts = []
+        for post in posts:
+            result_posts.append({
+                "id": str(post.id),
+                "authorId": str(profile.id),
+                "authorName": profile.name,
+                "content": post.content,
+                "timestamp": post.created_at.isoformat(),
+                "likes": 0,  # TODO: Implement likes if needed
+                "comments": 0  # TODO: Implement comments if needed
+            })
+        
+        return jsonify({"status": "success", "posts": result_posts}), 200
+        
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

@@ -118,6 +118,22 @@ function AppContent() {
           }
 
           setIsAuthenticated(true);
+          
+          // Fetch persisted posts from database
+          const { fetchPostsFromDatabase } = await import('./services/chromadb');
+          const postsResult = await fetchPostsFromDatabase();
+          if (postsResult.status === 'success' && postsResult.posts) {
+            const formattedPosts = postsResult.posts.map((post: any) => ({
+              id: post.id,
+              authorId: post.authorId,
+              authorName: post.authorName,
+              content: post.content,
+              timestamp: new Date(post.timestamp),
+              likes: post.likes || 0,
+              comments: post.comments || 0,
+            }));
+            setPosts(formattedPosts);
+          }
         } catch (error) {
           // Token is invalid or expired, clear it
           AuthService.logout();
