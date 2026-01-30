@@ -35,4 +35,3 @@ penpals-backend/src/penpals_db/*
 *.db
 *.sqlite3
 penpals_installer.exe
-penpals-backend/src/penpals-backend.spec
