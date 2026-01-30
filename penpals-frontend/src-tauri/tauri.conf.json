@@ -24,6 +24,12 @@
     }
   },
   "bundle": {
+    "windows": {
+      "webviewInstallMode": { 
+        "type": "embedBootstrapper", 
+        "silent": true 
+      }
+    },
     "active": true,
     "targets": "all",
     "icon": [
