@@ -1,7 +1,5 @@
 #define AppName "penpals"
-#define AppVersion "1.0"
-#define AppPublisher "Your Name"
-#define AppPublisherURL "http://yourwebsite.com"
+#define AppVersion "0.1"
 #define FrontendInstaller "penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi"
 #define BackendExe "penpals-backend\src\dist\penpals-backend.exe"
 
@@ -25,9 +23,9 @@ Source: "{#BackendExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\Wrapper.bat"; Tasks: create_shortcut
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\Wrapper.bat"; Tasks: create_shortcut
 
 [Tasks]
-Name: "choose_directory"; Description: "Choose Installation Directory"; GroupDescription: "Directory Options"
 Name: "create_shortcut"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons"
 
 [UninstallDelete]
@@ -41,8 +39,11 @@ Type: filesandordirs; Name: "{app}\chroma_db"
 ; Run the frontend installer in silent mode
 Filename: "msiexec"; Parameters: "/i ""{app}\penpals-frontend_0.1.0_x64_en-US.msi"" INSTALLDIR=""{app}"" DESKTOPSHORTCUT=0 /quiet"; Flags: waituntilterminated
 
-[Code]
+[UninstallRun]
+; Run the frontend uninstaller
+Filename: "cmd"; Parameters: "/C ""{app}\Uninstall penpals-frontend.lnk"""; Flags: runhidden
 
+[Code]
 procedure CreateWrapper;
 var
   Wrapper: string;

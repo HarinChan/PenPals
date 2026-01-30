@@ -9,7 +9,7 @@ installed exe will be at `C:\Program Files\penpals-frontend\app.exe`
 `cd ../penpals-backend`
 `pip install -r requirements.txt`
 `cd/src`
-`pyinstaller --onefile --exclude-module config --collect-all chromadb app.py`
+`pyinstaller --onefile --exclude-module config --collect-all chromadb --name=penpals-backend app.py`
 `cd ../..` back to root
 
 Open the `Inno Set Up Compiler` (download [here](https://jrsoftware.org/)), open and run `build.iss`
