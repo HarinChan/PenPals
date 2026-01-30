@@ -19,6 +19,11 @@ obj/*
 package-lock.json
 penpals-backend/chroma_db
 penpals-backend/penpals_db/
+penpals-frontend/src-tauri/build
+penpals-frontend/build
+penpals-frontend/src-tauri/gen/*
+penpals-frontend/src-tauri/target/*
+penpals-frontend/src-tauri/Cargo.toml
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
