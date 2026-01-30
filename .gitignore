@@ -32,7 +32,7 @@ yarn-error.log*
 penpals-backend/src/chroma_db/*
 penpals-backend/src/penpals_db/*
 
-
-../app.spec
+*.db
+*.sqlite3
 penpals_installer.exe
 penpals-backend/src/penpals-backend.spec
