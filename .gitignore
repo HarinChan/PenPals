@@ -29,6 +29,9 @@ penpals-frontend/src-tauri/Cargo.toml
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+penpals-backend/src/chroma_db/*
+penpals-backend/src/penpals_db/*
+
 
 ../app.spec
 penpals_installer.exe
