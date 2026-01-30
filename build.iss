@@ -2,8 +2,8 @@
 #define AppVersion "1.0"
 #define AppPublisher "Your Name"
 #define AppPublisherURL "http://yourwebsite.com"
-#define FrontendInstaller "penpals-frontend\src-tauri\target\release\bundle\nsis\penpals-frontend_0.1.0_x64-setup.exe"
-#define BackendExe "penpals-backend\src\dist\app.exe"
+#define FrontendInstaller "penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi"
+#define BackendExe "penpals-backend\src\dist\penpals-backend.exe"
 
 [Setup]
 AppId={{E5D25EA9-1D87-4C56-83C3-5E6B06C4B9DD}
@@ -19,23 +19,30 @@ SolidCompression=yes
 SetupIconFile=penpals-frontend\src-tauri\icons\icon.ico
 
 [Files]
-Source: "{#FrontendInstaller}"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "{#FrontendInstaller}"; DestDir: "{app}"; 
+// Flags: deleteafterinstall
 Source: "{#BackendExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\app.exe"; Tasks: create_shortcut
+Name: "{group}\{#AppName}"; Filename: "{app}\Wrapper.bat"; Tasks: create_shortcut
 
 [Tasks]
 Name: "choose_directory"; Description: "Choose Installation Directory"; GroupDescription: "Directory Options"
 Name: "create_shortcut"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons"
 
+[UninstallDelete]
+Type: files; Name: "{app}\Wrapper.bat"
+Type: files; Name: "{app}\app.exe"
+Type: filesandordirs; Name: "{app}\penpals_db"
+Type: filesandordirs; Name: "{app}\chroma_db"
+
+
 [Run]
 ; Run the frontend installer in silent mode
-Filename: "msiexec"; Parameters: "/i ""{tmp}\{#FrontendInstaller}"" INSTALLDIR=""{app}"" /quiet"; Flags: waituntilterminated
-; Create a small wrapper executable to run the backend and then the app
-Filename: "{app}\CreateWrapper.bat"; Parameters: ""; Flags: runhidden
+Filename: "msiexec"; Parameters: "/i ""{app}\penpals-frontend_0.1.0_x64_en-US.msi"" INSTALLDIR=""{app}"" DESKTOPSHORTCUT=0 /quiet"; Flags: waituntilterminated
 
 [Code]
+
 procedure CreateWrapper;
 var
   Wrapper: string;
@@ -43,38 +50,33 @@ var
   AppExePath: string;
   ResultCode: Integer;
 begin
-  BackendExePath := ExpandConstant('{app}\backend.exe');
+  BackendExePath := ExpandConstant('{app}\penpals-backend.exe');
   AppExePath := ExpandConstant('{app}\app.exe');
-  Wrapper := ExpandConstant('{tmp}\RunBackendAndApp.bat');
+  Wrapper := ExpandConstant('{app}\Wrapper.bat');
 
   // Create the batch file to run backend and app
   SaveStringToFile(Wrapper,
     'start "" "' + BackendExePath + '"' + #13#10 +
     'timeout /t 10' + #13#10 + // Wait for 10 seconds (adjust as needed)
-    'start "" "' + AppExePath + '"', True);
-
-  // Execute the wrapper
-  Exec(Wrapper, '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    'start /B "" "' + AppExePath + '"', True);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   InstallDir: string;
-begin
-  // choose directory
+  ResultCode: Integer;
+  Wrapper: String;
+begin 
+  // install
   if CurStep = ssInstall then
   begin
-    if MsgBox('Do you want to customize the installation directory?', mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      // SelectDirectory('Select Installation Directory', '', NewDir)
-      // InstallDir := SelectDirectory(ExpandConstant('{pf}\{#AppName}')); // Prompt to select new directory
-      // WizardForm.DirectoryEdit.Text := InstallDir; // Set directory to user-selected
-    end;
+    CreateWrapper;
   end;
   
-  // post install
-  if CurStep = ssPostInstall then
-  begin
-    CreateWrapper; // Ensure this line exists
+  if CurStep = ssDone then
+  begin // Execute the wrapper
+    Wrapper := ExpandConstant('{app}\Wrapper.bat');
+    Exec(Wrapper, '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
+  
 end;

@@ -32,3 +32,4 @@ yarn-error.log*
 
 ../app.spec
 penpals_installer.exe
+penpals-backend/src/penpals-backend.spec
