@@ -1428,7 +1428,13 @@ export default function SidePanel({
       <ClassroomDetailDialog
         classroom={detailDialogClassroom}
         open={showDetailDialog}
-        onOpenChange={setShowDetailDialog}
+        onOpenChange={(open) => {
+          setShowDetailDialog(open);
+          // Deselect classroom when dialog is closed
+          if (!open) {
+            onClassroomSelect(null as any);
+          }
+        }}
         mySchedule={currentAccount.schedule}
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
