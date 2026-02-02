@@ -2,6 +2,7 @@
 #define AppVersion "0.1"
 #define FrontendInstaller "penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi"
 #define BackendExe "penpals-backend\src\dist\penpals-backend.exe"
+#define LauncherExe "dist/penpals.exe"
 
 [Setup]
 AppId={{E5D25EA9-1D87-4C56-83C3-5E6B06C4B9DD}
@@ -20,10 +21,11 @@ SetupIconFile=penpals-frontend\src-tauri\icons\icon.ico
 Source: "{#FrontendInstaller}"; DestDir: "{app}"; 
 // Flags: deleteafterinstall
 Source: "{#BackendExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#LauncherExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Wrapper.bat"; Tasks: create_shortcut
-Name: "{userdesktop}\{#AppName}"; Filename: "{app}\Wrapper.bat"; Tasks: create_shortcut
+Name: "{group}\{#AppName}"; Filename: "{app}\penpals.exe"; Tasks: create_shortcut
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\penpals.exe"; Tasks: create_shortcut
 
 [Tasks]
 Name: "create_shortcut"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons"
@@ -31,6 +33,7 @@ Name: "create_shortcut"; Description: "Create a desktop shortcut"; GroupDescript
 [UninstallDelete]
 Type: files; Name: "{app}\Wrapper.bat"
 Type: files; Name: "{app}\app.exe"
+Type: files; Name: "{app}\penpals.exe"
 Type: filesandordirs; Name: "{app}\penpals_db"
 Type: filesandordirs; Name: "{app}\chroma_db"
 
@@ -44,23 +47,23 @@ Filename: "msiexec"; Parameters: "/i ""{app}\penpals-frontend_0.1.0_x64_en-US.ms
 Filename: "cmd"; Parameters: "/C ""{app}\Uninstall penpals-frontend.lnk"""; Flags: runhidden
 
 [Code]
-procedure CreateWrapper;
-var
-  Wrapper: string;
-  BackendExePath: string;
-  AppExePath: string;
-  ResultCode: Integer;
-begin
-  BackendExePath := ExpandConstant('{app}\penpals-backend.exe');
-  AppExePath := ExpandConstant('{app}\app.exe');
-  Wrapper := ExpandConstant('{app}\Wrapper.bat');
-
-  // Create the batch file to run backend and app
-  SaveStringToFile(Wrapper,
-    'start "" "' + BackendExePath + '"' + #13#10 +
-    'timeout /t 10' + #13#10 + // Wait for 10 seconds (adjust as needed)
-    'start /B "" "' + AppExePath + '"', True);
-end;
+// procedure CreateWrapper;
+// var
+//   Wrapper: string;
+//   BackendExePath: string;
+//   AppExePath: string;
+//   ResultCode: Integer;
+// begin
+//   BackendExePath := ExpandConstant('{app}\penpals-backend.exe');
+//   AppExePath := ExpandConstant('{app}\app.exe');
+//   Wrapper := ExpandConstant('{app}\Wrapper.bat');
+// 
+//   // Create the batch file to run backend and app
+//   SaveStringToFile(Wrapper,
+//     'start "" "' + BackendExePath + '"' + #13#10 +
+//     'timeout /t 10' + #13#10 + // Wait for 10 seconds (adjust as needed)
+//     'start /B "" "' + AppExePath + '"', True);
+// end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -71,13 +74,13 @@ begin
   // install
   if CurStep = ssInstall then
   begin
-    CreateWrapper;
+    // CreateWrapper;
   end;
   
   if CurStep = ssDone then
   begin // Execute the wrapper
-    Wrapper := ExpandConstant('{app}\Wrapper.bat');
-    Exec(Wrapper, '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Wrapper := ExpandConstant('{app}\Wrapper.bat');
+    // Exec(Wrapper, '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
   
 end;
