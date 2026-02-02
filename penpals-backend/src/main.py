@@ -20,6 +20,8 @@ from webex_service import WebexService
 from account import account_bp
 from classroom import classroom_bp
 
+LOCALLOWCATION = os.path.join(os.getenv('LOCALAPPDATA'), 'Penpals')
+
 def print_tables():
     with application.app_context():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
@@ -34,7 +36,8 @@ application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
+sqlite_db_path = os.path.join(LOCALLOWCATION, "sqlite:///penpals_db/penpals.db")
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', sqlite_db_path)
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
     rel_path = db_uri.replace('sqlite:///', '', 1)
     # Ensure the directory exists
@@ -64,7 +67,8 @@ webex_service = WebexService()
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
 
-chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
+chroma_persist_directory = os.path.join(LOCALLOWCATION, "chroma_db")
+chroma_service = ChromaDBService(persist_directory=chroma_persist_directory, collection_name="penpals_documents")
 
 @application.route('/api/auth/register', methods=['POST'])
 def register():
