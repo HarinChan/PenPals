@@ -16,6 +16,43 @@ import { fetchPosts, createPost, likePost, unlikePost, PostResponse } from './se
 import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
 
+// Helper to transform backend availability to frontend schedule format
+const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
+  if (!backendAvailability) return {};
+
+  // Case 1: Already in the correct format { "Mon": [9, 10], ... }
+  if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
+    // Basic validation to ensure values are arrays
+    const cleanSchedule: { [day: string]: number[] } = {};
+    Object.entries(backendAvailability).forEach(([day, hours]) => {
+      if (Array.isArray(hours)) {
+        cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
+      }
+    });
+    return cleanSchedule;
+  }
+
+  // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...] (Legacy/Alternative)
+  const schedule: { [day: string]: number[] } = {};
+  if (Array.isArray(backendAvailability)) {
+    backendAvailability.forEach(slot => {
+      // Handle both string time "10:00" and potential other formats if they exist
+      if (slot.day && slot.time) {
+        const hour = parseInt(slot.time.split(':')[0], 10);
+        if (!isNaN(hour)) {
+          if (!schedule[slot.day]) {
+            schedule[slot.day] = [];
+          }
+          if (!schedule[slot.day].includes(hour)) {
+            schedule[slot.day].push(hour);
+          }
+        }
+      }
+    });
+  }
+  return schedule;
+};
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -60,20 +97,7 @@ function AppContent() {
             .filter(c => c.latitude && c.longitude) // Only show classrooms with location
             .map(c => {
               // Transform availability from [{day, time}] to {[day]: [hours]}
-              const availability: { [day: string]: number[] } = {};
-              if (c.availability && Array.isArray(c.availability)) {
-                c.availability.forEach(slot => {
-                  const hour = parseInt(slot.time.split(':')[0], 10);
-                  if (!isNaN(hour)) {
-                    if (!availability[slot.day]) {
-                      availability[slot.day] = [];
-                    }
-                    if (!availability[slot.day].includes(hour)) {
-                      availability[slot.day].push(hour);
-                    }
-                  }
-                });
-              }
+              const availability = transformAvailability(c.availability);
 
               return {
                 id: String(c.id),
@@ -141,7 +165,7 @@ function AppContent() {
             size: classroom.class_size || 20,
             description: `Classroom managed by ${userData.account.email}`,
             interests: classroom.interests || [],
-            schedule: classroom.availability || {},
+            schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
             x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
             y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
@@ -208,7 +232,7 @@ function AppContent() {
           lon: c.lon,
           lat: c.lat,
           interests: c.interests,
-          availability: c.availability || {},
+          availability: transformAvailability(c.availability),
           size: c.size,
           description: ''
         }));
@@ -324,7 +348,7 @@ function AppContent() {
         size: classroom.class_size || 20,
         description: `Classroom managed by ${userData.account.email}`,
         interests: classroom.interests || [],
-        schedule: {}, // TODO: Convert availability to schedule format
+        schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
         x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
         y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
@@ -391,7 +415,7 @@ function AppContent() {
         size: classroomResult.classroom.class_size || 20,
         description: 'A new classroom on PenPals',
         interests: classroomResult.classroom.interests || [],
-        schedule: {},
+        schedule: transformAvailability(classroomResult.classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
         x: classroomResult.classroom.longitude ? parseFloat(classroomResult.classroom.longitude) : -0.1278,
         y: classroomResult.classroom.latitude ? parseFloat(classroomResult.classroom.latitude) : 51.5074,
