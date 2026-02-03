@@ -466,14 +466,21 @@ export default function SidePanel({
       });
   }, [searchQuery, currentAccount.interests, currentAccount.schedule]);
 
-  const handleClassroomClick = (classroom: Classroom) => {
+  const openClassroomDetails = (classroom: Classroom) => {
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
   };
 
+  const handleClassroomClick = (classroom: Classroom) => {
+    if (selectedClassroom?.id !== classroom.id) {
+      onClassroomSelect(classroom);
+    }
+    openClassroomDetails(classroom);
+  };
+
   useEffect(() => {
     if (selectedClassroom) {
-      handleClassroomClick(selectedClassroom);
+      openClassroomDetails(selectedClassroom);
     }
   }, [selectedClassroom]);
 
