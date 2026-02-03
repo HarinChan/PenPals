@@ -36,8 +36,7 @@ application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-sqlite_db_path = os.path.join(LOCALLOWCATION, "sqlite:///penpals_db/penpals.db")
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', sqlite_db_path)
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', "sqlite:///penpals_db/penpals.db")
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
     rel_path = db_uri.replace('sqlite:///', '', 1)
     # Ensure the directory exists
