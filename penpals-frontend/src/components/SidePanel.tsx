@@ -212,6 +212,17 @@ export default function SidePanel({
   const [editingAccountLocation, setEditingAccountLocation] = useState(false);
 
   const allInterests = [...AVAILABLE_SUBJECTS];
+  const sortedInterests = useMemo(() => {
+    return [...allInterests].sort((a, b) => {
+      const aChecked = currentAccount.interests.includes(a);
+      const bChecked = currentAccount.interests.includes(b);
+      if (aChecked !== bChecked) return aChecked ? -1 : 1;
+      return a.localeCompare(b);
+    });
+  }, [allInterests, currentAccount.interests]);
+  const sortedSelectedInterests = useMemo(() => {
+    return [...currentAccount.interests].sort((a, b) => a.localeCompare(b));
+  }, [currentAccount.interests]);
 
   const toggleInterest = (interest: string) => {
     const newInterests = currentAccount.interests.includes(interest)
@@ -843,7 +854,7 @@ export default function SidePanel({
 
                     <ScrollArea className="h-64">
                       <div className="space-y-3 pr-4">
-                        {allInterests.map((subject) => (
+                        {sortedInterests.map((subject) => (
                           <div key={subject} className="flex items-center space-x-2">
                             <Checkbox
                               id={subject}
@@ -880,7 +891,7 @@ export default function SidePanel({
 
                     {currentAccount.interests.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        {currentAccount.interests.map((interest) => (
+                        {sortedSelectedInterests.map((interest) => (
                           <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
                             {interest}
                           </Badge>
