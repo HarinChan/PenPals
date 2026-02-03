@@ -346,14 +346,15 @@ export default function SidePanel({
 
   const createNewAccount = () => {
     if (accounts.length >= 12) {
-      return; // Don't create if at limit
+      return;
     }
 
-    // Reset form and open dialog
+    const defaultDescription = `Classroom managed by: `;
+
     setNewClassroomData({
       name: '',
       size: 20,
-      description: '',
+      description: defaultDescription,
     });
     setCreateClassroomDialogOpen(true);
   };
@@ -1505,9 +1506,8 @@ export default function SidePanel({
               Cancel
             </Button>
             <Button
-              variant="outline"
               onClick={submitCreateClassroom}
-              className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               Create Classroom
             </Button>
