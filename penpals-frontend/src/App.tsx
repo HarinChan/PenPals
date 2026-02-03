@@ -45,7 +45,6 @@ function AppContent() {
   const [loadingClassrooms, setLoadingClassrooms] = useState(true);
 
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || EMPTY_ACCOUNT;
 
@@ -655,7 +654,6 @@ function AppContent() {
             onCreatePost={handleCreatePost}
             onLikePost={handleLikePost}
             likedPosts={likedPosts}
-            classrooms={classrooms}
             loadingPosts={loadingPosts}
           />
         </div>
@@ -687,7 +685,6 @@ function AppContent() {
                   onCreatePost={handleCreatePost}
                   onLikePost={handleLikePost}
                   likedPosts={likedPosts}
-                  classrooms={classrooms}
                   loadingPosts={loadingPosts}
                 />
               </div>

@@ -12,8 +12,6 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
-import type { Classroom } from './MapView';
-import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
 import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
 import { WebexService } from '../services';
 import { FriendsService } from '../services/friends';
@@ -76,7 +74,6 @@ interface SidePanelProps {
   onCreatePost: (content: string, imageUrl?: string) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
-  classrooms: Classroom[];
   loadingPosts?: boolean;
 }
 
@@ -96,7 +93,6 @@ export default function SidePanel({
   onCreatePost,
   onLikePost,
   likedPosts,
-  classrooms,
   loadingPosts = false,
 }: SidePanelProps) {
   const [customInterest, setCustomInterest] = useState('');
