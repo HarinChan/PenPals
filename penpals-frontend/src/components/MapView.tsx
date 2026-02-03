@@ -15,12 +15,42 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
+export interface Classroom {
+  id: string;
+  name: string;
+  location: string;
+  lon: number;
+  lat: number;
+  interests: string[];
+  availability: {
+    [day: string]: number[]; // Array of hours (0-23)
+  };
+  size?: number;
+  description?: string;
+}
+
+// Hardcoded classrooms removed. Now passed via props.
+// The interface below is compatible with what is passed from parent
+export interface Classroom {
+  id: string;
+  name: string;
+  location: string;
+  lon: number;
+  lat: number;
+  interests: string[];
+  availability: {
+    [day: string]: number[]; // Array of hours (0-23)
+  };
+  size?: number;
+  description?: string;
+}
 
 interface MapViewProps {
   onClassroomSelect: (classroom: Classroom) => void;
   selectedClassroom?: Classroom;
   myClassroom: Account;
-  classrooms: Classroom[];
+  classrooms?: Classroom[]; // New prop
+  theme: string;
 }
 
 // Component to handle map view updates when selectedClassroom changes
@@ -45,8 +75,7 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
   return null;
 }
 
-
-export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom, classrooms }: MapViewProps) {
+export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom, classrooms = [] }: MapViewProps) {
   const { theme } = useTheme();
   const [mapInitialized, setMapInitialized] = useState(false);
 

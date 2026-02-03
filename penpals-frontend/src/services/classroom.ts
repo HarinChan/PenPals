@@ -64,6 +64,17 @@ export interface ConnectClassroomsData {
   from_classroom_id: number;
 }
 
+export interface ClassroomMapData {
+  id: string;
+  name: string;
+  location: string;
+  lat: number;
+  lon: number;
+  interests: string[];
+  availability: any;
+  size?: number;
+}
+
 /**
  * Classroom management service
  */
@@ -108,6 +119,13 @@ export class ClassroomService {
     deleted_connections: number;
   }> {
     return ApiClient.delete(`/classrooms/${classroomId}`);
+  }
+
+  /**
+   * Get all classrooms for map
+   */
+  static async fetchAllClassrooms(): Promise<{ classrooms: ClassroomMapData[] }> {
+    return ApiClient.get('/classrooms');
   }
 
   /**

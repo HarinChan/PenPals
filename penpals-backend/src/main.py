@@ -14,7 +14,8 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import db, Account, Profile, Relation, Post, Meeting, MeetingInvitation
+from sqlalchemy import desc
+from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
 from webex_service import WebexService
 
 from account import account_bp
@@ -137,31 +138,108 @@ def login():
 @application.route('/api/auth/me', methods=['GET'])
 @jwt_required()
 def get_current_user():
-    """Get current authenticated user's info"""
+    """Get current authenticated user's info, including classrooms and friends"""
     account_id = get_jwt_identity()
     account = Account.query.get(account_id)
     
     if not account:
         return jsonify({"msg": "Account not found"}), 404
     
-    # Get all classrooms for this account
+    # Get all classrooms for this account with friend data
     classrooms = []
+    
+    # Collect notifications
+    notifications = []
+    for notif in account.notifications.order_by(desc(Notification.created_at)).all():
+        notifications.append({
+            "id": str(notif.id),
+            "title": notif.title,
+            "message": notif.message,
+            "type": notif.type,
+            "read": notif.read,
+            "timestamp": notif.created_at.isoformat()
+        })
+
     for classroom in account.classrooms:
+        # Fetch friends (relations)
+        # We look for accepted relations where this classroom is either sender or receiver
+        friends = []
+        
+        # Sent accepted requests (my friends)
+        sent_relations = Relation.query.filter_by(from_profile_id=classroom.id, status='accepted').all()
+        for rel in sent_relations:
+            friend_profile = Profile.query.get(rel.to_profile_id)
+            if friend_profile:
+                friends.append({
+                    "id": str(friend_profile.id),
+                    "classroomId": str(friend_profile.id),
+                    "classroomName": friend_profile.name,
+                    "location": friend_profile.location,
+                    "addedDate": rel.created_at.isoformat() if rel.created_at else None,
+                    "friendshipStatus": "accepted"
+                })
+        
+        # Received accepted requests (also my friends)
+        received_relations = Relation.query.filter_by(to_profile_id=classroom.id, status='accepted').all()
+        for rel in received_relations:
+            friend_profile = Profile.query.get(rel.from_profile_id)
+            if friend_profile:
+                friends.append({
+                    "id": str(friend_profile.id),
+                    "classroomId": str(friend_profile.id),
+                    "classroomName": friend_profile.name,
+                    "location": friend_profile.location,
+                    "addedDate": rel.created_at.isoformat() if rel.created_at else None,
+                    "friendshipStatus": "accepted"
+                })
+        
+        # Received Pending Friend Requests
+        received_friend_requests = []
+        for req in classroom.received_requests:
+            if req.status == 'pending':
+                received_friend_requests.append({
+                    "id": str(req.id),
+                    "senderId": str(req.sender.id),
+                    "senderName": req.sender.name,
+                    "location": req.sender.location,
+                    "sentDate": req.created_at.isoformat()
+                })
+
+        # Recent Calls
+        recent_calls = []
+        # Calls made by this classroom
+        for call in classroom.call_history:
+            recent_calls.append({
+                "id": str(call.id),
+                "classroomId": call.target_classroom_id,
+                "classroomName": call.target_classroom_name,
+                "timestamp": call.timestamp.isoformat(),
+                "duration": call.duration_seconds,
+                "type": call.call_type
+            })
+
         classrooms.append({
             "id": classroom.id,
             "name": classroom.name,
             "location": classroom.location,
-            "latitude": classroom.lattitude,  # Note: keeping original typo for consistency
+            "latitude": classroom.lattitude,
             "longitude": classroom.longitude,
             "class_size": classroom.class_size,
-            "interests": classroom.interests
+            "interests": classroom.interests,
+            "availability": classroom.availability, 
+            "friends": friends,
+            "receivedFriendRequests": received_friend_requests,
+            "recent_calls": recent_calls
         })
     
     return jsonify({
         "account": {
             "id": account.id,
             "email": account.email,
-            "organization": account.organization
+            "organization": account.organization,
+            "notifications": notifications,
+            "friends": classrooms[0]["friends"] if classrooms else [], # flatten for convenience if needed by frontend
+            "recentCalls": classrooms[0]["recent_calls"] if classrooms else [] # flatten
         },
         "classrooms": classrooms
     }), 200
@@ -903,6 +981,436 @@ def update_document():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@application.route('/api/posts', methods=['GET'])
+@jwt_required(optional=True)
+def get_posts():
+    """Get all posts, ordered by newest"""
+    current_user_id = get_jwt_identity()
+    current_account = None
+    if current_user_id:
+        current_account = Account.query.get(current_user_id)
+        
+    posts = Post.query.order_by(desc(Post.created_at)).all()
+    
+    result = []
+    for post in posts:
+        is_liked = False
+        if current_account and current_account in post.liked_by:
+            is_liked = True
+            
+        post_data = {
+            "id": str(post.id),
+            "authorId": str(post.profile_id),
+            "authorName": post.profile.name,
+            "content": post.content,
+            "imageUrl": post.image_url,
+            "timestamp": post.created_at.isoformat(),
+            "likes": post.likes,
+            "comments": post.comments_count,
+            "isLiked": is_liked
+        }
+        
+        # Include quoted post if it exists
+        if post.quoted_post:
+            post_data["quotedPost"] = {
+                "id": str(post.quoted_post.id),
+                "authorName": post.quoted_post.profile.name,
+                "content": post.quoted_post.content,
+                "imageUrl": post.quoted_post.image_url
+            }
+            
+        result.append(post_data)
+        
+    return jsonify({"posts": result}), 200
+
+
+@application.route('/api/posts', methods=['POST'])
+@jwt_required()
+def create_post():
+    """Create a new post"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+        
+    # Use the first profile for posting (simplification)
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found. Create a profile first."}), 400
+        
+    data = request.json
+    content = data.get('content')
+    image_url = data.get('imageUrl')
+    quoted_post_id = data.get('quotedPostId')
+    
+    if not content:
+        return jsonify({"msg": "Content is required"}), 400
+        
+    post = Post(
+        profile_id=profile.id, 
+        content=content,
+        image_url=image_url,
+        quoted_post_id=quoted_post_id
+    )
+    
+    db.session.add(post)
+    db.session.commit()
+    
+    # Return the created post in the format frontend expects
+    response_data = {
+        "id": str(post.id),
+        "authorId": str(profile.id),
+        "authorName": profile.name,
+        "content": post.content,
+        "imageUrl": post.image_url,
+        "timestamp": post.created_at.isoformat(),
+        "likes": post.likes,
+        "comments": post.comments_count
+    }
+    
+    if post.quoted_post:
+        response_data["quotedPost"] = {
+            "id": str(post.quoted_post.id),
+            "authorName": post.quoted_post.profile.name,
+            "content": post.quoted_post.content,
+            "imageUrl": post.quoted_post.image_url
+        }
+    
+    return jsonify({
+        "msg": "Post created successfully",
+        "post": response_data
+    }), 201
+
+
+@application.route('/api/posts/<int:post_id>/like', methods=['POST'])
+@jwt_required()
+def like_post(post_id):
+    """Like a post"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"msg": "Post not found"}), 404
+        
+    # Check if already liked
+    if account in post.liked_by:
+        return jsonify({"msg": "Already liked", "likes": post.likes}), 200
+        
+    post.liked_by.append(account)
+    post.likes += 1
+    db.session.commit()
+    
+    return jsonify({"msg": "Post liked", "likes": post.likes}), 200
+
+
+@application.route('/api/posts/<int:post_id>/unlike', methods=['POST'])
+@jwt_required()
+def unlike_post(post_id):
+    """Unlike a post"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"msg": "Post not found"}), 404
+        
+    # Check if liked
+    if account not in post.liked_by:
+        return jsonify({"msg": "Not liked yet", "likes": post.likes}), 200
+        
+    post.liked_by.remove(account)
+    if post.likes > 0:
+        post.likes -= 1
+    db.session.commit()
+    
+    return jsonify({"msg": "Post unliked", "likes": post.likes}), 200
+
+
+@application.route('/api/classrooms', methods=['GET'])
+def get_classrooms():
+    """Get all classrooms (profiles with locations)"""
+    # Filter only profiles that have geospatial data to be safe, or just return all
+    profiles = Profile.query.filter(Profile.lattitude.isnot(None), Profile.longitude.isnot(None)).all()
+    
+    result = []
+    for p in profiles:
+        availability = p.availability if p.availability else {}
+        interests = p.interests if p.interests else []
+        
+        try:
+            lat = float(p.lattitude)
+            lon = float(p.longitude)
+        except (ValueError, TypeError):
+             continue # Skip invalid coordinates
+
+        result.append({
+            "id": str(p.id),
+            "name": p.name,
+            "location": p.location,
+            "lat": lat,
+            "lon": lon,
+            "interests": interests,
+            "availability": availability,
+            "size": p.class_size
+        })
+        
+    return jsonify({"classrooms": result}), 200
+
+
+
+@application.route('/api/friends/request', methods=['POST'])
+@jwt_required()
+def send_friend_request():
+    """Send a friend request to another classroom"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    sender_profile = account.classrooms.first()
+    if not sender_profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    data = request.json
+    target_classroom_id = data.get('classroomId')
+    
+    if not target_classroom_id:
+        return jsonify({"msg": "Target classroom ID is required"}), 400
+
+    target_profile = Profile.query.get(target_classroom_id)
+    if not target_profile:
+        return jsonify({"msg": "Target classroom not found"}), 404
+        
+    if sender_profile.id == target_profile.id:
+        return jsonify({"msg": "Cannot add yourself as a friend"}), 400
+
+    # Check if already friends
+    existing_relation = Relation.query.filter(
+        ((Relation.from_profile_id == sender_profile.id) & (Relation.to_profile_id == target_profile.id)) |
+        ((Relation.from_profile_id == target_profile.id) & (Relation.to_profile_id == sender_profile.id))
+    ).first()
+    
+    if existing_relation:
+        return jsonify({"msg": "Already friends"}), 400
+
+    # Check if request already exists
+    existing_request = FriendRequest.query.filter_by(
+        sender_profile_id=sender_profile.id,
+        receiver_profile_id=target_profile.id,
+        status='pending'
+    ).first()
+    
+    if existing_request:
+        return jsonify({"msg": "Friend request already sent"}), 400
+        
+    # Check if they sent us a request (if so, auto-accept?)
+    reverse_request = FriendRequest.query.filter_by(
+        sender_profile_id=target_profile.id,
+        receiver_profile_id=sender_profile.id,
+        status='pending'
+    ).first()
+    
+    if reverse_request:
+        # Auto-accept since both want to be friends
+        reverse_request.status = 'accepted'
+        
+        # Create relations (two-way)
+        rel1 = Relation(from_profile_id=target_profile.id, to_profile_id=sender_profile.id)
+        rel2 = Relation(from_profile_id=sender_profile.id, to_profile_id=target_profile.id)
+        
+        # Notify original sender (who is now becoming a friend)
+        notif = Notification(
+            account_id=target_profile.account_id,
+            title="Friend Request Accepted",
+            message=f"{sender_profile.name} accepted your friend request!",
+            type="success",
+            related_id=str(sender_profile.id)
+        )
+        
+        db.session.add_all([rel1, rel2, notif])
+        db.session.commit()
+        
+        return jsonify({"msg": "Friend request accepted (mutual)", "status": "accepted"}), 200
+
+    # Create new request
+    new_request = FriendRequest(
+        sender_profile_id=sender_profile.id,
+        receiver_profile_id=target_profile.id,
+        status='pending'
+    )
+    
+    # Notify receiver
+    notif = Notification(
+        account_id=target_profile.account_id,
+        title="New Friend Request",
+        message=f"{sender_profile.name} sent you a friend request!",
+        type="friend_request_received",
+        related_id=str(sender_profile.id)
+    )
+    
+    db.session.add_all([new_request, notif])
+    db.session.commit()
+    
+    return jsonify({"msg": "Friend request sent", "status": "pending"}), 201
+
+
+@application.route('/api/friends/accept', methods=['POST'])
+@jwt_required()
+def accept_friend_request():
+    """Accept a pending friend request"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    receiver_profile = account.classrooms.first()
+    if not receiver_profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    data = request.json
+    request_id = data.get('requestId')
+    sender_profile_id = data.get('senderId') # Optional, if request_id not provided
+    
+    friend_request = None
+    if request_id:
+        friend_request = FriendRequest.query.get(request_id)
+    elif sender_profile_id:
+         friend_request = FriendRequest.query.filter_by(
+            sender_profile_id=sender_profile_id,
+            receiver_profile_id=receiver_profile.id,
+            status='pending'
+        ).first()
+        
+    if not friend_request:
+        return jsonify({"msg": "Friend request not found"}), 404
+        
+    if friend_request.receiver_profile_id != receiver_profile.id:
+        return jsonify({"msg": "Unauthorized"}), 403
+        
+    friend_request.status = 'accepted'
+    
+    # Create two-way relation
+    rel1 = Relation(from_profile_id=friend_request.sender_profile_id, to_profile_id=friend_request.receiver_profile_id)
+    rel2 = Relation(from_profile_id=friend_request.receiver_profile_id, to_profile_id=friend_request.sender_profile_id)
+    
+    # Notify sender
+    notif = Notification(
+        account_id=friend_request.sender.account_id,
+        title="Friend Request Accepted",
+        message=f"{receiver_profile.name} accepted your friend request!",
+        type="friend_request_accepted",
+        related_id=str(receiver_profile.id)
+    )
+    
+    db.session.add_all([rel1, rel2, notif])
+    db.session.commit()
+    
+    return jsonify({"msg": "Friend request accepted"}), 200
+
+
+@application.route('/api/friends/reject', methods=['POST'])
+@jwt_required()
+def reject_friend_request():
+    """Reject a pending friend request"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    receiver_profile = account.classrooms.first()
+    data = request.json
+    request_id = data.get('requestId')
+    sender_profile_id = data.get('senderId')
+    
+    friend_request = None
+    if request_id:
+        friend_request = FriendRequest.query.get(request_id)
+    elif sender_profile_id:
+         friend_request = FriendRequest.query.filter_by(
+            sender_profile_id=sender_profile_id,
+            receiver_profile_id=receiver_profile.id,
+            status='pending'
+        ).first()
+        
+    if not friend_request:
+        return jsonify({"msg": "Friend request not found"}), 404
+        
+    if friend_request.receiver_profile_id != receiver_profile.id:
+        return jsonify({"msg": "Unauthorized"}), 403
+        
+    friend_request.status = 'rejected'
+    db.session.commit()
+    
+    return jsonify({"msg": "Friend request rejected"}), 200
+    
+
+@application.route('/api/friends/<string:friend_id>', methods=['DELETE'])
+@jwt_required()
+def remove_friend(friend_id):
+    """Remove a friend connection"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    my_profile = account.classrooms.first()
+    
+    # Check both directions
+    relations_to_delete = Relation.query.filter(
+        ((Relation.from_profile_id == my_profile.id) & (Relation.to_profile_id == friend_id)) |
+        ((Relation.from_profile_id == friend_id) & (Relation.to_profile_id == my_profile.id))
+    ).all()
+    
+    if not relations_to_delete:
+        return jsonify({"msg": "Friendship not found"}), 404
+        
+    for rel in relations_to_delete:
+        db.session.delete(rel)
+        
+    db.session.commit()
+    
+    return jsonify({"msg": "Friend removed"}), 200
+
+
+@application.route('/api/notifications/<int:notification_id>/read', methods=['POST'])
+@jwt_required()
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    notif = Notification.query.get(notification_id)
+    if not notif or not account or notif.account_id != account.id:
+        return jsonify({"msg": "Notification not found"}), 404
+        
+    notif.read = True
+    db.session.commit()
+    return jsonify({"msg": "Marked as read"}), 200
+
+
+@application.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+@jwt_required()
+def delete_notification(notification_id):
+    """Delete a notification"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    
+    notif = Notification.query.get(notification_id)
+    if not notif or not account or notif.account_id != account.id:
+        return jsonify({"msg": "Notification not found"}), 404
+        
+    # We can either soft delete or hard delete. Hard delete for now.
+    db.session.delete(notif)
+    db.session.commit()
+    return jsonify({"msg": "Deleted"}), 200
+
+
 # Migration endpoint - convert old meetings to invitations
 @application.route('/api/admin/migrate-meetings', methods=['POST'])
 def migrate_meetings_to_invitations():
@@ -963,4 +1471,4 @@ def migrate_meetings_to_invitations():
 
 
 if __name__ == '__main__':
-    application.run(host='0.0.0.0', port=5001)
+    application.run(host='0.0.0.0', port=5001, debug=True)
