@@ -13,9 +13,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
 import type { Classroom } from './MapView';
-import { classrooms } from './MapView';
 import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
 import { WebexService } from '../services';
+import { FriendsService } from '../services/friends';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
@@ -74,6 +74,8 @@ interface SidePanelProps {
   onCreatePost: (content: string, imageUrl?: string) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
+  classrooms: Classroom[];
+  loadingPosts?: boolean;
 }
 
 export default function SidePanel({
@@ -91,6 +93,8 @@ export default function SidePanel({
   onCreatePost,
   onLikePost,
   likedPosts,
+  classrooms,
+  loadingPosts = false,
 }: SidePanelProps) {
   const [customInterest, setCustomInterest] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -477,102 +481,134 @@ export default function SidePanel({
     }
   }, [selectedClassroom]);
 
-  const removeFriend = (friendId: string) => {
-    const friend = (currentAccount.friends || []).find(f => f.id === friendId);
-    const updatedFriends = (currentAccount.friends || []).filter(f => f.id !== friendId);
-    onAccountUpdate({ ...currentAccount, friends: updatedFriends });
-    if (friend) {
-      toast.success(`Removed ${friend.classroomName} from friends`);
+
+
+  // ...
+
+  const removeFriend = async (friendId: string) => {
+    try {
+      await FriendsService.removeFriend(friendId);
+
+      const updatedFriends = (currentAccount.friends || []).filter(f => f.classroomId !== friendId && f.id !== friendId);
+      onAccountUpdate({ ...currentAccount, friends: updatedFriends });
+      toast.success('Removed friend');
+    } catch (error) {
+      console.error("Failed to remove friend", error);
+      toast.error("Failed to remove friend");
     }
   };
 
-  const addFriend = (classroom: Classroom) => {
-    const newFriend: Friend = {
-      id: `friend-${Date.now()}`,
-      classroomId: classroom.id,
-      classroomName: classroom.name,
-      location: classroom.location,
-      addedDate: new Date(),
-      friendshipStatus: 'pending',
-    };
-    const updatedFriends = [...(currentAccount.friends || []), newFriend];
+  const addFriend = async (classroom: Classroom) => {
+    try {
+      await FriendsService.sendRequest(classroom.id);
 
-    // Add notification for the other user (simulated)
-    const notification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'friend_request_received',
-      title: 'New Friend Request',
-      message: `${currentAccount.classroomName} sent you a friend request!`,
-      timestamp: new Date(),
-      read: false,
-      relatedId: classroom.id,
-    };
-    const updatedNotifications = [...(currentAccount.notifications || []), notification];
+      // Optimistically add to some local state or just notify user
+      // Since it's pending, we might not show it in "Friends" list yet, 
+      // but maybe show "Pending Sent" button state.
+      // For now, let's just show success message.
+      toast.success(`Friend request sent to ${classroom.name}`);
 
-    onAccountUpdate({ ...currentAccount, friends: updatedFriends, notifications: updatedNotifications });
-    toast.success(`Friend request sent to ${classroom.name}`);
+      // If we want to show it as "Pending" immediately without reload:
+      // We would need a "sentRequests" array in user state, which we don't strictly have deep implemented yet.
+      // But we can reload user data.
+
+    } catch (error: any) {
+      console.error("Failed to send friend request", error);
+      toast.error(error.message || "Failed to send request");
+    }
   };
 
-  const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' => {
+  const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' | 'received' => {
+    // Check accepted friends
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
-    if (!friend) return 'none';
-    return friend.friendshipStatus || 'none';
+    if (friend) return 'accepted';
+
+    // Check if we received a request from them
+    const received = (currentAccount.receivedFriendRequests || []).find(r => r.senderId === classroomId.toString());
+    if (received) return 'received';
+
+    // We don't track sent requests cleanly in frontend state yet without reload, 
+    // unless we add 'sentRequests' to Account interface. 
+    // For now, 'none' is safe fallback.
+    return 'none';
   };
 
+  // Improved toggle function
   const toggleFriendRequest = (classroom: Classroom) => {
     const status = getFriendshipStatus(classroom.id);
 
     if (status === 'accepted') {
-      // Unfriend
-      const friendToRemove = currentAccount.friends?.find(f => f.classroomId === classroom.id);
-      if (friendToRemove) removeFriend(friendToRemove.id);
-    } else if (status === 'pending') {
-      // Cancel request
-      const friendToRemove = currentAccount.friends?.find(f => f.classroomId === classroom.id);
-      if (friendToRemove) {
-        const updatedFriends = (currentAccount.friends || []).filter(f => f.id !== friendToRemove.id);
-        onAccountUpdate({ ...currentAccount, friends: updatedFriends });
-        toast.success(`Friend request to ${classroom.name} cancelled`);
+      // Confirm before deleting?
+      if (confirm(`Remove ${classroom.name} from friends?`)) {
+        removeFriend(classroom.id);
       }
+    } else if (status === 'received') {
+      // Accept request
+      acceptFriendRequest(classroom.id);
     } else {
-      // Send friend request
+      // Send request
       addFriend(classroom);
     }
   };
 
-  const acceptFriendRequest = (classroomId: string) => {
-    const updatedFriends = (currentAccount.friends || []).map(f =>
-      f.classroomId === classroomId ? { ...f, friendshipStatus: 'accepted' as const } : f
-    );
+  const acceptFriendRequest = async (senderId: string, requestId?: string) => {
+    try {
+      await FriendsService.acceptRequest(requestId, senderId);
 
-    // Add notification
-    const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
-    if (friend) {
-      const notification: Notification = {
-        id: `notif-${Date.now()}`,
-        type: 'friend_request_accepted',
-        title: 'Friend Request Accepted',
-        message: `${friend.classroomName} accepted your friend request!`,
-        timestamp: new Date(),
-        read: false,
-        relatedId: classroomId,
-      };
-      const updatedNotifications = [...(currentAccount.notifications || []), notification];
-      onAccountUpdate({ ...currentAccount, friends: updatedFriends, notifications: updatedNotifications });
-      toast.success(`You are now friends with ${friend.classroomName}!`);
+      // Optimistic Update
+      // Remove from requests
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+
+      // Add to friends
+      // We need classroom details for this. 
+      // If called from SidePanel list, we have `classroom` object. 
+      // If called from Notification, we might fetch it or just reload.
+
+      // Easiest is to force reload user data if possible, or just update requests
+      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+
+      toast.success("Friend request accepted!");
+      // Trigger a reload of user data in parent if possible, or we rely on next poll/action
+
+    } catch (error) {
+      console.error("Failed to accept request", error);
+      toast.error("Failed to accept request");
     }
   };
 
-  const markNotificationAsRead = (notificationId: string) => {
-    const updatedNotifications = (currentAccount.notifications || []).map(n =>
-      n.id === notificationId ? { ...n, read: true } : n
-    );
-    onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+  const rejectFriendRequest = async (senderId: string, requestId?: string) => {
+    try {
+      await FriendsService.rejectRequest(requestId, senderId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+      toast.success("Friend request rejected");
+    } catch (error) {
+      console.error("Failed to reject request", error);
+      toast.error("Failed to reject request");
+    }
+  }
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      await FriendsService.markNotificationRead(notificationId);
+      const updatedNotifications = (currentAccount.notifications || []).map(n =>
+        n.id === notificationId ? { ...n, read: true } : n
+      );
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    } catch (e) { console.error(e); }
   };
 
-  const clearNotification = (notificationId: string) => {
-    const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
-    onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+  const clearNotification = async (notificationId: string) => {
+    try {
+      await FriendsService.deleteNotification(notificationId);
+      const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    } catch (e) {
+      console.error(e);
+      // optimistic remove anyway
+      const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    }
   };
 
 
@@ -1419,6 +1455,7 @@ export default function SidePanel({
               onCreatePost={onCreatePost}
               onLikePost={onLikePost}
               likedPosts={likedPosts}
+              isLoading={loadingPosts}
             />
           </TabsContent>
         </Tabs>

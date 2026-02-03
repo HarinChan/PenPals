@@ -15,6 +15,7 @@ export interface Post {
   timestamp: Date;
   likes: number;
   comments: number;
+  isLiked?: boolean;
   quotedPost?: {
     id: string;
     authorName: string;
@@ -54,7 +55,7 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
     // Extract post ID from dummy link format: https://mirrormirror.app/post/[postId]
     const postId = quoteLinkInput.split('/').pop();
     const post = allPosts.find(p => p.id === postId);
-    
+
     if (post) {
       setQuotedPost({
         id: post.id,
@@ -85,7 +86,7 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
               onChange={(e) => setContent(e.target.value)}
               className="min-h-[100px] resize-none bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
-            
+
             {showImageInput && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -158,8 +159,8 @@ export default function PostCreator({ onCreatePost, authorName, allPosts = [] }:
                       Quoting @{quotedPost.authorName}
                     </div>
                     <div className="text-sm text-slate-900 dark:text-slate-100">
-                      {quotedPost.content.length > 100 
-                        ? quotedPost.content.substring(0, 100) + '...' 
+                      {quotedPost.content.length > 100
+                        ? quotedPost.content.substring(0, 100) + '...'
                         : quotedPost.content}
                     </div>
                     {quotedPost.imageUrl && (
