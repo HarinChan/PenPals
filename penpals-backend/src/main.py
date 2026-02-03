@@ -20,6 +20,8 @@ from webex_service import WebexService
 from account import account_bp
 from classroom import classroom_bp
 
+LOCALLOWCATION = os.path.join(os.getenv('LOCALAPPDATA'), 'Penpals')
+
 def print_tables():
     with application.app_context():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
@@ -34,15 +36,19 @@ application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', "sqlite:///penpals_db/penpals.db")
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
-    rel_path = db_uri.replace('sqlite:///', '', 1)
-    # Ensure the directory exists
+    rel_path = db_uri.replace('sqlite:///', '', 1) # "penpals_db/penpals.db"
     db_dir = os.path.dirname(rel_path)
-    if db_dir:
+    db_dir = os.path.join(LOCALLOWCATION,db_dir) # ..\AppData\Local\Penpals\penpals_db
+    db_name = os.path.basename(rel_path) # penepals.db
+    db_path = os.path.join(db_dir,db_name) # ..\AppData\Local\Penpals\penpals_db\penepals.db
+    if db_dir: # Ensure the directory exists
         os.makedirs(db_dir, exist_ok=True)
-    abs_path = os.path.abspath(rel_path)
-    db_uri = f'sqlite:///{abs_path}'
+    db_uri = f'sqlite:///{db_path}'
+    # db_uri = f'sqlite:///{os.path.abspath(rel_path)}'
+
+print(db_uri)
 application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -64,7 +70,8 @@ webex_service = WebexService()
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
 
-chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
+chroma_persist_directory = os.path.join(LOCALLOWCATION, "chroma_db")
+chroma_service = ChromaDBService(persist_directory=chroma_persist_directory, collection_name="penpals_documents")
 
 @application.route('/api/auth/register', methods=['POST'])
 def register():
