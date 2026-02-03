@@ -476,12 +476,10 @@ def manage_meeting(meeting_id):
     if not (is_creator or is_participant):
         return jsonify({"msg": "Unauthorized"}), 403
 
-    # Check WebEx connection
-    if not account.webex_access_token:
-        return jsonify({"msg": "WebEx not connected. Please connect your account first."}), 403
-        
-    # Refresh token logic (simplified reuse)
-    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
+    # Relaxed WebEx check: Only strict for modifying/deleting. GET is allowed for participants without WebEx.
+    
+    # Refresh token logic (only if connected)
+    if account.webex_access_token and account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
         try:
              token_data = webex_service.refresh_access_token(account.webex_refresh_token)
              account.webex_access_token = token_data.get('access_token')
@@ -491,7 +489,10 @@ def manage_meeting(meeting_id):
                  account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
              db.session.commit()
         except Exception as e:
-            return jsonify({"msg": "Failed to refresh WebEx session. Please reconnect."}), 403
+            # If refresh fails, we might still allow GET if it doesn't need fresh WebEx access
+            print(f"Failed to refresh WebEx session: {e}")
+            # If we were strictly needing it, we'd fail later or in specific methods.
+
 
     if request.method == 'GET':
         return jsonify({
@@ -509,6 +510,9 @@ def manage_meeting(meeting_id):
         if not is_creator:
             return jsonify({"msg": "Only default creator can delete meetings"}), 403
             
+        if not account.webex_access_token:
+             return jsonify({"msg": "WebEx not connected. Cannot delete meeting."}), 403
+            
         try:
             # Delete from WebEx
             if meeting.webex_id:
@@ -524,6 +528,9 @@ def manage_meeting(meeting_id):
     if request.method == 'PUT':
         if not is_creator:
             return jsonify({"msg": "Only creator can update meetings"}), 403
+            
+        if not account.webex_access_token:
+             return jsonify({"msg": "WebEx not connected. Cannot update meeting."}), 403
             
         data = request.json
         start_time_str = data.get('start_time')
