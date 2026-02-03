@@ -1,4 +1,4 @@
-#define AppName "penpals"
+#define AppName "Penpals"
 #define AppVersion "0.1"
 #define FrontendInstaller "penpals-frontend\src-tauri\target\release\bundle\msi\penpals-frontend_0.1.0_x64_en-US.msi"
 #define BackendExe "penpals-backend\src\dist\penpals-backend.exe"
@@ -15,7 +15,7 @@ OutputBaseFilename=penpals_installer
 UninstallDisplayIcon={app}\app.exe
 Compression=lzma
 SolidCompression=yes
-SetupIconFile=penpals-frontend\src-tauri\icons\icon.ico
+SetupIconFile=penpals-frontend\asset\icon\Penpals.ico
 
 [Files]
 Source: "{#FrontendInstaller}"; DestDir: "{app}"; 
@@ -36,6 +36,8 @@ Type: files; Name: "{app}\app.exe"
 Type: files; Name: "{app}\penpals.exe"
 Type: filesandordirs; Name: "{app}\penpals_db"
 Type: filesandordirs; Name: "{app}\chroma_db"
+Type: filesandordirs; Name: "{localappdata}\{#AppName}\penpals_db"
+Type: filesandordirs; Name: "{localappdata}\{#AppName}\chroma_db"
 
 
 [Run]
@@ -47,24 +49,6 @@ Filename: "msiexec"; Parameters: "/i ""{app}\penpals-frontend_0.1.0_x64_en-US.ms
 Filename: "cmd"; Parameters: "/C ""{app}\Uninstall penpals-frontend.lnk"""; Flags: runhidden
 
 [Code]
-// procedure CreateWrapper;
-// var
-//   Wrapper: string;
-//   BackendExePath: string;
-//   AppExePath: string;
-//   ResultCode: Integer;
-// begin
-//   BackendExePath := ExpandConstant('{app}\penpals-backend.exe');
-//   AppExePath := ExpandConstant('{app}\app.exe');
-//   Wrapper := ExpandConstant('{app}\Wrapper.bat');
-// 
-//   // Create the batch file to run backend and app
-//   SaveStringToFile(Wrapper,
-//     'start "" "' + BackendExePath + '"' + #13#10 +
-//     'timeout /t 10' + #13#10 + // Wait for 10 seconds (adjust as needed)
-//     'start /B "" "' + AppExePath + '"', True);
-// end;
-
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   InstallDir: string;
@@ -74,13 +58,5 @@ begin
   // install
   if CurStep = ssInstall then
   begin
-    // CreateWrapper;
-  end;
-  
-  if CurStep = ssDone then
-  begin // Execute the wrapper
-    // Wrapper := ExpandConstant('{app}\Wrapper.bat');
-    // Exec(Wrapper, '', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
-  
+  end;  
 end;
