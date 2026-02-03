@@ -15,7 +15,7 @@ export interface CreateClassroomData {
   interests: string[];
 }
 
-export interface UpdateClassroomData extends Partial<CreateClassroomData> {}
+export interface UpdateClassroomData extends Partial<CreateClassroomData> { }
 
 export interface ClassroomDetails {
   id: number;
@@ -108,6 +108,16 @@ export class ClassroomService {
     deleted_connections: number;
   }> {
     return ApiClient.delete(`/classrooms/${classroomId}`);
+  }
+
+  /**
+   * Get all classrooms
+   */
+  static async getAllClassrooms(limit: number = 50): Promise<{
+    classrooms: ClassroomDetails[];
+    count: number;
+  }> {
+    return ApiClient.get(`/classrooms?limit=${limit}`);
   }
 
   /**
@@ -240,8 +250,8 @@ export class ClassroomService {
     if (!Array.isArray(interests)) return [];
 
     return interests
-      .map(interest => 
-        typeof interest === 'string' 
+      .map(interest =>
+        typeof interest === 'string'
           ? interest.trim().toLowerCase().replace(/\s+/g, ' ')
           : ''
       )

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge } from './ui/badge';
 import TimezoneClock from './TimezoneClock';
-import type { Account } from '../types';
+import type { Account, Classroom } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,39 +15,12 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-export interface Classroom {
-  id: string;
-  name: string;
-  location: string;
-  lon: number;
-  lat: number;
-  interests: string[];
-  availability: {
-    [day: string]: number[]; // Array of hours (0-23)
-  };
-  size?: number;
-  description?: string;
-}
-
-const classrooms: Classroom[] = [
-  { id: 'dummy_lee_1', name: "Lee's Classroom", location: 'New York, USA', lon: -74.0060, lat: 40.7128, interests: ['Math', 'Biology', 'Rock Climbing'], availability: { Mon: [9, 10, 11, 14, 15], Tue: [9, 10, 11], Wed: [14, 15, 16], Thu: [9, 10, 11], Fri: [14, 15] } },
-  { id: 'dummy_math_2', name: 'Math Lover House', location: 'Los Angeles, USA', lon: -118.2437, lat: 34.0522, interests: ['Math', 'Physics', 'Chess'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [15, 16, 17], Thu: [10, 11], Fri: [14, 15, 16] } },
-  { id: 'dummy_book_3', name: 'The Book Nook', location: 'Bangkok, Thailand', lon: 100.518, lat: 13.7563, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9, 10, 11], Tue: [14, 15, 16], Wed: [9, 10, 11], Thu: [14, 15, 16], Fri: [9, 10] } },
-  { id: 'dummy_marie_4', name: "Marie's Language Lab", location: 'Paris, France', lon: 2.3522, lat: 48.8566, interests: ['French', 'Spanish', 'Mandarin'], availability: { Mon: [8, 9, 10], Tue: [8, 9, 10, 11], Wed: [14, 15], Thu: [8, 9, 10], Fri: [14, 15, 16] } },
-  { id: 'dummy_sakura_5', name: 'Sakura Study Space', location: 'Tokyo, Japan', lon: 139.6917, lat: 35.6895, interests: ['Japanese', 'Anime', 'Calligraphy', 'Math'], availability: { Mon: [13, 14, 15], Tue: [13, 14, 15, 16], Wed: [13, 14], Thu: [14, 15, 16], Fri: [13, 14, 15] } },
-  { id: 'dummy_outback_6', name: 'Outback Learning Hub', location: 'Sydney, Australia', lon: 151.2093, lat: -33.8688, interests: ['Biology', 'Geography', 'Surfing'], availability: { Mon: [7, 8, 9], Tue: [7, 8, 9, 10], Wed: [16, 17, 18], Thu: [7, 8, 9], Fri: [16, 17, 18] } },
-  { id: 'dummy_tech_7', name: 'TechHub Singapore', location: 'Singapore', lon: 103.8198, lat: 1.3521, interests: ['Computer Science', 'Robotics', 'Math'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [14, 15, 16], Thu: [10, 11, 12], Fri: [14, 15] } },
-  { id: 'dummy_priya_8', name: "Priya's Practice Room", location: 'Mumbai, India', lon: 72.8777, lat: 19.0760, interests: ['Hindi', 'Music', 'Dance', 'Math'], availability: { Mon: [15, 16, 17], Tue: [15, 16, 17], Wed: [9, 10, 11], Thu: [15, 16, 17], Fri: [9, 10, 11] } },
-  { id: 'dummy_samba_9', name: 'Samba Study Circle', location: 'São Paulo, Brazil', lon: -46.6333, lat: -23.5505, interests: ['Portuguese', 'Music', 'Dance', 'Biology'], availability: { Mon: [11, 12, 13], Tue: [11, 12, 13, 14], Wed: [16, 17, 18], Thu: [11, 12, 13], Fri: [16, 17] } },
-  { id: 'dummy_alpine_10', name: 'Alpine Academic Circle', location: 'Gstaad, Switzerland', lon: 46.4722, lat: 7.2869, interests: ['German', 'Chemistry', 'Physics', 'Hiking'], availability: { Mon: [8, 9, 10, 11], Tue: [14, 15, 16], Wed: [8, 9, 10], Thu: [14, 15, 16], Fri: [8, 9, 10] } },
-  { id: 'dummy_knit_11', name: 'The Knit & Wit', location: 'Stockholm, Sweden', lon: 18.0686, lat: 59.3293, interests: ['Knitting', 'Crafts', 'Design', 'Swedish'], availability: { Mon: [13, 14, 15], Tue: [9, 10, 11], Wed: [13, 14, 15], Thu: [9, 10, 11], Fri: [13, 14, 15] } },
-  { id: 'dummy_seoul_12', name: 'Seoul Study Station', location: 'Seoul, South Korea', lon: 126.9780, lat: 37.5665, interests: ['Korean', 'K-Pop', 'Art', 'Math'], availability: { Mon: [16, 17, 18], Tue: [10, 11, 12], Wed: [16, 17, 18], Thu: [10, 11, 12], Fri: [16, 17] } },
-];
 
 interface MapViewProps {
   onClassroomSelect: (classroom: Classroom) => void;
   selectedClassroom?: Classroom;
   myClassroom: Account;
+  classrooms: Classroom[];
 }
 
 // Component to handle map view updates when selectedClassroom changes
@@ -72,9 +45,12 @@ function MapController({ center, zoom, animate = true }: { center: [number, numb
   return null;
 }
 
-export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
+
+export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom, classrooms }: MapViewProps) {
   const { theme } = useTheme();
   const [mapInitialized, setMapInitialized] = useState(false);
+
+  // Guard schedule (avoid runtime/TS errors if schedule is undefined)
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
   const schedule = (myClassroom as any).schedule ?? {};
@@ -241,7 +217,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
           }`} style={{ pointerEvents: 'auto' }}>
-            Legend for matching interests
+          Legend for matching interests
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-blue"></div>
@@ -274,5 +250,3 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     </div>
   );
 }
-
-export { classrooms };

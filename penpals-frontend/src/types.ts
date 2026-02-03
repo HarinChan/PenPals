@@ -5,7 +5,7 @@ export interface Classroom {
   name: string;
   location: string;
   lat: number;
-  lng: number;
+  lon: number;
   interests: string[];
   availability: {
     [day: string]: number[];

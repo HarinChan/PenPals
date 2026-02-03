@@ -108,6 +108,31 @@ def create_classroom():
         return jsonify({"msg": "Internal server error", "error": str(e)}), 500
 
 
+@classroom_bp.route('/api/classrooms', methods=['GET'])
+@jwt_required()
+def get_all_classrooms():
+    """Get list of all classrooms (public)"""
+    try:
+        # Get query parameters
+        limit = request.args.get('limit', default=50, type=int)
+        
+        # Enforce max limit
+        limit = min(limit, 100)
+        
+        # Get all classrooms sorted by creation time (newest first)
+        classrooms = Profile.query.order_by(Profile.id.desc()).limit(limit).all()
+        
+        classrooms_data = [PenpalsHelper.format_classroom_response(c) for c in classrooms]
+        
+        return jsonify({
+            "classrooms": classrooms_data,
+            "count": len(classrooms_data)
+        }), 200
+    
+    except Exception as e:
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500
+
+
 @classroom_bp.route('/api/classrooms/<int:classroom_id>', methods=['GET'])
 @jwt_required()
 def get_classroom(classroom_id):

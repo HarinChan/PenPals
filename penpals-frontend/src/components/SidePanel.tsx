@@ -12,9 +12,7 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
-import type { Classroom } from './MapView';
-import { classrooms } from './MapView';
-import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
+import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
 import { WebexService } from '../services';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -64,6 +62,7 @@ interface SidePanelProps {
   onClassroomSelect: (classroom: Classroom) => void;
   currentAccount: Account;
   accounts: Account[];
+  classrooms: Classroom[];
   onAccountChange: (accountId: string) => void;
   onAccountUpdate: (account: Account) => void;
   onAccountCreate: (account: Account) => void;
@@ -81,6 +80,7 @@ export default function SidePanel({
   onClassroomSelect,
   currentAccount,
   accounts,
+  classrooms,
   onAccountChange,
   onAccountUpdate,
   onAccountCreate,
@@ -192,7 +192,7 @@ export default function SidePanel({
 
       if (response.ok) {
         const data = await response.json();
-        const message = data.meeting.web_link 
+        const message = data.meeting.web_link
           ? `Meeting invitation accepted! Meeting link: ${data.meeting.web_link}`
           : "Meeting invitation accepted! The meeting has been created.";
         toast.success(message);

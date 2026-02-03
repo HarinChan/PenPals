@@ -58,8 +58,63 @@ function AppContent() {
   ]);
 
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || defaultAccount;
+
+  // Fetch classrooms when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const fetchClassrooms = async () => {
+        try {
+          const response = await ClassroomService.getAllClassrooms(100);
+
+          // Transform backend data to frontend model
+          const mappedClassrooms: Classroom[] = response.classrooms
+            .filter(c => c.latitude && c.longitude) // Only show classrooms with location
+            .map(c => {
+              // Transform availability from [{day, time}] to {[day]: [hours]}
+              const availability: { [day: string]: number[] } = {};
+              if (c.availability && Array.isArray(c.availability)) {
+                c.availability.forEach(slot => {
+                  const hour = parseInt(slot.time.split(':')[0], 10);
+                  if (!isNaN(hour)) {
+                    if (!availability[slot.day]) {
+                      availability[slot.day] = [];
+                    }
+                    if (!availability[slot.day].includes(hour)) {
+                      availability[slot.day].push(hour);
+                    }
+                  }
+                });
+              }
+
+              return {
+                id: String(c.id),
+                name: c.name,
+                location: c.location || 'Unknown Location',
+                lat: parseFloat(c.latitude || '0'),
+                lon: parseFloat(c.longitude || '0'),
+                interests: c.interests || [],
+                availability: availability,
+                size: c.class_size,
+                description: `Friends: ${c.friends_count || 0}`
+              };
+            });
+
+          setClassrooms(mappedClassrooms);
+        } catch (error) {
+          console.error("Failed to fetch classrooms", error);
+        }
+      };
+
+      fetchClassrooms();
+
+      // Poll for updates every minute
+      const interval = setInterval(fetchClassrooms, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   // Check for existing authentication on component mount
   useEffect(() => {
@@ -498,7 +553,7 @@ function AppContent() {
             onClassroomSelect={handleClassroomSelect}
             selectedClassroom={selectedClassroom}
             myClassroom={currentAccount}
-            theme={theme}
+            classrooms={classrooms}
           />
         </div>
 
@@ -509,6 +564,7 @@ function AppContent() {
             onClassroomSelect={handleClassroomSelect}
             currentAccount={currentAccount}
             accounts={accounts}
+            classrooms={classrooms}
             onAccountChange={handleAccountChange}
             onAccountUpdate={handleAccountUpdate}
             onAccountCreate={handleAccountCreate}
@@ -538,6 +594,7 @@ function AppContent() {
                   onClassroomSelect={handleClassroomSelect}
                   currentAccount={currentAccount}
                   accounts={accounts}
+                  classrooms={classrooms}
                   onAccountChange={handleAccountChange}
                   onAccountUpdate={handleAccountUpdate}
                   onAccountCreate={handleAccountCreate}
