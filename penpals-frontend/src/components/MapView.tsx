@@ -425,8 +425,10 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         zoom={2}
         minZoom={minZoom}
         maxZoom={19}
+        maxBounds={[[-85.051129, -180], [85.051129, 180]]}
+        maxBoundsViscosity={1.0}
         zoomControl={false}
-        style={{ height: '100%', width: '100%', zIndex: 0 }}
+        style={{ height: '100%', width: '130%', zIndex: 0 }}
         scrollWheelZoom={true}
         className="z-0"
         whenReady={() => setMapInitialized(true)}

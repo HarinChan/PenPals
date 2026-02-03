@@ -1449,7 +1449,6 @@ export default function SidePanel({
         open={showDetailDialog}
         onOpenChange={(open) => {
           setShowDetailDialog(open);
-          // Deselect classroom when dialog is closed
           if (!open) {
             onClassroomSelect(null as any);
           }
@@ -1457,6 +1456,7 @@ export default function SidePanel({
         mySchedule={currentAccount.schedule}
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
+        accountLon={currentAccount.x}
       />
 
       {/* Delete Classroom Confirmation Dialog */}
