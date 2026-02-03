@@ -1,6 +1,6 @@
 # Build Instructions
 
-## Build Frontend
+## 1. Build Frontend
 Start at root.
 `cd penpals-frontend`
 `npm i`
@@ -8,30 +8,33 @@ Start at root.
 installation exe will be at `penpals-frontend\src-tauri\target\release\bundle\nsis\penpals-frontend_0.1.0_x64-setup.exe`
 
 
-## Build Backend
+## 2. Build Backend
 `cd ../penpals-backend`
 `pip install -r requirements.txt`
 `cd/src`
 
 do
-> `pyinstaller --onefile --exclude-module config --collect-all chromadb --name=penpals-backend app.py`
+> a. `pyinstaller --onefile --exclude-module config --collect-all chromadb --name=penpals-backend app.py`
+
 or
-> `pyinstaller penpals-backend.spec` (prefered)
+
+> b. `pyinstaller penpals-backend.spec` (prefered)
 `cd ../..` back to root
 
-## Build Launcher
-`pyinstaller penpals.spec` (builds launcher.py, which launches the frontend and the backend)
+## 3. Build Launcher
+`pyinstaller penpals.spec` (builds launcher.py, which is the executable which launches the frontend and the backend)
 
-# Bundle Instruction
+# 4. Bundle Instruction
 Open the `Inno Set Up Compiler` (download [here](https://jrsoftware.org/)), open and run `build.iss`
 Intaller will be at `build/penpals_installer.exe`
 
 # Dev Notes
 Default Installation Path: `C:\Program Files (x86)\penpals`
-relative file write paths that shouldve been in local low or appdata:
--  `penpals-backend\src\main.py` -> line 37 `db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')`
--  `penpals-backend\src\main.py` -> line 67 `db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')`
 
-Remove shortcuts produced by tauri frontend:
-- `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\penpals-frontend\penpals-frontend.exe` NEED ADMIN
-- `C:\Users\Public\Desktop\penpals-frontend.lnk`
+
+##### Remaining issues:
+1. Remove windows application registry. (need to specify where tauri is installed first)*[1]
+2. ChromaDB does not create folder in working director, in AppData/Local instead*[2]
+
+[1] minor issue, is not urgent to the installation's functionality.
+[2] will absolutely affect the installation HOWever, chromadb will be removed from the Penpals application in the final product so this shouldn't be an issue in the future.
