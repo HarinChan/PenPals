@@ -38,13 +38,17 @@ application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
 db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', "sqlite:///penpals_db/penpals.db")
 if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
-    rel_path = db_uri.replace('sqlite:///', '', 1)
-    # Ensure the directory exists
+    rel_path = db_uri.replace('sqlite:///', '', 1) # "penpals_db/penpals.db"
     db_dir = os.path.dirname(rel_path)
-    if db_dir:
+    db_dir = os.path.join(LOCALLOWCATION,db_dir) # ..\AppData\Local\Penpals\penpals_db
+    db_name = os.path.basename(rel_path) # penepals.db
+    db_path = os.path.join(db_dir,db_name) # ..\AppData\Local\Penpals\penpals_db\penepals.db
+    if db_dir: # Ensure the directory exists
         os.makedirs(db_dir, exist_ok=True)
-    abs_path = os.path.abspath(rel_path)
-    db_uri = f'sqlite:///{abs_path}'
+    db_uri = f'sqlite:///{db_path}'
+    # db_uri = f'sqlite:///{os.path.abspath(rel_path)}'
+
+print(db_uri)
 application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
