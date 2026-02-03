@@ -212,13 +212,21 @@ export default function ClassroomDetailDialog({
 
         <ScrollArea className="max-h-[600px]">
           <div className="space-y-6 pr-4">
+
+
             {/* Basic Info */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <MapPin size={16} />
                 <span>{classroom.location}</span>
-                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">(Current time: {localTime})</span>
               </div>
+            {/* Local Time Bubble */}
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-slate-600 dark:text-slate-400" />
+                <span className="text-xs text-slate-600 dark:text-slate-400">Local time:</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{localTime}</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">({localDate})</span>
+            </div>
               {classroom.size && (
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <Users size={16} />
