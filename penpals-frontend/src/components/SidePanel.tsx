@@ -466,14 +466,21 @@ export default function SidePanel({
       });
   }, [searchQuery, currentAccount.interests, currentAccount.schedule]);
 
-  const handleClassroomClick = (classroom: Classroom) => {
+  const openClassroomDetails = (classroom: Classroom) => {
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
   };
 
+  const handleClassroomClick = (classroom: Classroom) => {
+    if (selectedClassroom?.id !== classroom.id) {
+      onClassroomSelect(classroom);
+    }
+    openClassroomDetails(classroom);
+  };
+
   useEffect(() => {
     if (selectedClassroom) {
-      handleClassroomClick(selectedClassroom);
+      openClassroomDetails(selectedClassroom);
     }
   }, [selectedClassroom]);
 
@@ -1428,7 +1435,13 @@ export default function SidePanel({
       <ClassroomDetailDialog
         classroom={detailDialogClassroom}
         open={showDetailDialog}
-        onOpenChange={setShowDetailDialog}
+        onOpenChange={(open) => {
+          setShowDetailDialog(open);
+          // Deselect classroom when dialog is closed
+          if (!open) {
+            onClassroomSelect(null as any);
+          }
+        }}
         mySchedule={currentAccount.schedule}
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
