@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
-import { Calendar, MapPin, Users, Phone, Clock, Heart } from 'lucide-react';
+import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
 import type { Classroom } from './MapView';
 import { toast } from 'sonner';
 
@@ -26,6 +26,42 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const CURRENT_HOUR = new Date().getHours();
 const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
+// Helper function to estimate timezone offset from coordinates
+const getTimezoneOffsetFromCoords = (lat: number, lon: number): number => {
+  // Approximate timezone offset based on longitude
+  // This is a simplified calculation; for production, use a proper timezone library
+  const offset = Math.round(lon / 15);
+  return offset;
+};
+
+// Format time with timezone offset (minutes only)
+const formatLocalTime = (lat: number, lon: number): string => {
+  const now = new Date();
+  const offset = getTimezoneOffsetFromCoords(lat, lon);
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const localTime = new Date(utcTime + offset * 3600000);
+  
+  return localTime.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+// Format date with timezone
+const formatLocalDate = (lat: number, lon: number): string => {
+  const now = new Date();
+  const offset = getTimezoneOffsetFromCoords(lat, lon);
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const localTime = new Date(utcTime + offset * 3600000);
+  
+  return localTime.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
 export default function ClassroomDetailDialog({
   classroom,
   open,
@@ -37,6 +73,22 @@ export default function ClassroomDetailDialog({
   const [showScheduleCall, setShowScheduleCall] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const [localTime, setLocalTime] = useState<string>('');
+  const [localDate, setLocalDate] = useState<string>('');
+
+  // Update local time every second
+  useEffect(() => {
+    if (classroom) {
+      setLocalTime(formatLocalTime(classroom.lat, classroom.lon));
+      setLocalDate(formatLocalDate(classroom.lat, classroom.lon));
+
+      const interval = setInterval(() => {
+        setLocalTime(formatLocalTime(classroom.lat, classroom.lon));
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [classroom]);
 
   if (!classroom) return null;
 
@@ -165,6 +217,7 @@ export default function ClassroomDetailDialog({
               <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <MapPin size={16} />
                 <span>{classroom.location}</span>
+                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">(Current time: {localTime})</span>
               </div>
               {classroom.size && (
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
