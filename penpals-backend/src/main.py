@@ -529,9 +529,11 @@ def get_upcoming_meetings():
 # ChromaDB Document Endpoints
 
 @application.route('/api/documents/upload', methods=['POST'])
+@jwt_required()
 def upload_documents():
     """
     Upload documents to ChromaDB for embedding and storage
+    Also persists posts to database for permanent storage
     Expected JSON format:
     {
         "documents": ["text1", "text2", ...],
@@ -545,6 +547,18 @@ def upload_documents():
         if not data or 'documents' not in data:
             return jsonify({"status": "error", "message": "Missing 'documents' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        # Get user's profile (classroom)
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         documents = data.get('documents')
         metadatas = data.get('metadatas', None)
         ids = data.get('ids', None)
@@ -552,14 +566,42 @@ def upload_documents():
         if not isinstance(documents, list) or len(documents) == 0:
             return jsonify({"status": "error", "message": "'documents' must be a non-empty list"}), 400
         
+        # Save each post to database first
+        saved_post_ids = []
+        for i, doc in enumerate(documents):
+            post = Post(
+                profile_id=profile.id,
+                content=doc
+            )
+            db.session.add(post)
+            db.session.flush()  # Flush to get the auto-generated ID
+            
+            # Update the ID in the ids list to use database ID
+            if ids is None:
+                ids = []
+            if i >= len(ids):
+                ids.append(str(post.id))
+            else:
+                ids[i] = str(post.id)
+            
+            saved_post_ids.append(str(post.id))
+        
+        db.session.commit()
+        
+        # Now add to ChromaDB with database IDs
         result = chroma_service.add_documents(documents, metadatas, ids)
         
         if result['status'] == 'success':
-            return jsonify(result), 201
+            return jsonify({
+                "status": "success",
+                "message": "Documents uploaded and posts saved",
+                "post_ids": saved_post_ids
+            }), 201
         else:
             return jsonify(result), 500
             
     except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -599,9 +641,10 @@ def query_documents():
 
 
 @application.route('/api/documents/delete', methods=['DELETE'])
+@jwt_required()
 def delete_documents():
     """
-    Delete documents from ChromaDB
+    Delete documents from ChromaDB and database
     Expected JSON format:
     {
         "ids": ["id1", "id2", ...]
@@ -613,19 +656,44 @@ def delete_documents():
         if not data or 'ids' not in data:
             return jsonify({"status": "error", "message": "Missing 'ids' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         ids = data.get('ids')
         
         if not isinstance(ids, list) or len(ids) == 0:
             return jsonify({"status": "error", "message": "'ids' must be a non-empty list"}), 400
         
+        # Verify ownership and delete from database
+        deleted_ids = []
+        for post_id in ids:
+            post = Post.query.filter_by(id=int(post_id)).first()
+            if post:
+                if post.profile_id != profile.id:
+                    return jsonify({"status": "error", "message": f"Unauthorized to delete post {post_id}"}), 403
+                db.session.delete(post)
+                deleted_ids.append(post_id)
+        
+        db.session.commit()
+        
+        # Delete from ChromaDB
         result = chroma_service.delete_documents(ids)
         
         if result['status'] == 'success':
-            return jsonify(result), 200
+            return jsonify({"status": "success", "message": "Posts deleted", "deleted_ids": deleted_ids}), 200
         else:
             return jsonify(result), 500
             
     except Exception as e:
+        db.session.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -647,9 +715,10 @@ def get_collection_info():
 
 
 @application.route('/api/documents/update', methods=['PUT'])
+@jwt_required()
 def update_document():
     """
-    Update an existing document in ChromaDB
+    Update an existing document in ChromaDB and database
     Expected JSON format:
     {
         "id": "document_id",
@@ -663,6 +732,17 @@ def update_document():
         if not data or 'id' not in data or 'document' not in data:
             return jsonify({"status": "error", "message": "Missing 'id' or 'document' field"}), 400
         
+        # Get current user from JWT
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"status": "error", "message": "User has no classroom profile"}), 404
+        
         document_id = data.get('id')
         document = data.get('document')
         metadata = data.get('metadata', None)
@@ -673,13 +753,65 @@ def update_document():
         if not isinstance(document, str) or len(document.strip()) == 0:
             return jsonify({"status": "error", "message": "'document' must be a non-empty string"}), 400
         
+        # Verify ownership and update database
+        post = Post.query.filter_by(id=int(document_id)).first()
+        if not post:
+            return jsonify({"status": "error", "message": "Post not found"}), 404
+        
+        if post.profile_id != profile.id:
+            return jsonify({"status": "error", "message": "Unauthorized to update this post"}), 403
+        
+        post.content = document
+        db.session.commit()
+        
+        # Update ChromaDB
         result = chroma_service.update_document(document_id, document, metadata)
         
         if result['status'] == 'success':
-            return jsonify(result), 200
+            return jsonify({"status": "success", "message": "Post updated"}), 200
         else:
             return jsonify(result), 500
             
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@application.route('/api/documents/list', methods=['GET'])
+@jwt_required()
+def list_documents():
+    """
+    Get all posts/documents for the authenticated user
+    Returns posts as full objects with timestamps
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        account = Account.query.get(current_user_id)
+        
+        if not account:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        profile = account.classrooms.first()
+        if not profile:
+            return jsonify({"posts": []}), 200
+        
+        # Get all posts for this profile
+        posts = Post.query.filter_by(profile_id=profile.id).order_by(Post.created_at.desc()).all()
+        
+        result_posts = []
+        for post in posts:
+            result_posts.append({
+                "id": str(post.id),
+                "authorId": str(profile.id),
+                "authorName": profile.name,
+                "content": post.content,
+                "timestamp": post.created_at.isoformat(),
+                "likes": 0,  # TODO: Implement likes if needed
+                "comments": 0  # TODO: Implement comments if needed
+            })
+        
+        return jsonify({"status": "success", "posts": result_posts}), 200
+        
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

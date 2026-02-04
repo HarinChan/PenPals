@@ -71,8 +71,10 @@ interface SidePanelProps {
   // Feed props
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string) => void;
+  onCreatePost: (content: string) => void;
   onLikePost: (postId: string) => void;
+  onDeletePost?: (postId: string) => void;
+  onEditPost?: (postId: string, newContent: string) => void;
   likedPosts?: Set<string>;
 }
 
@@ -90,6 +92,8 @@ export default function SidePanel({
   myPosts,
   onCreatePost,
   onLikePost,
+  onDeletePost,
+  onEditPost,
   likedPosts,
 }: SidePanelProps) {
   const [customInterest, setCustomInterest] = useState('');
@@ -1437,6 +1441,8 @@ export default function SidePanel({
               myPosts={myPosts}
               onCreatePost={onCreatePost}
               onLikePost={onLikePost}
+              onDeletePost={onDeletePost || (() => {})}
+              onEditPost={onEditPost || (() => {})}
               likedPosts={likedPosts}
             />
           </TabsContent>

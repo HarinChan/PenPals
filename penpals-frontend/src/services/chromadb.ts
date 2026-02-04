@@ -29,7 +29,6 @@ export interface PostMetadata {
   timestamp: string;
   likes: number;
   comments: number;
-  imageUrl?: string;
 }
 
 /**
@@ -41,11 +40,17 @@ export async function uploadPostToChromaDB(
   metadata: PostMetadata
 ): Promise<ChromaDBUploadResponse> {
   try {
+    const token = localStorage.getItem('penpals_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/documents/upload`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         documents: [content],
         metadatas: [metadata],
@@ -109,11 +114,17 @@ export async function deletePostFromChromaDB(postId: string): Promise<{
   deleted_ids?: string[];
 }> {
   try {
+    const token = localStorage.getItem('penpals_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/documents/delete`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         ids: [postId],
       }),
@@ -129,6 +140,98 @@ export async function deletePostFromChromaDB(postId: string): Promise<{
     return {
       status: 'error',
       message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+/**
+ * Update a post document in ChromaDB
+ */
+export async function updateDocument(
+  documentId: string,
+  document: string,
+  metadata: Record<string, any>
+): Promise<{
+  status: 'success' | 'error';
+  message: string;
+}> {
+  try {
+    const token = localStorage.getItem('penpals_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/documents/update`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        id: documentId,
+        document,
+        metadata,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating document in ChromaDB:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Fetch posts from the database
+ */
+export async function fetchPostsFromDatabase(): Promise<{
+  status: 'success' | 'error';
+  posts?: Array<{
+    id: string;
+    authorId: string;
+    authorName: string;
+    content: string;
+    timestamp: string;
+    likes: number;
+    comments: number;
+  }>;
+  message?: string;
+}> {
+  try {
+    const token = localStorage.getItem('penpals_token');
+    if (!token) {
+      return {
+        status: 'error',
+        message: 'No authentication token found',
+        posts: [],
+      };
+    }
+
+    const response = await fetch(`${API_BASE_URL}/documents/list`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching posts from database:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      posts: [],
     };
   }
 }
