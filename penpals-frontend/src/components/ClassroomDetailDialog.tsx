@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
-import { Calendar, MapPin, Users, Phone, Clock, Heart } from 'lucide-react';
+import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
 import type { Classroom } from './MapView';
 import { toast } from 'sonner';
 
@@ -20,11 +20,62 @@ interface ClassroomDetailDialogProps {
   mySchedule: { [day: string]: number[] };
   friendshipStatus: 'none' | 'pending' | 'accepted' | 'received';
   onToggleFriend?: (classroom: Classroom) => void;
+  accountLon?: number;
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const CURRENT_HOUR = new Date().getHours();
 const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+
+// Helper function to estimate timezone offset from coordinates
+const getTimezoneOffsetFromCoords = (lat: number, lon: number): number => {
+  // Approximate timezone offset based on longitude
+  // This is a simplified calculation; for production, use a proper timezone library
+  const offset = Math.round(lon / 15);
+  return offset;
+};
+
+// Format time with timezone offset (24-hour format)
+const formatLocalTime = (lat: number, lon: number): string => {
+  const now = new Date();
+  const offset = getTimezoneOffsetFromCoords(lat, lon);
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const localTime = new Date(utcTime + offset * 3600000);
+  
+  return localTime.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
+// Format date with timezone
+const formatLocalDate = (lat: number, lon: number): string => {
+  const now = new Date();
+  const offset = getTimezoneOffsetFromCoords(lat, lon);
+  const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+  const localTime = new Date(utcTime + offset * 3600000);
+  
+  return localTime.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+// Convert UTC hour to local timezone hour
+const convertUtcToLocalHour = (utcHour: number, timezoneOffset: number): number => {
+  const localHour = (utcHour + timezoneOffset + 24) % 24;
+  return Math.floor(localHour);
+};
+
+// Convert availability hours from UTC to local timezone
+const convertAvailabilityToLocal = (utcHours: number[], accountLon: number): number[] => {
+  const timezoneOffset = getTimezoneOffsetFromCoords(0, accountLon);
+  const converted = utcHours.map(hour => convertUtcToLocalHour(hour, timezoneOffset));
+  // Remove duplicates and sort
+  return [...new Set(converted)].sort((a, b) => a - b);
+};
 
 export default function ClassroomDetailDialog({
   classroom,
@@ -33,12 +84,33 @@ export default function ClassroomDetailDialog({
   mySchedule,
   friendshipStatus = 'none',
   onToggleFriend,
+  accountLon = 0,
 }: ClassroomDetailDialogProps) {
   const [showScheduleCall, setShowScheduleCall] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const [localTime, setLocalTime] = useState<string>('');
+  const [localDate, setLocalDate] = useState<string>('');
+
+  // Update local time every second
+  useEffect(() => {
+    if (classroom) {
+      setLocalTime(formatLocalTime(classroom.lat, classroom.lon));
+      setLocalDate(formatLocalDate(classroom.lat, classroom.lon));
+
+      const interval = setInterval(() => {
+        setLocalTime(formatLocalTime(classroom.lat, classroom.lon));
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [classroom]);
 
   if (!classroom) return null;
+
+  // Get classroom timezone offset for display
+  const classroomTimezoneOffset = getTimezoneOffsetFromCoords(classroom.lat, classroom.lon);
+  const classroomTimezoneLabel = classroomTimezoneOffset >= 0 ? `UTC+${classroomTimezoneOffset}` : `UTC${classroomTimezoneOffset}`;
 
   // Check if classroom is currently available
   const isCurrentlyAvailable = () => {
@@ -46,15 +118,25 @@ export default function ClassroomDetailDialog({
     return classroomHours.includes(CURRENT_HOUR);
   };
 
-  // Get common available hours for a given day
+  // Get classroom's local availability (converted from UTC using account's timezone)
+  const getClassroomLocalAvailability = (day: string): number[] => {
+    const utcHours = classroom.availability[day] || [];
+    return convertAvailabilityToLocal(utcHours, accountLon);
+  };
+
+  // Get common available hours accounting for timezone conversion
   const getCommonHours = (day: string) => {
     const myHours = mySchedule[day] || [];
-    const theirHours = classroom.availability[day] || [];
-    return myHours.filter(hour => theirHours.includes(hour));
+    const theirLocalHours = getClassroomLocalAvailability(day);
+    return myHours.filter(hour => theirLocalHours.includes(hour));
   };
 
   // Get all days with common availability
   const daysWithCommonAvailability = DAYS.filter(day => getCommonHours(day).length > 0);
+
+  // Get account timezone offset for display
+  const accountTimezoneOffset = getTimezoneOffsetFromCoords(0, accountLon);
+  const accountTimezoneLabel = accountTimezoneOffset >= 0 ? `UTC+${accountTimezoneOffset}` : `UTC${accountTimezoneOffset}`;
 
   const handleScheduleCall = () => {
     setShowScheduleCall(true);
@@ -160,12 +242,22 @@ export default function ClassroomDetailDialog({
 
         <ScrollArea className="max-h-[600px]">
           <div className="space-y-6 pr-4">
+
+
             {/* Basic Info */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <MapPin size={16} />
                 <span>{classroom.location}</span>
               </div>
+            {/* Local Time Bubble */}
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-slate-600 dark:text-slate-400" />
+                <span className="text-xs text-slate-600 dark:text-slate-400">Local time:</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{localTime}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-500 ml-1">{classroomTimezoneLabel}</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">({localDate})</span>
+            </div>
               {classroom.size && (
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <Users size={16} />
@@ -198,11 +290,14 @@ export default function ClassroomDetailDialog({
             <div className="space-y-2">
               <h3 className="text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Calendar size={16} />
-                Availability Schedule
+                Availability Schedule (classroom local time)
               </h3>
               <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 space-y-2 border border-slate-200 dark:border-slate-600">
+                <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                  Your timezone: {accountTimezoneLabel}
+                </div>
                 {DAYS.map((day) => {
-                  const hours = classroom.availability[day] || [];
+                  const hours = getClassroomLocalAvailability(day);
                   if (hours.length === 0) return null;
                   return (
                     <div key={day} className="flex gap-2 text-sm">

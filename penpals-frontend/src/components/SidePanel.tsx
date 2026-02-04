@@ -324,6 +324,17 @@ export default function SidePanel({
   const [editingAccountLocation, setEditingAccountLocation] = useState(false);
 
   const allInterests = [...AVAILABLE_SUBJECTS];
+  const sortedInterests = useMemo(() => {
+    return [...allInterests].sort((a, b) => {
+      const aChecked = currentAccount.interests.includes(a);
+      const bChecked = currentAccount.interests.includes(b);
+      if (aChecked !== bChecked) return aChecked ? -1 : 1;
+      return a.localeCompare(b);
+    });
+  }, [allInterests, currentAccount.interests]);
+  const sortedSelectedInterests = useMemo(() => {
+    return [...currentAccount.interests].sort((a, b) => a.localeCompare(b));
+  }, [currentAccount.interests]);
 
   const toggleInterest = (interest: string) => {
     const newInterests = currentAccount.interests.includes(interest)
@@ -458,14 +469,15 @@ export default function SidePanel({
 
   const createNewAccount = () => {
     if (accounts.length >= 12) {
-      return; // Don't create if at limit
+      return;
     }
 
-    // Reset form and open dialog
+    const defaultDescription = `Classroom managed by: `;
+
     setNewClassroomData({
       name: '',
       size: 20,
-      description: '',
+      description: defaultDescription,
     });
     setCreateClassroomDialogOpen(true);
   };
@@ -578,14 +590,21 @@ export default function SidePanel({
       });
   }, [searchQuery, currentAccount.interests, currentAccount.schedule]);
 
-  const handleClassroomClick = (classroom: Classroom) => {
+  const openClassroomDetails = (classroom: Classroom) => {
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
   };
 
+  const handleClassroomClick = (classroom: Classroom) => {
+    if (selectedClassroom?.id !== classroom.id) {
+      onClassroomSelect(classroom);
+    }
+    openClassroomDetails(classroom);
+  };
+
   useEffect(() => {
     if (selectedClassroom) {
-      handleClassroomClick(selectedClassroom);
+      openClassroomDetails(selectedClassroom);
     }
   }, [selectedClassroom]);
 
@@ -980,7 +999,7 @@ export default function SidePanel({
 
                     <ScrollArea className="h-64">
                       <div className="space-y-3 pr-4">
-                        {allInterests.map((subject) => (
+                        {sortedInterests.map((subject) => (
                           <div key={subject} className="flex items-center space-x-2">
                             <Checkbox
                               id={subject}
@@ -1017,7 +1036,7 @@ export default function SidePanel({
 
                     {currentAccount.interests.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        {currentAccount.interests.map((interest) => (
+                        {sortedSelectedInterests.map((interest) => (
                           <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
                             {interest}
                           </Badge>
@@ -1709,10 +1728,16 @@ export default function SidePanel({
       <ClassroomDetailDialog
         classroom={detailDialogClassroom}
         open={showDetailDialog}
-        onOpenChange={setShowDetailDialog}
+        onOpenChange={(open) => {
+          setShowDetailDialog(open);
+          if (!open) {
+            onClassroomSelect(null as any);
+          }
+        }}
         mySchedule={currentAccount.schedule}
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
+        accountLon={currentAccount.x}
       />
 
       {/* Delete Classroom Confirmation Dialog */}
@@ -1786,9 +1811,8 @@ export default function SidePanel({
               Cancel
             </Button>
             <Button
-              variant="outline"
               onClick={submitCreateClassroom}
-              className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               Create Classroom
             </Button>
