@@ -347,6 +347,15 @@ function AppContent() {
 
       setIsAuthenticated(true);
       setShowLoginDialog(false);
+
+      // Force cleanup of body styles that might be left by Radix Dialog
+      // This prevents the "cannot interact after login" bug
+      setTimeout(() => {
+        document.body.style.pointerEvents = '';
+        document.body.style.overflow = '';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 50);
+
       toast.success('Successfully logged in!');
     } catch (error) {
       console.error('Login error:', error);
@@ -405,6 +414,14 @@ function AppContent() {
       setCurrentAccountId(newAccount.id);
       setIsAuthenticated(true);
       setShowLoginDialog(false);
+
+      // Force cleanup of body styles that might be left by Radix Dialog
+      setTimeout(() => {
+        document.body.style.pointerEvents = '';
+        document.body.style.overflow = '';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 50);
+
       toast.success('Account created successfully!');
     } catch (error) {
       console.error('Signup error:', error);
