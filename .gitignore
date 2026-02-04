@@ -17,6 +17,9 @@ node_modules/*
 npm-debug.log*
 obj/*
 package-lock.json
+chroma_db/
+penpals_db/
+penpals.db
 penpals-backend/chroma_db
 penpals-backend/penpals_db/
 penpals-frontend/src-tauri/build
