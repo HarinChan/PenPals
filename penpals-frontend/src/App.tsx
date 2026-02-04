@@ -220,31 +220,6 @@ function AppContent() {
       } finally {
         setLoadingPosts(false);
       }
-
-      // Fetch classrooms for map
-      try {
-        setLoadingClassrooms(true);
-        const response = await ClassroomService.fetchAllClassrooms();
-        // Convert to Classroom interface expected by MapView
-        const mappedClassrooms: Classroom[] = response.classrooms
-          .map(c => ({
-            id: c.id,
-            name: c.name,
-            location: c.location,
-            lon: c.lon,
-            lat: c.lat,
-            interests: c.interests,
-            availability: transformAvailability(c.availability),
-            size: c.size,
-            description: ''
-          }))
-          .filter(c => typeof c.lat === 'number' && typeof c.lon === 'number' && !isNaN(c.lat) && !isNaN(c.lon));
-        setClassrooms(mappedClassrooms);
-      } catch (error) {
-        console.error("Failed to fetch classrooms:", error);
-      } finally {
-        setLoadingClassrooms(false);
-      }
     };
 
     checkAuthStatus();

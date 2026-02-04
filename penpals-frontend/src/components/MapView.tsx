@@ -16,35 +16,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-export interface Classroom {
-  id: string;
-  name: string;
-  location: string;
-  lon: number;
-  lat: number;
-  interests: string[];
-  availability: {
-    [day: string]: number[]; // Array of hours (0-23)
-  };
-  size?: number;
-  description?: string;
-}
 
-// Hardcoded classrooms removed. Now passed via props.
-// The interface below is compatible with what is passed from parent
-export interface Classroom {
-  id: string;
-  name: string;
-  location: string;
-  lon: number;
-  lat: number;
-  interests: string[];
-  availability: {
-    [day: string]: number[]; // Array of hours (0-23)
-  };
-  size?: number;
-  description?: string;
-}
 
 interface MapViewProps {
   onClassroomSelect: (classroom: Classroom) => void;
@@ -82,7 +54,7 @@ function MapController({ selectedClassroom, mapInitialized }: { selectedClassroo
 // Debug component to verify map is ready
 function MapDebug() {
   const map = useMap();
-  
+
   useEffect(() => {
     console.log('Map is ready:', map, 'scrollWheelZoom enabled:', map.scrollWheelZoom ? 'yes' : 'no');
   }, [map]);
@@ -103,7 +75,7 @@ function MapInstanceBridge({ onReady }: { onReady: (map: L.Map) => void }) {
 // Component to handle cluster zoom on click
 function ClusterMarker({ position, icon, classrooms, currentZoom, count }: { position: [number, number], icon: any, classrooms: Classroom[], currentZoom: number, count: number }) {
   const map = useMap();
-  
+
   return (
     <Marker
       position={position}
@@ -133,7 +105,7 @@ function SmoothScrollZoom({ minZoom }: { minZoom: number }) {
 
     const handleWheel = (e: WheelEvent) => {
       if (!isEnabledRef.current) return;
-      
+
       e.preventDefault();
 
       // Normalize wheel delta across devices (trackpad/mouse)
@@ -191,7 +163,7 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void })
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-      
+
       // Debounce zoom changes to wait for animation to complete
       debounceTimerRef.current = window.setTimeout(() => {
         onZoomChange(Math.floor(map.getZoom()));
@@ -338,7 +310,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     });
 
     return markers;
-  }, [currentZoom]);
+  }, [currentZoom, classrooms, myClassroom]);
 
   // Helper to get best color for cluster - also memoized
   const getBestClusterColor = (clusterClassrooms: Classroom[]) => {
@@ -524,8 +496,8 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
           }`} style={{ pointerEvents: 'auto' }}>
-            <div className="mb-2 font-semibold">{classrooms.length} Classrooms Available</div>
-            <div className="mb-2">Legend for matching interests</div>
+          <div className="mb-2 font-semibold">{classrooms.length} Classrooms Available</div>
+          <div className="mb-2">Legend for matching interests</div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-blue"></div>
