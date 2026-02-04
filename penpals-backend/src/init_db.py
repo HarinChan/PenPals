@@ -184,18 +184,18 @@ def init_db():
         )
         db.session.add(freq2)
 
-        # 5. Create Meetings
-        from models import Meeting
+        # # 5. Create Meetings
+        # from models import Meeting
         
-        meeting1 = Meeting(
-            title="Cultural Exchange: UK & Japan",
-            start_time=datetime.utcnow() + timedelta(days=1, hours=2),
-            end_time=datetime.utcnow() + timedelta(days=1, hours=3),
-            creator_id=me_profile.id,
-            web_link="https://meet.google.com/abc-defg-hij" # Mock link
-        )
-        meeting1.participants.append(sakura)
-        db.session.add(meeting1)
+        # meeting1 = Meeting(
+        #     title="Cultural Exchange: UK & Japan",
+        #     start_time=datetime.utcnow() + timedelta(days=1, hours=2),
+        #     end_time=datetime.utcnow() + timedelta(days=1, hours=3),
+        #     creator_id=me_profile.id,
+        #     web_link="https://meet.google.com/abc-defg-hij" # Mock link
+        # )
+        # meeting1.participants.append(sakura)
+        # db.session.add(meeting1)
         
         db.session.commit()
         print("Created synthetic friends and meetings")
