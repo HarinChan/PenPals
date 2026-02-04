@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
@@ -225,17 +226,19 @@ function AppContent() {
         setLoadingClassrooms(true);
         const response = await ClassroomService.fetchAllClassrooms();
         // Convert to Classroom interface expected by MapView
-        const mappedClassrooms: Classroom[] = response.classrooms.map(c => ({
-          id: c.id,
-          name: c.name,
-          location: c.location,
-          lon: c.lon,
-          lat: c.lat,
-          interests: c.interests,
-          availability: transformAvailability(c.availability),
-          size: c.size,
-          description: ''
-        }));
+        const mappedClassrooms: Classroom[] = response.classrooms
+          .map(c => ({
+            id: c.id,
+            name: c.name,
+            location: c.location,
+            lon: c.lon,
+            lat: c.lat,
+            interests: c.interests,
+            availability: transformAvailability(c.availability),
+            size: c.size,
+            description: ''
+          }))
+          .filter(c => typeof c.lat === 'number' && typeof c.lon === 'number' && !isNaN(c.lat) && !isNaN(c.lon));
         setClassrooms(mappedClassrooms);
       } catch (error) {
         console.error("Failed to fetch classrooms:", error);
@@ -650,15 +653,18 @@ function AppContent() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden flex-col lg:flex-row">
+
         {/* Map Area */}
         <div className="flex-1 p-3 md:p-6 overflow-hidden">
-          <MapView
-            onClassroomSelect={handleClassroomSelect}
-            selectedClassroom={selectedClassroom}
-            myClassroom={currentAccount}
-            classrooms={classrooms}
-            theme={theme}
-          />
+          <ErrorBoundary name="Map View">
+            <MapView
+              onClassroomSelect={handleClassroomSelect}
+              selectedClassroom={selectedClassroom}
+              myClassroom={currentAccount}
+              classrooms={classrooms}
+              theme={theme}
+            />
+          </ErrorBoundary>
         </div>
 
         {/* Side Panel */}
