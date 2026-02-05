@@ -18,7 +18,7 @@ interface ClassroomDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mySchedule: { [day: string]: number[] };
-  friendshipStatus?: 'none' | 'pending' | 'accepted';
+  friendshipStatus: 'none' | 'pending' | 'accepted' | 'received';
   onToggleFriend?: (classroom: Classroom) => void;
   accountLon?: number;
 }
@@ -155,7 +155,7 @@ export default function ClassroomDetailDialog({
     try {
       const token = localStorage.getItem('penpals_token');
       if (!token) {
-        toast.error("You must be logged in to make a call");
+        toast.error("You must be logged in to schedule a meeting");
         return;
       }
 
@@ -179,11 +179,11 @@ export default function ClassroomDetailDialog({
           toast.error("Please connect WebEx in Account settings first");
           return null;
         }
-        throw new Error(error.msg || 'Failed to create meeting');
+        throw new Error(error.msg || 'Failed to schedule meeting');
       }
 
       const data = await response.json();
-      return data.meeting;
+      return data.invitation;
 
     } catch (error: any) {
       toast.error(error.message);
@@ -213,19 +213,19 @@ export default function ClassroomDetailDialog({
       const endTime = new Date(targetDate);
       endTime.setHours(selectedHours[selectedHours.length - 1] + 1, 0, 0, 0);
 
-      // Create meeting
+      // Create meeting invitation
       toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
-        loading: 'Scheduling meeting...',
+        loading: 'Sending meeting invitation...',
         success: (data) => {
           if (data) {
             setShowScheduleCall(false);
             setSelectedHours([]);
-            return `Meeting scheduled! Link: ${data.web_link}`;
+            return `Meeting invitation sent to ${classroom.name}!`;
           } else {
             throw new Error("Failed");
           }
         },
-        error: 'Failed to schedule meeting'
+        error: 'Failed to send meeting invitation'
       });
     }
   };
@@ -408,7 +408,9 @@ export default function ClassroomDetailDialog({
                   ? 'text-pink-600 border-pink-500 dark:text-pink-400 dark:border-pink-400'
                   : friendshipStatus === 'pending'
                     ? 'text-yellow-600 border-yellow-500 dark:text-yellow-400 dark:border-yellow-400'
-                    : 'text-slate-700 dark:text-slate-300'
+                    : friendshipStatus === 'received'
+                      ? 'text-green-600 border-green-500 dark:text-green-400 dark:border-green-400'
+                      : 'text-slate-700 dark:text-slate-300'
                   }`}
               >
                 <Heart size={16} className="mr-2" fill={friendshipStatus === 'accepted' ? 'currentColor' : 'none'} />
@@ -416,7 +418,9 @@ export default function ClassroomDetailDialog({
                   ? 'Unfriend'
                   : friendshipStatus === 'pending'
                     ? 'Cancel Request'
-                    : 'Send Friend Request'}
+                    : friendshipStatus === 'received'
+                      ? 'Accept Request'
+                      : 'Send Friend Request'}
               </Button>
             )}
             <Button

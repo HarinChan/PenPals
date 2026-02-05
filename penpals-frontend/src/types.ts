@@ -5,7 +5,7 @@ export interface Classroom {
   name: string;
   location: string;
   lat: number;
-  lng: number;
+  lon: number;
   interests: string[];
   availability: {
     [day: string]: number[];
@@ -16,11 +16,11 @@ export interface Classroom {
 
 export interface RecentCall {
   id: string;
-  classroomId: string;
+  classroomId: string; // ID of the other classroom
   classroomName: string;
   timestamp: Date;
-  duration: number;
-  type: 'incoming' | 'outgoing' | 'missed';
+  duration: number; // in seconds
+  type: 'incoming' | 'outgoing';
 }
 
 export interface Friend {
@@ -49,7 +49,7 @@ export interface FriendRequest {
 
 export interface Notification {
   id: string;
-  type: 'friend-request' | 'call-missed' | 'call-incoming' | 'post-like' | 'post-comment' | 'friend_request_received' | 'friend_request_accepted' | 'post_likes' | 'friend_posted' | 'post_quoted';
+  type: 'friend-request' | 'call-missed' | 'call-incoming' | 'post-like' | 'post-comment' | 'friend_request_received' | 'friend_request_accepted' | 'post_likes' | 'friend_posted' | 'post_quoted' | 'info' | 'warning' | 'success' | 'error';
   title: string;
   message: string;
   timestamp: Date;

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
@@ -12,7 +13,46 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
 import { AuthService, ClassroomService, WebexService } from './services';
+import { fetchPosts, createPost, likePost, unlikePost, PostResponse } from './services/posts';
+import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
+
+// Helper to transform backend availability to frontend schedule format
+const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
+  if (!backendAvailability) return {};
+
+  // Case 1: Already in the correct format { "Mon": [9, 10], ... }
+  if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
+    // Basic validation to ensure values are arrays
+    const cleanSchedule: { [day: string]: number[] } = {};
+    Object.entries(backendAvailability).forEach(([day, hours]) => {
+      if (Array.isArray(hours)) {
+        cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
+      }
+    });
+    return cleanSchedule;
+  }
+
+  // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...] (Legacy/Alternative)
+  const schedule: { [day: string]: number[] } = {};
+  if (Array.isArray(backendAvailability)) {
+    backendAvailability.forEach(slot => {
+      // Handle both string time "10:00" and potential other formats if they exist
+      if (slot.day && slot.time) {
+        const hour = parseInt(slot.time.split(':')[0], 10);
+        if (!isNaN(hour)) {
+          if (!schedule[slot.day]) {
+            schedule[slot.day] = [];
+          }
+          if (!schedule[slot.day].includes(hour)) {
+            schedule[slot.day].push(hour);
+          }
+        }
+      }
+    });
+  }
+  return schedule;
+};
 
 export default function App() {
   return (
@@ -33,33 +73,59 @@ function AppContent() {
   const [initialLoading, setInitialLoading] = useState(true);
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
-  const [accounts, setAccounts] = useState<Account[]>([defaultAccount]);
-  const [currentAccountId, setCurrentAccountId] = useState(defaultAccount.id);
+  const [accounts, setAccounts] = useState<Account[]>([EMPTY_ACCOUNT]);
+  const [currentAccountId, setCurrentAccountId] = useState(EMPTY_ACCOUNT.id);
 
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: '1',
-      authorId: 'account-1',
-      authorName: 'My Classroom',
-      content: 'Just joined MirrorMirror! Excited to connect with classrooms around the world! 🌍',
-      timestamp: new Date(Date.now() - 3600000),
-      likes: 5,
-      comments: 2,
-    },
-    {
-      id: '2',
-      authorId: 'other-1',
-      authorName: "Lee's Classroom",
-      content: 'Had an amazing session teaching Mandarin today. Looking forward to more collaborations!',
-      timestamp: new Date(Date.now() - 7200000),
-      likes: 12,
-      comments: 4,
-    },
-  ]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [loadingClassrooms, setLoadingClassrooms] = useState(true);
 
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
-  const currentAccount = accounts.find(acc => acc.id === currentAccountId) || defaultAccount;
+  const currentAccount = accounts.find(acc => acc.id === currentAccountId) || EMPTY_ACCOUNT;
+
+  // Fetch classrooms when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const fetchClassrooms = async () => {
+        try {
+          const response = await ClassroomService.getAllClassrooms(100);
+
+          // Transform backend data to frontend model
+          const mappedClassrooms: Classroom[] = response.classrooms
+            .filter(c => c.latitude && c.longitude) // Only show classrooms with location
+            .map(c => {
+              // Transform availability from [{day, time}] to {[day]: [hours]}
+              const availability = transformAvailability(c.availability);
+
+              return {
+                id: String(c.id),
+                name: c.name,
+                location: c.location || 'Unknown Location',
+                lat: parseFloat(c.latitude || '0'),
+                lon: parseFloat(c.longitude || '0'),
+                interests: c.interests || [],
+                availability: availability,
+                size: c.class_size,
+                description: `Friends: ${c.friends_count || 0}`
+              };
+            });
+
+          setClassrooms(mappedClassrooms);
+        } catch (error) {
+          console.error("Failed to fetch classrooms", error);
+        }
+      };
+
+      fetchClassrooms();
+
+      // Poll for updates every minute
+      const interval = setInterval(fetchClassrooms, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   // Check for existing authentication on component mount
   useEffect(() => {
@@ -100,12 +166,14 @@ function AppContent() {
             size: classroom.class_size || 20,
             description: `Classroom managed by ${userData.account.email}`,
             interests: classroom.interests || [],
-            schedule: {}, // TODO: Convert availability to schedule format
+            schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
             x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
             y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
-            recentCalls: [],
-            friends: [],
+            recentCalls: classroom.recent_calls || [],
+            friends: classroom.friends || [],
+            receivedFriendRequests: classroom.receivedFriendRequests || [],
+            notifications: userData.account.notifications || [],
           }));
 
           if (convertedAccounts.length > 0) {
@@ -113,8 +181,8 @@ function AppContent() {
             setCurrentAccountId(convertedAccounts[0].id);
           } else {
             // No classrooms yet, keep default state
-            setAccounts([defaultAccount]);
-            setCurrentAccountId(defaultAccount.id);
+            setAccounts([EMPTY_ACCOUNT]);
+            setCurrentAccountId(EMPTY_ACCOUNT.id);
           }
 
           setIsAuthenticated(true);
@@ -131,7 +199,31 @@ function AppContent() {
       }
     };
 
+    const loadData = async () => {
+      // Fetch posts
+      try {
+        setLoadingPosts(true);
+        const fetchedPosts = await fetchPosts();
+        setPosts(fetchedPosts);
+
+        // Initialize likedPosts set based on backend data
+        const initialLikedPosts = new Set<string>();
+        fetchedPosts.forEach(p => {
+          if (p.isLiked) {
+            initialLikedPosts.add(p.id);
+          }
+        });
+        setLikedPosts(initialLikedPosts);
+      } catch (error) {
+        console.error("Failed to fetch posts:", error);
+        toast.error("Failed to load posts");
+      } finally {
+        setLoadingPosts(false);
+      }
+    };
+
     checkAuthStatus();
+    loadData();
   }, []);
 
   const handleClassroomSelect = (classroom: Classroom) => {
@@ -234,12 +326,14 @@ function AppContent() {
         size: classroom.class_size || 20,
         description: `Classroom managed by ${userData.account.email}`,
         interests: classroom.interests || [],
-        schedule: {}, // TODO: Convert availability to schedule format
+        schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
         x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
         y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
-        recentCalls: [],
-        friends: [],
+        recentCalls: classroom.recent_calls || [],
+        friends: classroom.friends || [],
+        receivedFriendRequests: classroom.receivedFriendRequests || [],
+        notifications: userData.account.notifications || [],
       }));
 
       if (convertedAccounts.length > 0) {
@@ -247,12 +341,21 @@ function AppContent() {
         setCurrentAccountId(convertedAccounts[0].id);
       } else {
         // No classrooms yet, keep default state
-        setAccounts([defaultAccount]);
-        setCurrentAccountId(defaultAccount.id);
+        setAccounts([EMPTY_ACCOUNT]);
+        setCurrentAccountId(EMPTY_ACCOUNT.id);
       }
 
       setIsAuthenticated(true);
       setShowLoginDialog(false);
+
+      // Force cleanup of body styles that might be left by Radix Dialog
+      // This prevents the "cannot interact after login" bug
+      setTimeout(() => {
+        document.body.style.pointerEvents = '';
+        document.body.style.overflow = '';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 50);
+
       toast.success('Successfully logged in!');
     } catch (error) {
       console.error('Login error:', error);
@@ -299,7 +402,7 @@ function AppContent() {
         size: classroomResult.classroom.class_size || 20,
         description: 'A new classroom on PenPals',
         interests: classroomResult.classroom.interests || [],
-        schedule: {},
+        schedule: transformAvailability(classroomResult.classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
         x: classroomResult.classroom.longitude ? parseFloat(classroomResult.classroom.longitude) : -0.1278,
         y: classroomResult.classroom.latitude ? parseFloat(classroomResult.classroom.latitude) : 51.5074,
@@ -311,6 +414,14 @@ function AppContent() {
       setCurrentAccountId(newAccount.id);
       setIsAuthenticated(true);
       setShowLoginDialog(false);
+
+      // Force cleanup of body styles that might be left by Radix Dialog
+      setTimeout(() => {
+        document.body.style.pointerEvents = '';
+        document.body.style.overflow = '';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 50);
+
       toast.success('Account created successfully!');
     } catch (error) {
       console.error('Signup error:', error);
@@ -337,8 +448,8 @@ function AppContent() {
     // Clear backend authentication
     AuthService.logout();
     setIsAuthenticated(false);
-    setAccounts([defaultAccount]);
-    setCurrentAccountId(defaultAccount.id);
+    setAccounts([EMPTY_ACCOUNT]);
+    setCurrentAccountId(EMPTY_ACCOUNT.id);
     toast.success('Logged out successfully');
   };
 
@@ -347,61 +458,103 @@ function AppContent() {
   };
 
   const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
-    const newPost: Post = {
-      id: `post-${Date.now()}`,
-      authorId: currentAccountId,
-      authorName: currentAccount.classroomName,
-      content,
-      imageUrl,
-      timestamp: new Date(),
-      likes: 0,
-      comments: 0,
-      quotedPost,
-    };
-
-    // Upload to ChromaDB for search functionality
     try {
-      const { uploadPostToChromaDB } = await import('./services/chromadb');
-      const result = await uploadPostToChromaDB(newPost.id, content, {
-        postId: newPost.id,
-        authorId: newPost.authorId,
-        authorName: newPost.authorName,
-        timestamp: newPost.timestamp.toISOString(),
-        likes: newPost.likes,
-        comments: newPost.comments,
-        imageUrl: newPost.imageUrl,
-      });
+      const newPost = await createPost(content, imageUrl, quotedPost?.id);
 
-      if (result.status === 'success') {
-        // Only add post to local state if backend upload succeeds
-        setPosts([newPost, ...posts]);
-        toast.success('Post created and indexed successfully!');
-      } else {
-        toast.error('Failed to create post. Backend error: ' + result.message);
-        console.warn('ChromaDB indexing failed:', result.message);
+      // Update local state
+      setPosts([newPost, ...posts]);
+      toast.success('Post created successfully!');
+
+      // Upload to ChromaDB for search functionality
+      try {
+        const { uploadPostToChromaDB } = await import('./services/chromadb');
+        await uploadPostToChromaDB(newPost.id, content, {
+          postId: newPost.id,
+          authorId: newPost.authorId,
+          authorName: newPost.authorName,
+          timestamp: newPost.timestamp.toISOString(),
+          likes: newPost.likes,
+          comments: newPost.comments,
+          imageUrl: newPost.imageUrl,
+        });
+      } catch (dbError) {
+        console.warn('ChromaDB indexing failed:', dbError);
       }
-    } catch (error) {
-      toast.error('Failed to create post. Cannot connect to backend server.');
-      console.error('Error uploading to ChromaDB:', error);
+
+    } catch (error: any) {
+      console.error('Error creating post:', error);
+      toast.error(error.message || 'Failed to create post');
     }
   };
 
-  const handleLikePost = (postId: string) => {
+  const handleLikePost = async (postId: string) => {
+    // Determine current state
     const isLiked = likedPosts.has(postId);
 
-    setPosts(posts.map(post =>
-      post.id === postId ? {
-        ...post,
-        likes: isLiked ? post.likes - 1 : post.likes + 1
-      } : post
-    ));
-
     if (isLiked) {
-      const newLikedPosts = new Set(likedPosts);
-      newLikedPosts.delete(postId);
-      setLikedPosts(newLikedPosts);
+      // UNLIKE FLOW
+
+      // Optimistic update
+      setPosts(prevPosts => prevPosts.map(post =>
+        post.id === postId ? { ...post, likes: Math.max(0, post.likes - 1) } : post
+      ));
+
+      setLikedPosts(prev => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
+
+      try {
+        const newLikes = await unlikePost(postId);
+        // Update with server truth
+        setPosts(prevPosts => prevPosts.map(post =>
+          post.id === postId ? { ...post, likes: newLikes } : post
+        ));
+      } catch (error: any) {
+        // Revert on error
+        console.error("Failed to unlike post:", error);
+
+        setPosts(prevPosts => prevPosts.map(post =>
+          post.id === postId ? { ...post, likes: post.likes + 1 } : post
+        ));
+
+        setLikedPosts(prev => new Set([...prev, postId]));
+
+        toast.error(`Failed to unlike post: ${error.message || 'Unknown error'}`);
+      }
+
     } else {
-      setLikedPosts(new Set([...likedPosts, postId]));
+      // LIKE FLOW
+
+      // Update UI immediately (optimistic)
+      setPosts(prevPosts => prevPosts.map(post =>
+        post.id === postId ? { ...post, likes: post.likes + 1 } : post
+      ));
+      setLikedPosts(prev => new Set([...prev, postId]));
+
+      try {
+        const newLikes = await likePost(postId);
+        // Update with server truth
+        setPosts(prevPosts => prevPosts.map(post =>
+          post.id === postId ? { ...post, likes: newLikes } : post
+        ));
+      } catch (error: any) {
+        // Revert on error
+        console.error("Failed to like post:", error);
+
+        setPosts(prevPosts => prevPosts.map(post =>
+          post.id === postId ? { ...post, likes: post.likes - 1 } : post
+        ));
+
+        setLikedPosts(prev => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+
+        toast.error(`Failed to like post: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -492,14 +645,18 @@ function AppContent() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden flex-col lg:flex-row">
+
         {/* Map Area */}
         <div className="flex-1 p-3 md:p-6 overflow-hidden">
-          <MapView
-            onClassroomSelect={handleClassroomSelect}
-            selectedClassroom={selectedClassroom}
-            myClassroom={currentAccount}
-            theme={theme}
-          />
+          <ErrorBoundary name="Map View">
+            <MapView
+              onClassroomSelect={handleClassroomSelect}
+              selectedClassroom={selectedClassroom}
+              myClassroom={currentAccount}
+              classrooms={classrooms}
+              theme={theme}
+            />
+          </ErrorBoundary>
         </div>
 
         {/* Side Panel */}
@@ -509,6 +666,7 @@ function AppContent() {
             onClassroomSelect={handleClassroomSelect}
             currentAccount={currentAccount}
             accounts={accounts}
+            classrooms={classrooms}
             onAccountChange={handleAccountChange}
             onAccountUpdate={handleAccountUpdate}
             onAccountCreate={handleAccountCreate}
@@ -518,6 +676,7 @@ function AppContent() {
             onCreatePost={handleCreatePost}
             onLikePost={handleLikePost}
             likedPosts={likedPosts}
+            loadingPosts={loadingPosts}
           />
         </div>
 
@@ -538,6 +697,7 @@ function AppContent() {
                   onClassroomSelect={handleClassroomSelect}
                   currentAccount={currentAccount}
                   accounts={accounts}
+                  classrooms={classrooms}
                   onAccountChange={handleAccountChange}
                   onAccountUpdate={handleAccountUpdate}
                   onAccountCreate={handleAccountCreate}
@@ -547,6 +707,7 @@ function AppContent() {
                   onCreatePost={handleCreatePost}
                   onLikePost={handleLikePost}
                   likedPosts={likedPosts}
+                  loadingPosts={loadingPosts}
                 />
               </div>
             </SheetContent>
@@ -589,71 +750,17 @@ function AppContent() {
   );
 }
 
-const defaultAccount: Account = {
-  id: 'account-1',
-  classroomName: 'My Classroom',
+const EMPTY_ACCOUNT: Account = {
+  id: 'guest',
+  classroomName: 'New Classroom',
   location: 'London, England, United Kingdom',
-  size: 25,
-  description: 'A friendly learning environment focused on STEM subjects and outdoor activities.',
-  interests: ['Math', 'Biology'],
-  schedule: {
-    Mon: [9, 10, 11, 14, 15],
-    Tue: [9, 10, 11],
-    Wed: [14, 15, 16],
-    Thu: [9, 10, 11],
-    Fri: [14, 15],
-  },
-  x: -0.1278, // London longitude
-  y: 51.5074, // London latitude
-  recentCalls: [
-    {
-      id: 'call-1',
-      classroomId: '1',
-      classroomName: "Lee's Classroom",
-      timestamp: new Date('2025-11-03T14:30:00'),
-      duration: 45,
-      type: 'outgoing' as const,
-    },
-    {
-      id: 'call-2',
-      classroomId: '2',
-      classroomName: 'Math Nerd House',
-      timestamp: new Date('2025-11-02T10:15:00'),
-      duration: 30,
-      type: 'incoming' as const,
-    },
-    {
-      id: 'call-3',
-      classroomId: '5',
-      classroomName: 'Studio Ghibli Fan Club',
-      timestamp: new Date('2025-11-01T16:00:00'),
-      duration: 0,
-      type: 'missed' as const,
-    },
-  ],
-  friends: [
-    {
-      id: 'friend-1',
-      classroomId: '1',
-      classroomName: "Lee's Classroom",
-      location: 'Tokyo, Japan',
-      addedDate: new Date('2025-10-15'),
-      lastConnected: new Date('2025-11-03'),
-    },
-    {
-      id: 'friend-2',
-      classroomId: '2',
-      classroomName: 'Math Nerd House',
-      location: 'Berlin, Germany',
-      addedDate: new Date('2025-10-20'),
-      lastConnected: new Date('2025-11-02'),
-    },
-    {
-      id: 'friend-3',
-      classroomId: '7',
-      classroomName: 'Outdoor Adventure Squad',
-      location: 'Denver, USA',
-      addedDate: new Date('2025-10-25'),
-    },
-  ],
+  size: 20,
+  description: 'Welcome to PenPals! Create a classroom to get started.',
+  interests: [],
+  schedule: {},
+  x: -0.1278,
+  y: 51.5074,
+  recentCalls: [],
+  friends: [],
+  notifications: [],
 };

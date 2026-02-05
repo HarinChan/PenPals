@@ -2,8 +2,8 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
-import { Bell, ChevronDown, UserPlus, UserCheck, Heart, MessageSquare, Quote, X } from 'lucide-react';
-import { Notification } from './SidePanel';
+import { Bell, ChevronDown, UserPlus, UserCheck, Heart, MessageSquare, Quote, X, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Notification } from '../types';
 
 interface NotificationWidgetProps {
   notifications: Notification[];
@@ -34,6 +34,14 @@ export default function NotificationWidget({
         return <MessageSquare size={16} className="text-purple-600 dark:text-purple-400" />;
       case 'post_quoted':
         return <Quote size={16} className="text-orange-600 dark:text-orange-400" />;
+      case 'info':
+        return <Info size={16} className="text-blue-500 dark:text-blue-400" />;
+      case 'warning':
+        return <AlertTriangle size={16} className="text-amber-500 dark:text-amber-400" />;
+      case 'success':
+        return <CheckCircle size={16} className="text-green-500 dark:text-green-400" />;
+      case 'error':
+        return <XCircle size={16} className="text-red-500 dark:text-red-400" />;
       default:
         return <Bell size={16} className="text-slate-600 dark:text-slate-400" />;
     }
@@ -79,11 +87,10 @@ export default function NotificationWidget({
                   notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-3 rounded-lg border transition-colors group ${
-                        notification.read
-                          ? 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600'
-                          : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                      }`}
+                      className={`p-3 rounded-lg border transition-colors group ${notification.read
+                        ? 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600'
+                        : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                        }`}
                       onClick={() => !notification.read && onMarkAsRead(notification.id)}
                     >
                       <div className="flex items-start gap-3">

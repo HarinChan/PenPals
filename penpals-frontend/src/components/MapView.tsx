@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import TimezoneClock from './TimezoneClock';
-import type { Account } from '../types';
+import type { Account, Classroom } from '../types';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -16,40 +16,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-export interface Classroom {
-  id: string;
-  name: string;
-  location: string;
-  lon: number;
-  lat: number;
-  interests: string[];
-  availability: {
-    [day: string]: number[]; // Array of hours (0-23)
-  };
-  size?: number;
-  description?: string;
-}
 
-const classrooms: Classroom[] = [
-  { id: '1', name: "Lee's Classroom", location: 'New York, USA', lon: -74.0060, lat: 40.7128, interests: ['Math', 'Biology', 'Rock Climbing'], availability: { Mon: [9, 10, 11, 14, 15], Tue: [9, 10, 11], Wed: [14, 15, 16], Thu: [9, 10, 11], Fri: [14, 15] } },
-  { id: '2', name: 'Math Lover House', location: 'Los Angeles, USA', lon: -118.2437, lat: 34.0522, interests: ['Math', 'Physics', 'Chess'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [15, 16, 17], Thu: [10, 11], Fri: [14, 15, 16] } },
-  { id: '3', name: 'The Book Nook', location: 'Bangkok, Thailand', lon: 100.518, lat: 13.7563, interests: ['English', 'History', 'Creative Writing'], availability: { Mon: [9, 10, 11], Tue: [14, 15, 16], Wed: [9, 10, 11], Thu: [14, 15, 16], Fri: [9, 10] } },
-  { id: '4', name: "Marie's Language Lab", location: 'Paris, France', lon: 2.3522, lat: 48.8566, interests: ['French', 'Spanish', 'Mandarin'], availability: { Mon: [8, 9, 10], Tue: [8, 9, 10, 11], Wed: [14, 15], Thu: [8, 9, 10], Fri: [14, 15, 16] } },
-  { id: '5', name: 'Sakura Study Space', location: 'Tokyo, Japan', lon: 139.6917, lat: 35.6895, interests: ['Japanese', 'Anime', 'Calligraphy', 'Math'], availability: { Mon: [13, 14, 15], Tue: [13, 14, 15, 16], Wed: [13, 14], Thu: [14, 15, 16], Fri: [13, 14, 15] } },
-  { id: '6', name: 'Outback Learning Hub', location: 'Sydney, Australia', lon: 151.2093, lat: -33.8688, interests: ['Biology', 'Geography', 'Surfing'], availability: { Mon: [7, 8, 9], Tue: [7, 8, 9, 10], Wed: [16, 17, 18], Thu: [7, 8, 9], Fri: [16, 17, 18] } },
-  { id: '7', name: 'TechHub Singapore', location: 'Singapore', lon: 103.8198, lat: 1.3521, interests: ['Computer Science', 'Robotics', 'Math'], availability: { Mon: [10, 11, 12, 13], Tue: [10, 11, 12], Wed: [14, 15, 16], Thu: [10, 11, 12], Fri: [14, 15] } },
-  { id: '8', name: "Priya's Practice Room", location: 'Mumbai, India', lon: 72.8777, lat: 19.0760, interests: ['Hindi', 'Music', 'Dance', 'Math'], availability: { Mon: [15, 16, 17], Tue: [15, 16, 17], Wed: [9, 10, 11], Thu: [15, 16, 17], Fri: [9, 10, 11] } },
-  { id: '9', name: 'Samba Study Circle', location: 'São Paulo, Brazil', lon: -46.6333, lat: -23.5505, interests: ['Portuguese', 'Music', 'Dance', 'Biology'], availability: { Mon: [11, 12, 13], Tue: [11, 12, 13, 14], Wed: [16, 17, 18], Thu: [11, 12, 13], Fri: [16, 17] } },
-  { id: '10', name: 'Alpine Academic Circle', location: 'Gstaad, Switzerland', lon: 46.4722, lat: 7.2869, interests: ['German', 'Chemistry', 'Physics', 'Hiking'], availability: { Mon: [8, 9, 10, 11], Tue: [14, 15, 16], Wed: [8, 9, 10], Thu: [14, 15, 16], Fri: [8, 9, 10] } },
-  { id: '11', name: 'The Knit & Wit', location: 'Stockholm, Sweden', lon: 18.0686, lat: 59.3293, interests: ['Knitting', 'Crafts', 'Design', 'Swedish'], availability: { Mon: [13, 14, 15], Tue: [9, 10, 11], Wed: [13, 14, 15], Thu: [9, 10, 11], Fri: [13, 14, 15] } },
-  { id: '12', name: 'Seoul Study Station', location: 'Seoul, South Korea', lon: 126.9780, lat: 37.5665, interests: ['Korean', 'K-Pop', 'Art', 'Math'], availability: { Mon: [16, 17, 18], Tue: [10, 11, 12], Wed: [16, 17, 18], Thu: [10, 11, 12], Fri: [16, 17] } },
-  { id: '12', name: 'Seoul South Study Station', location: 'Seoul, South Korea', lon: 126.9780, lat: 37.5265, interests: ['Korean', 'Chemistry', 'Art', 'Math'], availability: { Mon: [16, 17, 18], Tue: [10, 11, 12], Wed: [16, 17, 18], Thu: [10, 11, 12], Fri: [16, 17] } },
-];
 
 interface MapViewProps {
   onClassroomSelect: (classroom: Classroom) => void;
   selectedClassroom?: Classroom;
   myClassroom: Account;
+  classrooms?: Classroom[]; // New prop
+  theme: string;
 }
 
 // Component to handle map view updates when selectedClassroom changes
@@ -80,7 +54,7 @@ function MapController({ selectedClassroom, mapInitialized }: { selectedClassroo
 // Debug component to verify map is ready
 function MapDebug() {
   const map = useMap();
-  
+
   useEffect(() => {
     console.log('Map is ready:', map, 'scrollWheelZoom enabled:', map.scrollWheelZoom ? 'yes' : 'no');
   }, [map]);
@@ -101,7 +75,7 @@ function MapInstanceBridge({ onReady }: { onReady: (map: L.Map) => void }) {
 // Component to handle cluster zoom on click
 function ClusterMarker({ position, icon, classrooms, currentZoom, count }: { position: [number, number], icon: any, classrooms: Classroom[], currentZoom: number, count: number }) {
   const map = useMap();
-  
+
   return (
     <Marker
       position={position}
@@ -131,7 +105,7 @@ function SmoothScrollZoom({ minZoom }: { minZoom: number }) {
 
     const handleWheel = (e: WheelEvent) => {
       if (!isEnabledRef.current) return;
-      
+
       e.preventDefault();
 
       // Normalize wheel delta across devices (trackpad/mouse)
@@ -189,7 +163,7 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void })
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-      
+
       // Debounce zoom changes to wait for animation to complete
       debounceTimerRef.current = window.setTimeout(() => {
         onZoomChange(Math.floor(map.getZoom()));
@@ -211,7 +185,7 @@ function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void })
   return null;
 }
 
-export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom }: MapViewProps) {
+export default function MapView({ onClassroomSelect, selectedClassroom, myClassroom, classrooms = [] }: MapViewProps) {
   const { theme } = useTheme();
   const [mapInitialized, setMapInitialized] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(2);
@@ -236,6 +210,8 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     window.addEventListener('resize', calculateMinZoom);
     return () => window.removeEventListener('resize', calculateMinZoom);
   }, []);
+
+  // Guard schedule (avoid runtime/TS errors if schedule is undefined)
 
   // Guard schedule (avoid runtime/TS errors if schedule is undefined)
   const schedule = (myClassroom as any).schedule ?? {};
@@ -334,7 +310,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     });
 
     return markers;
-  }, [currentZoom]);
+  }, [currentZoom, classrooms, myClassroom]);
 
   // Helper to get best color for cluster - also memoized
   const getBestClusterColor = (clusterClassrooms: Classroom[]) => {
@@ -428,7 +404,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         maxBounds={[[-85.051129, -180], [85.051129, 180]]}
         maxBoundsViscosity={1.0}
         zoomControl={false}
-        style={{ height: '100%', width: '130%', zIndex: 0 }}
+        style={{ height: '100%', width: '120%', zIndex: 0 }}
         scrollWheelZoom={true}
         className="z-0"
         whenReady={() => setMapInitialized(true)}
@@ -520,8 +496,8 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           ? 'bg-slate-800/95 border-slate-700'
           : 'bg-white/95 border-slate-300'
           }`} style={{ pointerEvents: 'auto' }}>
-            <div className="mb-2 font-semibold">{classrooms.length} Classrooms Available</div>
-            <div className="mb-2">Legend for matching interests</div>
+          <div className="mb-2 font-semibold">{classrooms.length} Classrooms Available</div>
+          <div className="mb-2">Legend for matching interests</div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-blue"></div>
@@ -554,5 +530,3 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
     </div>
   );
 }
-
-export { classrooms };

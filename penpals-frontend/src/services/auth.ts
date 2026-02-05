@@ -23,6 +23,9 @@ export interface User {
   email: string;
   organization?: string;
   created_at: string;
+  notifications?: any[];
+  friends?: any[];
+  recentCalls?: any[];
 }
 
 export interface UserWithClassrooms {
@@ -37,12 +40,12 @@ export interface Classroom {
   latitude?: string;
   longitude?: string;
   class_size?: number;
-  availability?: Array<{
-    day: string;
-    time: string;
-  }>;
+  availability?: { [day: string]: number[] };
   interests: string[];
   friends_count?: number;
+  friends?: any[];
+  recent_calls?: any[];
+  receivedFriendRequests?: any[];
   created_at?: string;
 }
 
@@ -63,10 +66,10 @@ export class AuthService {
    */
   static async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await ApiClient.post<AuthResponse>('/auth/login', credentials);
-    
+
     // Store the token for future requests
     ApiClient.setToken(response.access_token);
-    
+
     return response;
   }
 
@@ -113,27 +116,27 @@ export class AuthService {
     errors: string[];
   } {
     const errors: string[] = [];
-    
+
     if (password.length < 8) {
       errors.push('Password must be at least 8 characters long');
     }
-    
+
     if (!/[A-Z]/.test(password)) {
       errors.push('Password must contain at least one uppercase letter');
     }
-    
+
     if (!/[a-z]/.test(password)) {
       errors.push('Password must contain at least one lowercase letter');
     }
-    
+
     if (!/\d/.test(password)) {
       errors.push('Password must contain at least one digit');
     }
-    
+
     if (!/[^A-Za-z0-9]/.test(password)) {
       errors.push('Password must contain at least one special character');
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
