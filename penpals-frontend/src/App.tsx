@@ -264,6 +264,16 @@ function AppContent() {
     }
   };
 
+  const persistInterestChanges = async (accountId: string, interests: string[]) => {
+    try {
+      const { ClassroomService } = await import('./services/classroom');
+      await ClassroomService.updateClassroom(Number(accountId), { interests });
+    } catch (error) {
+      console.error('Failed to save interests:', error);
+      throw error;
+    }
+  };
+
   const handleAccountCreate = (newAccount: Account) => {
     // If there are existing accounts, inherit coordinates from the first one
     if (accounts.length > 0) {
