@@ -387,9 +387,22 @@ export default function SidePanel({
   };
 
   const addCustomInterest = async () => {
-    if (customInterest.trim() && !allInterests.includes(customInterest.trim())) {
-      const titleCaseInterest = toTitleCase(customInterest.trim());
-      const newInterests = [...currentAccount.interests, titleCaseInterest];
+    const trimmedInput = customInterest.trim();
+    if (!trimmedInput) return;
+
+    const titleCaseInput = toTitleCase(trimmedInput);
+    
+    // Check if it exists in the list (case-insensitive)
+    const existingInterest = allInterests.find(
+      (interest) => interest.toLowerCase() === titleCaseInput.toLowerCase()
+    );
+
+    if (existingInterest) {
+      // If it exists, toggle it
+      await toggleInterest(existingInterest);
+    } else {
+      // If it doesn't exist, add it as a new custom interest
+      const newInterests = [...currentAccount.interests, titleCaseInput];
 
       // Update UI immediately for responsiveness
       onAccountUpdate({ ...currentAccount, interests: newInterests });
@@ -410,6 +423,8 @@ export default function SidePanel({
         setIsSavingInterests(false);
       }
     }
+
+    setCustomInterest('');
   };
 
   // Helper: Format schedule array to string (e.g., [9, 10, 11] -> "9, 10, 11")
