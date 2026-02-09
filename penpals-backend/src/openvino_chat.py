@@ -3,15 +3,6 @@ import threading
 import queue
 from typing import Any, Dict, Iterable, List
 
-def _apply_runtime_limits():
-    # Mitigate native crashes on older Intel Macs by limiting threading.
-    os.environ.setdefault("OMP_NUM_THREADS", "2")
-    os.environ.setdefault("OV_NUM_STREAMS", "1")
-    os.environ.setdefault("KMP_BLOCKTIME", "0")
-
-
-_apply_runtime_limits()
-
 try:
     import openvino_genai as ov_genai
 except ImportError:
@@ -19,10 +10,10 @@ except ImportError:
 
 DEFAULT_MODEL_DIR = os.getenv(
     "OPENVINO_MODEL_DIR",
-    "/Users/philippbruhns/Documents/Year2/COMP0016_Systems_Engineering/PenPals/models/qwen3-1.7b-int4-ov",
+    "..\\..\\models\\qwen3-1.7b-int4-ov",
 )
 
-MAX_NEW_TOKENS = int(os.getenv("OPENVINO_MAX_NEW_TOKENS", "50"))
+MAX_NEW_TOKENS = int(os.getenv("OPENVINO_MAX_NEW_TOKENS", "256"))
 TEMPERATURE = float(os.getenv("OPENVINO_TEMPERATURE", "0.7"))
 TOP_P = float(os.getenv("OPENVINO_TOP_P", "0.9"))
 
