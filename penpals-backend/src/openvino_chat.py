@@ -1,6 +1,16 @@
 import os
 import threading
-from typing import Any, Dict, List
+import queue
+from typing import Any, Dict, Iterable, List
+
+def _apply_runtime_limits():
+    # Mitigate native crashes on older Intel Macs by limiting threading.
+    os.environ.setdefault("OMP_NUM_THREADS", "2")
+    os.environ.setdefault("OV_NUM_STREAMS", "1")
+    os.environ.setdefault("KMP_BLOCKTIME", "0")
+
+
+_apply_runtime_limits()
 
 try:
     import openvino_genai as ov_genai
@@ -12,7 +22,7 @@ DEFAULT_MODEL_DIR = os.getenv(
     "/Users/philippbruhns/Documents/Year2/COMP0016_Systems_Engineering/PenPals/models/qwen3-1.7b-int4-ov",
 )
 
-MAX_NEW_TOKENS = int(os.getenv("OPENVINO_MAX_NEW_TOKENS", "256"))
+MAX_NEW_TOKENS = int(os.getenv("OPENVINO_MAX_NEW_TOKENS", "50"))
 TEMPERATURE = float(os.getenv("OPENVINO_TEMPERATURE", "0.7"))
 TOP_P = float(os.getenv("OPENVINO_TOP_P", "0.9"))
 
@@ -87,3 +97,32 @@ def generate_reply(messages: List[Dict[str, str]], context_docs: List[Dict[str, 
     prompt = build_prompt(messages, context_docs)
     config = _get_generation_config(pipeline)
     return pipeline.generate(prompt, config)
+
+
+def generate_reply_stream(
+    messages: List[Dict[str, str]],
+    context_docs: List[Dict[str, Any]],
+) -> Iterable[str]:
+    pipeline = _get_pipeline()
+    prompt = build_prompt(messages, context_docs)
+    config = _get_generation_config(pipeline)
+
+    token_queue: "queue.Queue[str | None]" = queue.Queue()
+
+    def streamer(token: str):
+        token_queue.put(token)
+
+    def run_generation():
+        try:
+            pipeline.generate(prompt, config, streamer=streamer)
+        finally:
+            token_queue.put(None)
+
+    thread = threading.Thread(target=run_generation, daemon=True)
+    thread.start()
+
+    while True:
+        item = token_queue.get()
+        if item is None:
+            break
+        yield item
