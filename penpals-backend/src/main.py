@@ -1107,6 +1107,22 @@ def create_post():
     
     db.session.add(post)
     db.session.commit()
+
+    # Index post content in ChromaDB for RAG retrieval
+    try:
+        chroma_service.add_documents(
+            [post.content],
+            metadatas=[{
+                "source": "post",
+                "post_id": str(post.id),
+                "author": profile.name,
+                "timestamp": post.created_at.isoformat()
+            }],
+            ids=[f"post-{post.id}"]
+        )
+    except Exception as e:
+        # Don't fail post creation if indexing fails
+        application.logger.warning("Failed to index post in ChromaDB: %s", e)
     
     # Return the created post in the format frontend expects
     response_data = {
