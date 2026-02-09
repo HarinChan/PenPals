@@ -26,6 +26,7 @@ def print_tables():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
 
 from chromadb_service import ChromaDBService
+from openvino_chat import generate_reply
 
 application = Flask(__name__)
 CORS(application)
@@ -66,6 +67,49 @@ application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
 
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
+
+
+@application.route('/api/chat', methods=['POST'])
+def chat():
+    """
+    RAG-augmented chat endpoint using OpenVINO GenAI and ChromaDB.
+    Expected JSON format:
+    {
+        "message": "user message",
+        "history": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
+        "n_results": 5
+    }
+    """
+    try:
+        data = request.json or {}
+        message = data.get('message', '')
+        history = data.get('history', [])
+        n_results = data.get('n_results', 5)
+
+        if not isinstance(message, str) or len(message.strip()) == 0:
+            return jsonify({"status": "error", "message": "Missing or empty 'message' field"}), 400
+
+        if not isinstance(history, list):
+            return jsonify({"status": "error", "message": "'history' must be a list"}), 400
+
+        if not isinstance(n_results, int) or n_results <= 0:
+            n_results = 5
+
+        query_result = chroma_service.query_documents(message, n_results)
+        context_docs = []
+        if isinstance(query_result, dict) and query_result.get('status') == 'success':
+            context_docs = query_result.get('results', [])
+
+        messages = history + [{"role": "user", "content": message}]
+        reply = generate_reply(messages, context_docs)
+
+        return jsonify({
+            "status": "success",
+            "reply": reply,
+            "context": context_docs
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @application.route('/api/auth/register', methods=['POST'])
 def register():
