@@ -9,6 +9,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta, datetime
+import re
 import os
 
 from dotenv import load_dotenv
@@ -68,6 +69,40 @@ application.register_blueprint(classroom_bp)
 
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 
+_CLASSROOM_TAG_RE = re.compile(r'<classroom\s+id="[^"]+"\s*/>')
+
+
+def _extract_context_classroom_ids(context_docs, limit: int = 3):
+    ids = []
+    if not isinstance(context_docs, list):
+        return ids
+
+    for doc in context_docs:
+        metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
+        if isinstance(metadata, dict):
+            classroom_id = metadata.get("classroom_id")
+            if classroom_id:
+                classroom_id = str(classroom_id)
+                if classroom_id not in ids:
+                    ids.append(classroom_id)
+        if len(ids) >= limit:
+            break
+    return ids
+
+
+def _inject_classroom_tags(reply: str, context_docs, limit: int = 3) -> str:
+    if not isinstance(reply, str) or not reply:
+        return reply
+    if _CLASSROOM_TAG_RE.search(reply):
+        return reply
+
+    classroom_ids = _extract_context_classroom_ids(context_docs, limit)
+    if not classroom_ids:
+        return reply
+
+    tags = "\n".join(f'<classroom id="{cid}"/>' for cid in classroom_ids)
+    return reply.rstrip() + "\n" + tags
+
 
 @application.route('/api/chat', methods=['POST'])
 def chat():
@@ -102,6 +137,7 @@ def chat():
 
         messages = history + [{"role": "user", "content": message}]
         reply = generate_reply(messages, context_docs)
+        reply = _inject_classroom_tags(reply, context_docs, 3)
 
         return jsonify({
             "status": "success",
@@ -1116,6 +1152,7 @@ def create_post():
                 "source": "post",
                 "post_id": str(post.id),
                 "author": profile.name,
+                "classroom_id": str(profile.id),
                 "timestamp": post.created_at.isoformat()
             }],
             ids=[f"post-{post.id}"]
