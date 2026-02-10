@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
 import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
-import { WebexService } from '../services';
+import { WebexService, ClassroomService } from '../services';
 import { FriendsService } from '../services/friends';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -482,7 +482,7 @@ export default function SidePanel({
     setCreateClassroomDialogOpen(true);
   };
 
-  const submitCreateClassroom = () => {
+  const submitCreateClassroom = async () => {
     toast.info('Attempting to create classroom...'); // DEBUG
     try {
       // Validate
@@ -497,19 +497,32 @@ export default function SidePanel({
         return;
       }
 
-      const newAccount: Account = {
-        id: `account-${Date.now()}`,
-        classroomName: newClassroomData.name.trim(),
-        location: currentAccount.location, // Inherit location
-        size: newClassroomData.size,
-        description: newClassroomData.description,
+      const classroomResponse = await ClassroomService.createClassroom({
+        name: newClassroomData.name.trim(),
+        location: currentAccount.location,
+        latitude: currentAccount.y.toString(),
+        longitude: currentAccount.x.toString(),
+        class_size: newClassroomData.size,
         interests: [],
+      });
+
+      const backendClassroom = classroomResponse.classroom;
+
+      const newAccount: Account = {
+        id: String(backendClassroom.id),
+        classroomName: backendClassroom.name,
+        location: backendClassroom.location || currentAccount.location,
+        size: backendClassroom.class_size || 20,
+        description: newClassroomData.description,
+        interests: backendClassroom.interests || [],
         schedule: {},
-        // Inherit coordinates from the current account
-        x: currentAccount.x,
-        y: currentAccount.y,
+        // Use coordinates from backend or fallback to current
+        x: backendClassroom.longitude ? parseFloat(backendClassroom.longitude) : currentAccount.x,
+        y: backendClassroom.latitude ? parseFloat(backendClassroom.latitude) : currentAccount.y,
         recentCalls: [],
         friends: [],
+        receivedFriendRequests: [],
+        notifications: [],
       };
 
       onAccountCreate(newAccount);
@@ -517,7 +530,7 @@ export default function SidePanel({
       toast.success('New classroom created!');
     } catch (err: any) {
       console.error(err);
-      toast.error('Error creating classroom: ' + err.message);
+      toast.error('Error creating classroom: ' + (err.message || 'Unknown error'));
     }
   };
 
