@@ -1585,7 +1585,7 @@ export default function SidePanel({
                 {editingAccountLocation ? (
                   <div className="space-y-3">
                     <LocationAutocomplete
-                      label="Account Location"
+                      label=""
                       placeholder="Search for your location..."
                       value={selectedLocation}
                       onChange={setSelectedLocation}
