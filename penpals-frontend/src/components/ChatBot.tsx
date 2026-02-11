@@ -3,7 +3,6 @@ import { Send, Loader2, MapPin, Users, Sparkles, Bot } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { sendChatMessage, ChatMessage } from '../services/chat';
 import type { Account, Classroom } from '../types';
@@ -47,8 +46,10 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const bottomRef = useRef<HTMLDivElement>(null);
     const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -58,6 +59,18 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
             });
         }
     }, [messages, loading]);
+
+    useEffect(() => {
+        if (!loading) {
+            setElapsedSeconds(0);
+            return;
+        }
+        const start = Date.now();
+        const timer = window.setInterval(() => {
+            setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [loading]);
 
     const openClassroomDetails = (classroom: Classroom) => {
         setDetailDialogClassroom(classroom);
@@ -111,9 +124,9 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
     };
 
     return (
-        <Card className="h-full flex flex-col border-0 shadow-none rounded-2xl overflow-hidden bg-white dark:bg-slate-800">
+        <Card className="h-full w-full flex flex-col min-h-0 border-0 shadow-none rounded-2xl overflow-hidden bg-white dark:bg-slate-800">
             {/* Header */}
-            <CardHeader className="flex flex-row items-center justify-between py-6 px-6 border-b border-slate-100 dark:border-slate-800">
+            <CardHeader className="flex flex-row items-center justify-between py-4 px-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                         <Bot className="w-6 h-6" />
@@ -125,9 +138,9 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
             </CardHeader>
 
             {/* Chat Area */}
-            <CardContent className="flex-1 flex flex-col gap-4 p-0 bg-white dark:bg-slate-800 relative">
-                <ScrollArea className="flex-1 px-4 sm:px-6 py-6" ref={scrollRef}>
-                    <div className="space-y-10 pb-4">
+            <CardContent className="flex-1 min-h-0 flex flex-col gap-3 p-0 bg-white dark:bg-slate-800 relative">
+                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto pr-2 px-4 sm:px-6 py-4 chat-scroll">
+                    <div className="space-y-6 pb-2">
                         {messages.map((message, index) => (
                             <div
                                 key={`${message.role}-${index}`}
@@ -231,7 +244,9 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                                 </div>
                                 <div className="bg-slate-100 dark:bg-slate-800 border-none rounded-3xl rounded-tl-sm px-5 py-3.5 shadow-sm flex items-center gap-2.5">
                                     <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Thinking...</span>
+                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                                        Thinking... {elapsedSeconds > 0 ? `(${elapsedSeconds}s)` : ''}
+                                    </span>
                                 </div>
                             </div>
                         )}
@@ -243,11 +258,12 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                                 </div>
                             </div>
                         )}
+                        <div ref={bottomRef} />
                     </div>
-                </ScrollArea>
+                </div>
 
                 {/* Input Area */}
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="shrink-0 p-3 border-t border-slate-100 dark:border-slate-800">
                     <form 
                         onSubmit={(e) => {
                             e.preventDefault();
@@ -280,7 +296,7 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                     </form>
                 </div>
             </CardContent>
-            
+
             <ClassroomDetailDialog
                 classroom={detailDialogClassroom}
                 open={detailDialogOpen}
