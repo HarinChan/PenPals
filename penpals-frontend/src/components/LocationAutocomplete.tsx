@@ -165,10 +165,8 @@ export default function LocationAutocomplete({
         />
         
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-          {isLoading ? (
+          {isLoading && (
             <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-          ) : (
-            <MapPin className="w-4 h-4 text-slate-400" />
           )}
         </div>
       </div>
