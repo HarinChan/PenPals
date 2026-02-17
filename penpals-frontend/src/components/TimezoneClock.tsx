@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, Edit2, Check } from 'lucide-react';
+import tzLookup from 'tz-lookup';
 import {
   Select,
   SelectContent,
@@ -7,6 +8,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+
+interface TimezoneClockProps {
+  lat?: number;
+  lon?: number;
+}
 
 const TIMEZONES = [
   { label: 'UTC', value: 'UTC' },
@@ -31,13 +37,34 @@ const TIMEZONES = [
   { label: 'Auckland (NZDT)', value: 'Pacific/Auckland' },
 ];
 
-export default function TimezoneClock() {
+export default function TimezoneClock({ lat, lon }: TimezoneClockProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Initialize timezone based on props or device default
   const [timezone, setTimezone] = useState(() => {
-    // Initialize with device timezone
+    if (lat !== undefined && lon !== undefined) {
+      try {
+        return tzLookup(lat, lon);
+      } catch (e) {
+        console.error("Error looking up timezone for clock:", e);
+      }
+    }
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
   });
+
   const [isEditing, setIsEditing] = useState(false);
+
+  // Update timezone if props change
+  useEffect(() => {
+    if (lat !== undefined && lon !== undefined) {
+      try {
+        const newTz = tzLookup(lat, lon);
+        setTimezone(newTz);
+      } catch (e) {
+        console.error("Error updating timezone for clock:", e);
+      }
+    }
+  }, [lat, lon]);
 
   // Update time every second
   useEffect(() => {
