@@ -522,9 +522,9 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
           </div>
         </div>
 
-        {/* Timezone Clock */}
+        {/* TimezoneClock */}
         <div className="absolute top-4 right-4 pointer-events-auto" style={{ pointerEvents: 'auto' }}>
-          <TimezoneClock />
+          <TimezoneClock lat={myLat} lon={myLon} />
         </div>
       </div>
     </div>
