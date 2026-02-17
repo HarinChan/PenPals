@@ -618,15 +618,7 @@ function AppContent() {
             >
               <RotateCw className="w-5 h-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-              title="Toggle Theme"
-            >
-              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </Button>
+
             <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm">
               {currentAccount.classroomName.charAt(0)}
             </div>
