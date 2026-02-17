@@ -757,7 +757,7 @@ function AppContent() {
       </Dialog>
 
       <Dialog open={showChatBot} onOpenChange={setShowChatBot}>
-        <DialogContent className="sm:max-w-2xl h-[600px] p-0">
+        <DialogContent className="sm:max-w-xl h-[600px] max-h-85vh overflow-hidden p-0 bg-transparent border-none shadow-none flex flex-col">
           <ChatBot
             onClose={() => setShowChatBot(false)}
             classrooms={classrooms}
