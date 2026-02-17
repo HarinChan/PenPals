@@ -49,6 +49,21 @@ export interface Classroom {
   created_at?: string;
 }
 
+const getAccountWithClassroomCount = (account: any) => {
+  if (!account) {
+    return account;
+  }
+
+  return {
+    ...account,
+    classroom_count:
+      account.classroom_count ?? account.profile_count ?? account.total_profiles ?? account.total_classrooms,
+  };
+};
+
+const getClassroomsFromResponse = (response: any): Classroom[] =>
+  response.classrooms ?? response.profiles ?? response.account?.classrooms ?? response.account?.profiles ?? [];
+
 /**
  * Authentication service for PenPals
  */
@@ -84,7 +99,11 @@ export class AuthService {
    * Get current authenticated user info
    */
   static async getCurrentUser(): Promise<UserWithClassrooms> {
-    return ApiClient.get<UserWithClassrooms>('/auth/me');
+    const response = await ApiClient.get<any>('/auth/me');
+    return {
+      account: getAccountWithClassroomCount(response.account ?? response.user ?? {}),
+      classrooms: getClassroomsFromResponse(response),
+    };
   }
 
   /**

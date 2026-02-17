@@ -1,6 +1,7 @@
 // API Service for ChromaDB operations
 
-const API_BASE_URL = 'http://localhost:5001/api';
+//const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'https://mirrormirrorwebapp-g8gke7g9dbfchpgr.uksouth-01.azurewebsites.net/api';
 
 export interface ChromaDBUploadResponse {
   status: 'success' | 'error';

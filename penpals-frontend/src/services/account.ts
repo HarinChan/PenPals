@@ -22,6 +22,21 @@ export interface UpdateAccountData {
   organization?: string;
 }
 
+const getAccountWithClassroomCount = (account: any) => {
+  if (!account) {
+    return account;
+  }
+
+  return {
+    ...account,
+    classroom_count:
+      account.classroom_count ?? account.profile_count ?? account.total_profiles ?? account.total_classrooms,
+  };
+};
+
+const getClassroomsFromResponse = (response: any): Classroom[] =>
+  response.classrooms ?? response.profiles ?? [];
+
 /**
  * Account management service
  */
@@ -30,7 +45,11 @@ export class AccountService {
    * Get current account details with all classrooms
    */
   static async getAccountDetails(): Promise<AccountDetails> {
-    return ApiClient.get<AccountDetails>('/account');
+    const response = await ApiClient.get<any>('/account');
+    return {
+      account: getAccountWithClassroomCount(response.account ?? response.user ?? {}),
+      classrooms: getClassroomsFromResponse(response),
+    };
   }
 
   /**
@@ -66,14 +85,27 @@ export class AccountService {
     total_count: number;
     account_id: number;
   }> {
-    return ApiClient.get('/account/classrooms');
+    const response = await ApiClient.get<any>('/account/profiles');
+    return {
+      classrooms: getClassroomsFromResponse(response),
+      total_count:
+        response.total_count ?? response.total_profiles ?? response.total_classrooms ?? response.count ?? 0,
+      account_id: response.account_id ?? response.profile_account_id ?? 0,
+    };
   }
 
   /**
    * Get account statistics
    */
   static async getAccountStats(): Promise<AccountStats> {
-    return ApiClient.get<AccountStats>('/account/stats');
+    const response = await ApiClient.get<any>('/account/stats');
+    return {
+      account_id: response.account_id,
+      total_classrooms: response.total_classrooms ?? response.total_profiles ?? 0,
+      total_connections: response.total_connections ?? response.total_profile_connections ?? 0,
+      unique_interests: response.unique_interests ?? response.unique_profile_interests ?? 0,
+      account_created: response.account_created ?? response.created_at,
+    };
   }
 
   /**
