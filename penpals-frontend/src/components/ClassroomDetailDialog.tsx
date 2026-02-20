@@ -10,7 +10,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
-import type { Classroom } from './MapView';
+import type { Classroom } from '../types';
 import { toast } from 'sonner';
 
 interface ClassroomDetailDialogProps {
@@ -24,6 +24,8 @@ interface ClassroomDetailDialogProps {
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const SCHEDULE_WINDOW_DAYS = 14;
+const ALLOWED_DURATIONS = [15, 30, 45, 60];
 const CURRENT_HOUR = new Date().getHours();
 const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
 
@@ -91,8 +93,9 @@ export default function ClassroomDetailDialog({
   accountLon = 0,
 }: ClassroomDetailDialogProps) {
   const [showScheduleCall, setShowScheduleCall] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string>('');
-  const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [durationMinutes, setDurationMinutes] = useState<number>(30);
+  const [selectedStartMinutes, setSelectedStartMinutes] = useState<number | null>(null);
   const [localTime, setLocalTime] = useState<string>('');
   const [localDate, setLocalDate] = useState<string>('');
 
@@ -136,22 +139,68 @@ export default function ClassroomDetailDialog({
   };
 
   // Get all days with common availability
-  const daysWithCommonAvailability = DAYS.filter(day => getCommonHours(day).length > 0);
+  const getDateOptions = () => {
+    const now = new Date();
+    const options: { value: string; label: string; day: string }[] = [];
+
+    for (let offset = 0; offset <= SCHEDULE_WINDOW_DAYS; offset++) {
+      const date = new Date(now);
+      date.setDate(now.getDate() + offset);
+      const day = getDayLabel(date);
+      if (getCommonHours(day).length > 0) {
+        options.push({
+          value: toYmd(date),
+          label: formatMeetingDay(date),
+          day,
+        });
+      }
+    }
+
+    return options;
+  };
+
+  const dateOptions = getDateOptions();
+  const selectedDateOption = dateOptions.find(option => option.value === selectedDate);
+  const selectedDateDay = selectedDateOption?.day || '';
+  const selectedDayCommonHours = selectedDateDay ? getCommonHours(selectedDateDay) : [];
+
+  const timeBounds = selectedDayCommonHours.length > 0
+    ? {
+      minStart: selectedDayCommonHours[0] * 60,
+      maxEnd: (selectedDayCommonHours[selectedDayCommonHours.length - 1] + 1) * 60,
+    }
+    : null;
+
+  const getAllStartTimes = (): number[] => {
+    if (!timeBounds) return [];
+    const allTimes: number[] = [];
+    for (let minutes = timeBounds.minStart; minutes < timeBounds.maxEnd; minutes += 15) {
+      allTimes.push(minutes);
+    }
+    return allTimes;
+  };
+
+  const isTimeSelectable = (minutes: number): boolean => {
+    if (!timeBounds) return false;
+    return minutes + durationMinutes <= timeBounds.maxEnd;
+  };
+
+  const allStartTimes = getAllStartTimes();
+  const hasValidTimeRange = allStartTimes.some(m => isTimeSelectable(m));
 
   // Get account timezone for display
   const accountTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const handleScheduleCall = () => {
     setShowScheduleCall(true);
-    if (daysWithCommonAvailability.length > 0) {
-      setSelectedDay(daysWithCommonAvailability[0]);
+    if (dateOptions.length > 0) {
+      setSelectedDate(dateOptions[0].value);
+      setDurationMinutes(30);
+      const initialHours = getCommonHours(dateOptions[0].day);
+      if (initialHours.length > 0) {
+        setSelectedStartMinutes(initialHours[0] * 60);
+      }
     }
-  };
-
-  const toggleHour = (hour: number) => {
-    setSelectedHours(prev =>
-      prev.includes(hour) ? prev.filter(h => h !== hour) : [...prev, hour].sort((a, b) => a - b)
-    );
   };
 
   const createMeeting = async (title: string, start: Date | null, end: Date | null) => {
@@ -195,42 +244,42 @@ export default function ClassroomDetailDialog({
   };
 
   const confirmScheduleCall = async () => {
-    if (selectedHours.length > 0 && selectedHours.length <= 12) {
-      // Calculate date
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const now = new Date();
-      const currentDayIndex = now.getDay();
-      const targetDayIndex = days.indexOf(selectedDay); // selectedDay is like 'Mon'
-
-      let daysToAdd = targetDayIndex - currentDayIndex;
-      if (daysToAdd <= 0) daysToAdd += 7;
-
-      const targetDate = new Date(now);
-      targetDate.setDate(now.getDate() + daysToAdd);
-
-      // Start time
-      const startTime = new Date(targetDate);
-      startTime.setHours(selectedHours[0], 0, 0, 0);
-
-      // End time (last hour + 1)
-      const endTime = new Date(targetDate);
-      endTime.setHours(selectedHours[selectedHours.length - 1] + 1, 0, 0, 0);
-
-      // Create meeting invitation
-      toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
-        loading: 'Sending meeting invitation...',
-        success: (data) => {
-          if (data) {
-            setShowScheduleCall(false);
-            setSelectedHours([]);
-            return `Meeting invitation sent to ${classroom.name}!`;
-          } else {
-            throw new Error("Failed");
-          }
-        },
-        error: 'Failed to send meeting invitation'
-      });
+    if (!selectedDate || selectedStartMinutes === null || !ALLOWED_DURATIONS.includes(durationMinutes)) {
+      toast.error('Please select a valid date, start time, and duration.');
+      return;
     }
+
+    const targetDate = new Date(`${selectedDate}T00:00:00`);
+    const now = new Date();
+    const maxAllowedDate = new Date(now);
+    maxAllowedDate.setDate(now.getDate() + SCHEDULE_WINDOW_DAYS);
+
+    if (targetDate > maxAllowedDate) {
+      toast.error('Meetings can be scheduled up to 2 weeks in advance.');
+      return;
+    }
+
+    const startTime = new Date(targetDate);
+    startTime.setHours(Math.floor(selectedStartMinutes / 60), selectedStartMinutes % 60, 0, 0);
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+
+    if (durationMinutes < 15 || durationMinutes > 60) {
+      toast.error('Meeting duration must be between 15 and 60 minutes.');
+      return;
+    }
+
+    toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
+      loading: 'Sending meeting invitation...',
+      success: (data) => {
+        if (data) {
+          setShowScheduleCall(false);
+          setSelectedStartMinutes(null);
+          return `Meeting invitation sent to ${classroom.name}!`;
+        }
+        throw new Error('Failed');
+      },
+      error: 'Failed to send meeting invitation'
+    });
   };
 
   return (
@@ -319,52 +368,112 @@ export default function ClassroomDetailDialog({
               <div className="space-y-4 bg-slate-50 dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
                 <h3 className="text-slate-900 dark:text-slate-100">Schedule a Call</h3>
 
-                {daysWithCommonAvailability.length > 0 ? (
+                {dateOptions.length > 0 ? (
                   <>
                     <div className="space-y-2">
-                      <label className="text-sm text-slate-700 dark:text-slate-300">Select Day</label>
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Select Day (up to 2 weeks)</label>
                       <div className="flex gap-2 flex-wrap">
-                        {daysWithCommonAvailability.map((day) => (
+                        {dateOptions.map((option) => (
                           <button
-                            key={day}
+                            key={option.value}
                             onClick={() => {
-                              setSelectedDay(day);
-                              setSelectedHours([]);
+                              setSelectedDate(option.value);
+                              const nextHours = getCommonHours(option.day);
+                              setSelectedStartMinutes(nextHours.length > 0 ? nextHours[0] * 60 : null);
                             }}
-                            className={`px-3 py-1 rounded ${selectedDay === day
+                            className={`px-3 py-1 rounded ${selectedDate === option.value
                               ? 'bg-blue-600 dark:bg-blue-700 text-white'
                               : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
                               }`}
                           >
-                            {day}
+                            {option.label}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {selectedDay && (
-                      <div className="space-y-2">
-                        <label className="text-sm text-slate-700 dark:text-slate-300">
-                          Select Time (1-12 hours, both available)
-                        </label>
-                        <div className="grid grid-cols-8 gap-1">
-                          {getCommonHours(selectedDay).map((hour) => (
-                            <button
-                              key={hour}
-                              onClick={() => toggleHour(hour)}
-                              className={`p-2 text-xs rounded ${selectedHours.includes(hour)
-                                ? 'bg-green-600 dark:bg-green-700 text-white'
-                                : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
-                                }`}
-                            >
-                              {hour}:00
-                            </button>
-                          ))}
+                    {selectedDate && timeBounds && (
+                      <div className="space-y-3">
+                        {/* Two-column grid for start time and duration */}
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Start Time Column */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                              Start Time
+                            </label>
+                            {hasValidTimeRange ? (
+                              <div className="grid grid-cols-2 gap-1">
+                                {allStartTimes.map((minutes) => {
+                                  const canSelect = isTimeSelectable(minutes);
+                                  return (
+                                    <button
+                                      key={minutes}
+                                      onClick={() => canSelect && setSelectedStartMinutes(minutes)}
+                                      disabled={!canSelect}
+                                      className={`p-2 text-xs rounded transition-colors ${
+                                        selectedStartMinutes === minutes
+                                          ? 'bg-green-600 dark:bg-green-700 text-white'
+                                          : canSelect
+                                            ? 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
+                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-600 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      {formatMinutes(minutes)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                Selected duration does not fit this window.
+                              </p>
+                            )}
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Window: {formatMinutes(timeBounds.minStart)} - {formatMinutes(timeBounds.maxEnd)}
+                            </p>
+                          </div>
+
+                          {/* Duration Column */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                              Duration
+                            </label>
+                            <div className="grid grid-cols-2 gap-1">
+                              {ALLOWED_DURATIONS.map((minutes) => (
+                                <button
+                                  key={minutes}
+                                  onClick={() => {
+                                    setDurationMinutes(minutes);
+                                    if (timeBounds && selectedStartMinutes !== null) {
+                                      const maxStart = timeBounds.maxEnd - minutes;
+                                      if (selectedStartMinutes > maxStart) {
+                                        setSelectedStartMinutes(maxStart);
+                                      }
+                                    }
+                                  }}
+                                  className={`p-2 text-xs rounded transition-colors ${
+                                    durationMinutes === minutes
+                                      ? 'bg-green-600 dark:bg-green-700 text-white'
+                                      : 'bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-500 border border-slate-300 dark:border-slate-500'
+                                  }`}
+                                >
+                                  {minutes}m
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        {selectedHours.length > 0 && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400">
-                            Selected: {selectedHours.length} hour(s) - {selectedHours[0]}:00 to {selectedHours[selectedHours.length - 1] + 1}:00
-                          </p>
+
+                        {/* Prominent Selected Summary */}
+                        {selectedStartMinutes !== null && hasValidTimeRange && (
+                          <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              {selectedDateOption?.label} • {formatMinutes(selectedStartMinutes)} - {formatMinutes(selectedStartMinutes + durationMinutes)}
+                            </p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                              {durationMinutes} minute meeting
+                            </p>
+                          </div>
                         )}
                       </div>
                     )}
@@ -372,7 +481,7 @@ export default function ClassroomDetailDialog({
                     <div className="flex gap-2">
                       <Button
                         onClick={confirmScheduleCall}
-                        disabled={selectedHours.length === 0 || selectedHours.length > 12}
+                        disabled={!selectedDate || selectedStartMinutes === null || !hasValidTimeRange}
                         className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
                       >
                         <Clock size={16} className="mr-2" />
@@ -381,7 +490,7 @@ export default function ClassroomDetailDialog({
                       <Button
                         onClick={() => {
                           setShowScheduleCall(false);
-                          setSelectedHours([]);
+                          setSelectedStartMinutes(null);
                         }}
                         variant="outline"
                         className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"

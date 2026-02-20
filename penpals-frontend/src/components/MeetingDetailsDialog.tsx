@@ -15,6 +15,23 @@ import { Badge } from './ui/badge';
 import { Calendar, Clock, Link as LinkIcon, Lock, Copy, Trash2, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 
+const SCHEDULE_WINDOW_DAYS = 14;
+const ALLOWED_DURATIONS = [15, 30, 45, 60];
+
+const formatMeetingDay = (date: Date): string => {
+    const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+    const day = date.toLocaleDateString(undefined, { day: 'numeric' });
+    const month = date.toLocaleDateString(undefined, { month: 'short' });
+    return `${weekday} ${day} ${month}`;
+};
+
+const toYmd = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 interface MeetingDetailsDialogProps {
     meetingId: number | null;
     open: boolean;
@@ -44,6 +61,7 @@ export default function MeetingDetailsDialog({
     const [isRescheduling, setIsRescheduling] = useState(false);
     const [newDate, setNewDate] = useState<string>('');
     const [newTime, setNewTime] = useState<string>('');
+    const [durationMinutes, setDurationMinutes] = useState<number>(30);
 
     useEffect(() => {
         if (open && meetingId) {
@@ -67,8 +85,11 @@ export default function MeetingDetailsDialog({
                 setMeeting(data);
                 // Initialize Reschedule inputs
                 const startDate = new Date(data.start_time);
+                const endDate = new Date(data.end_time);
+                const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
                 setNewDate(startDate.toISOString().split('T')[0]);
                 setNewTime(startDate.toTimeString().slice(0, 5));
+                setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
             } else {
                 toast.error("Failed to load meeting details");
                 onOpenChange(false);
@@ -115,7 +136,19 @@ export default function MeetingDetailsDialog({
 
         try {
             const startDateTime = new Date(`${newDate}T${newTime}`);
-            const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // Assume 1 hour default duration
+            const now = new Date();
+            const maxAllowedDate = new Date(now);
+            maxAllowedDate.setDate(now.getDate() + SCHEDULE_WINDOW_DAYS);
+            if (startDateTime > maxAllowedDate) {
+                toast.error('Meetings can be scheduled up to 2 weeks in advance.');
+                return;
+            }
+            if (!ALLOWED_DURATIONS.includes(durationMinutes)) {
+                toast.error('Meeting duration must be between 15 and 60 minutes.');
+                return;
+            }
+
+            const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
 
             const token = localStorage.getItem('penpals_token');
             const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
@@ -149,6 +182,9 @@ export default function MeetingDetailsDialog({
 
     const startDate = new Date(meeting.start_time);
     const endDate = new Date(meeting.end_time);
+    const today = new Date();
+    const latestDate = new Date();
+    latestDate.setDate(today.getDate() + SCHEDULE_WINDOW_DAYS);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,7 +209,7 @@ export default function MeetingDetailsDialog({
                             <Clock className="mt-0.5 text-blue-500" size={18} />
                             <div>
                                 <div className="font-medium text-slate-900 dark:text-slate-100">
-                                    {startDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+                                    {formatMeetingDay(startDate)}
                                 </div>
                                 <div className="text-sm text-slate-600 dark:text-slate-400">
                                     {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -
@@ -238,11 +274,34 @@ export default function MeetingDetailsDialog({
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Date</Label>
-                                                <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="bg-white dark:bg-slate-900" />
+                                                <Input
+                                                    type="date"
+                                                    value={newDate}
+                                                    min={toYmd(today)}
+                                                    max={toYmd(latestDate)}
+                                                    onChange={e => setNewDate(e.target.value)}
+                                                    className="bg-white dark:bg-slate-900"
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Time</Label>
                                                 <Input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="bg-white dark:bg-slate-900" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Duration</Label>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {ALLOWED_DURATIONS.map((minutes) => (
+                                                    <Button
+                                                        key={minutes}
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={durationMinutes === minutes ? 'default' : 'outline'}
+                                                        onClick={() => setDurationMinutes(minutes)}
+                                                    >
+                                                        {minutes} min
+                                                    </Button>
+                                                ))}
                                             </div>
                                         </div>
                                         <div className="flex gap-2 justify-end">
