@@ -21,6 +21,25 @@ from webex_service import WebexService
 from account import account_bp
 from classroom import classroom_bp
 
+MEETING_MIN_DURATION_MINUTES = 15
+MEETING_MAX_DURATION_MINUTES = 60
+MEETING_MAX_ADVANCE_DAYS = 14
+
+
+def validate_meeting_schedule(start_time: datetime, end_time: datetime):
+    if end_time <= start_time:
+        return "end_time must be after start_time"
+
+    duration_minutes = (end_time - start_time).total_seconds() / 60
+    if duration_minutes < MEETING_MIN_DURATION_MINUTES or duration_minutes > MEETING_MAX_DURATION_MINUTES:
+        return f"Meeting duration must be between {MEETING_MIN_DURATION_MINUTES} and {MEETING_MAX_DURATION_MINUTES} minutes"
+
+    max_allowed_start = datetime.utcnow() + timedelta(days=MEETING_MAX_ADVANCE_DAYS)
+    if start_time > max_allowed_start:
+        return f"Meetings can be scheduled up to {MEETING_MAX_ADVANCE_DAYS} days in advance"
+
+    return None
+
 def print_tables():
     with application.app_context():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
@@ -427,6 +446,10 @@ def create_webex_meeting():
         except ValueError:
             return jsonify({"msg": "Invalid date format"}), 400
 
+    schedule_error = validate_meeting_schedule(start_time, end_time)
+    if schedule_error:
+        return jsonify({"msg": schedule_error}), 400
+
     # Create invitation instead of meeting
     new_invitation = MeetingInvitation(
         sender_profile_id=creator_profile.id,
@@ -543,6 +566,10 @@ def manage_meeting(meeting_id):
             if end_time_str:
                 if end_time_str.endswith('Z'): end_time_str = end_time_str[:-1]
                 meeting.end_time = datetime.fromisoformat(end_time_str)
+
+            schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
+            if schedule_error:
+                return jsonify({"msg": schedule_error}), 400
                 
             # Update WebEx
             if meeting.webex_id:
