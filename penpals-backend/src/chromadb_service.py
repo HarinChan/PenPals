@@ -7,7 +7,7 @@ from chromadb.api.types import Metadata
 
 class ChromaDBService:
     """Service for managing document embeddings with ChromaDB"""
-    def __init__(self, persist_directory: str = "./chroma_db", collection_name: str = "documents"):
+    def __init__(self, persist_directory: str, collection_name: str = "documents"):
         """
         Initialize ChromaDB client and collection
         
