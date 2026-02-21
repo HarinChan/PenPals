@@ -1,11 +1,29 @@
 
 # Load environment variables from .env file before importing main
 from dotenv import load_dotenv
-load_dotenv()
+from pathlib import Path
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
+load_dotenv(dotenv_path=SRC_ROOT / '.env')
 from main import application, db
 from models import Account, Profile, Post, Notification, RecentCall, FriendRequest, Relation
-from werkzeug.security import generate_password_hash
+import bcrypt
+import hashlib
+import os
 from datetime import datetime, timedelta
+
+CLIENT_HASH_SALT = (
+    os.getenv("VITE_CLIENT_HASH_SALT")
+    or os.getenv("CLIENT_HASH_SALT")
+    or "penpals-client-salt"
+)
+
+
+def client_hash(password: str) -> str:
+    data = f"{CLIENT_HASH_SALT}:{password}".encode()
+    return hashlib.sha256(data).hexdigest()
 
 def init_db():
     with application.app_context():
@@ -15,7 +33,7 @@ def init_db():
         print("Database tables re-created successfully!")
 
         # 1. Create a default account for "Me"
-        me_password = generate_password_hash("Metest123!")
+        me_password = bcrypt.hashpw(client_hash("Metest123!").encode(), bcrypt.gensalt(10)).decode()
         me_account = Account(email="me@penpals.com", password_hash=me_password, organization="My School")
         db.session.add(me_account)
         db.session.commit()
@@ -72,7 +90,7 @@ def init_db():
         for c in classrooms_data:
             # Create a dummy account for each classroom
             email = f"{c['name'].replace(' ', '').lower()}@penpals.com"
-            pwd = generate_password_hash("Test1234!")
+            pwd = bcrypt.hashpw(client_hash("Test1234!").encode(), bcrypt.gensalt(10)).decode()
             account = Account(email=email, password_hash=pwd, organization="Global School")
             db.session.add(account)
             db.session.commit()

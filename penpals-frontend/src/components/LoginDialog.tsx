@@ -9,6 +9,16 @@ import { useTheme } from './ThemeProvider';
 import LocationAutocomplete from './LocationAutocomplete';
 import type { SelectedLocation } from '../services/location';
 
+const CLIENT_HASH_SALT = (import.meta as any).env?.VITE_CLIENT_HASH_SALT || 'penpals-client-salt';
+
+const hashPassword = async (plainText: string): Promise<string> => {
+  const data = new TextEncoder().encode(`${CLIENT_HASH_SALT}:${plainText}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+};
+
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,8 +42,10 @@ export default function LoginDialog({
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
   const [signupClassroomName, setSignupClassroomName] = useState('');
   const [signupLocation, setSignupLocation] = useState<SelectedLocation | null>(null);
+  const [passwordMatchError, setPasswordMatchError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
@@ -43,7 +55,8 @@ export default function LoginDialog({
     e.preventDefault();
     setInternalLoading(true);
     try {
-      await onLogin(loginEmail, loginPassword);
+      const hashedPassword = await hashPassword(loginPassword);
+      await onLogin(loginEmail, hashedPassword);
       // Only clear fields on successful login (no error)
       if (!loginError) {
         setLoginEmail('');
@@ -59,13 +72,23 @@ export default function LoginDialog({
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate passwords match
+    if (signupPassword !== signupPasswordConfirm) {
+      setPasswordMatchError('Passwords do not match');
+      return;
+    }
+    
+    setPasswordMatchError('');
     setInternalLoading(true);
     try {
-      await onSignup(signupEmail, signupPassword, signupClassroomName, signupLocation);
+      const hashedPassword = await hashPassword(signupPassword);
+      await onSignup(signupEmail, hashedPassword, signupClassroomName, signupLocation || undefined);
       // Only clear fields on successful signup
       if (!signupError) {
         setSignupEmail('');
         setSignupPassword('');
+        setSignupPasswordConfirm('');
         setSignupClassroomName('');
         setSignupLocation(null);
       }
@@ -167,6 +190,13 @@ export default function LoginDialog({
                 </p>
               </div>
             )}
+            {passwordMatchError && (
+              <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {passwordMatchError}
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="signup-classroom" className="text-slate-900 dark:text-slate-100">Account Name</Label>
@@ -208,13 +238,35 @@ export default function LoginDialog({
                   type="password"
                   placeholder="••••••••"
                   value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
+                  onChange={(e) => {
+                    setSignupPassword(e.target.value);
+                    setPasswordMatchError('');
+                  }}
                   required
                   className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                 />
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Must be 8+ characters with uppercase, lowercase, digit, and special character
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-password-confirm" className="text-slate-900 dark:text-slate-100">Confirm Password</Label>
+                <Input
+                  id="signup-password-confirm"
+                  type="password"
+                  placeholder="••••••••"
+                  value={signupPasswordConfirm}
+                  onChange={(e) => {
+                    setSignupPasswordConfirm(e.target.value);
+                    setPasswordMatchError('');
+                  }}
+                  required
+                  className={`bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 ${
+                    passwordMatchError
+                      ? 'border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500'
+                      : 'border-slate-300 dark:border-slate-600'
+                  }`}
+                />
               </div>
               <Button 
                 type="submit" 
