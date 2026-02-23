@@ -56,6 +56,26 @@ const AVAILABLE_SUBJECTS = [
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+const formatMeetingDateTime = (dateInput: string): string => {
+  const date = new Date(dateInput);
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+  const day = date.toLocaleDateString(undefined, { day: 'numeric' });
+  const month = date.toLocaleDateString(undefined, { month: 'short' });
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${weekday} ${day} ${month} ${time}`;
+};
+
+const formatMeetingTimeRange = (startInput: string, endInput: string): string => {
+  const start = new Date(startInput);
+  const end = new Date(endInput);
+  const weekday = start.toLocaleDateString(undefined, { weekday: 'short' });
+  const day = start.toLocaleDateString(undefined, { day: 'numeric' });
+  const month = start.toLocaleDateString(undefined, { month: 'short' });
+  const startTime = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const endTime = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${weekday} ${day} ${month} ${startTime} - ${endTime}`;
+};
+
 
 
 interface SidePanelProps {
@@ -1246,9 +1266,7 @@ export default function SidePanel({
                                   <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
                                   <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                     <Clock size={12} />
-                                    {new Date(meeting.start_time).toLocaleString(undefined, {
-                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                    })}
+                                    {formatMeetingDateTime(meeting.start_time)}
                                   </div>
                                   <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                     Host: {meeting.creator_name}
@@ -1329,9 +1347,7 @@ export default function SidePanel({
                                       <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                         <Clock size={12} />
-                                        {new Date(invitation.start_time).toLocaleString(undefined, {
-                                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                        })}
+                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
                                       </div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                         From: {invitation.sender_name}
@@ -1377,9 +1393,7 @@ export default function SidePanel({
                                       <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                         <Clock size={12} />
-                                        {new Date(invitation.start_time).toLocaleString(undefined, {
-                                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                        })}
+                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
                                       </div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                         To: {invitation.receiver_name}
