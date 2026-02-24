@@ -30,6 +30,7 @@
             "@radix-ui/react-toggle-group": "^1.1.2",
             "@radix-ui/react-tooltip": "^1.1.8",
             "@radix-ui/react-visually-hidden": "^1.1.1",
+            "@tauri-apps/api": "^2.10.1",
             "@types/leaflet": "^1.9.21",
             "bcryptjs": "^3.0.3",
             "class-variance-authority": "^0.7.1",
