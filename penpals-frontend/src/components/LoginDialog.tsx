@@ -149,7 +149,7 @@ export default function LoginDialog({
                 <Input
                   id="login-email"
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="your_login@email.com"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   required
@@ -215,7 +215,7 @@ export default function LoginDialog({
                 <Input
                   id="signup-email"
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="your_signup@email.com"
                   value={signupEmail}
                   onChange={(e) => setSignupEmail(e.target.value)}
                   required
