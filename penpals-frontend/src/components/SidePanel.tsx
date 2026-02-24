@@ -12,10 +12,9 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
-import type { Classroom } from './MapView';
-import { classrooms } from './MapView';
-import { Account, RecentCall, Friend, FriendRequest, Notification } from '../types';
-import { WebexService } from '../services';
+import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
+import { WebexService, ClassroomService } from '../services';
+import { FriendsService } from '../services/friends';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
@@ -34,7 +33,7 @@ import {
 } from './ui/select';
 
 const AVAILABLE_SUBJECTS = [
-  'Math',
+  'Maths',
   'English',
   'Biology',
   'Chemistry',
@@ -57,6 +56,26 @@ const AVAILABLE_SUBJECTS = [
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+const formatMeetingDateTime = (dateInput: string): string => {
+  const date = new Date(dateInput);
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+  const day = date.toLocaleDateString(undefined, { day: 'numeric' });
+  const month = date.toLocaleDateString(undefined, { month: 'short' });
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${weekday} ${day} ${month} ${time}`;
+};
+
+const formatMeetingTimeRange = (startInput: string, endInput: string): string => {
+  const start = new Date(startInput);
+  const end = new Date(endInput);
+  const weekday = start.toLocaleDateString(undefined, { weekday: 'short' });
+  const day = start.toLocaleDateString(undefined, { day: 'numeric' });
+  const month = start.toLocaleDateString(undefined, { month: 'short' });
+  const startTime = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const endTime = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${weekday} ${day} ${month} ${startTime} - ${endTime}`;
+};
+
 
 
 interface SidePanelProps {
@@ -64,6 +83,7 @@ interface SidePanelProps {
   onClassroomSelect: (classroom: Classroom) => void;
   currentAccount: Account;
   accounts: Account[];
+  classrooms: Classroom[];
   onAccountChange: (accountId: string) => void;
   onAccountUpdate: (account: Account) => void;
   onAccountCreate: (account: Account) => void;
@@ -74,6 +94,7 @@ interface SidePanelProps {
   onCreatePost: (content: string, imageUrl?: string) => void;
   onLikePost: (postId: string) => void;
   likedPosts?: Set<string>;
+  loadingPosts?: boolean;
 }
 
 export default function SidePanel({
@@ -81,6 +102,7 @@ export default function SidePanel({
   onClassroomSelect,
   currentAccount,
   accounts,
+  classrooms,
   onAccountChange,
   onAccountUpdate,
   onAccountCreate,
@@ -91,6 +113,7 @@ export default function SidePanel({
   onCreatePost,
   onLikePost,
   likedPosts,
+  loadingPosts = false,
 }: SidePanelProps) {
   const [customInterest, setCustomInterest] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,32 +126,67 @@ export default function SidePanel({
   const [webexConnected, setWebexConnected] = useState(false);
   const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
   const [meetingDetailsOpen, setMeetingDetailsOpen] = useState(false);
+  const [isSavingInterests, setIsSavingInterests] = useState(false);
 
   const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+  const [invitationsOpen, setInvitationsOpen] = useState(true);
+  const [invitationsTab, setInvitationsTab] = useState<'received' | 'sent'>('received');
+  const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
+  const [sentInvitations, setSentInvitations] = useState<any[]>([]);
+
+  const fetchMeetings = async () => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch('http://127.0.0.1:5001/api/meetings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUpcomingMeetings(data.meetings);
+      }
+    } catch (err) {
+      console.error("Failed to fetch meetings", err);
+    }
+  };
+
+  const fetchInvitations = async () => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      // Fetch received invitations
+      const receivedResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (receivedResponse.ok) {
+        const data = await receivedResponse.json();
+        setReceivedInvitations(data.invitations);
+      }
+
+      // Fetch sent invitations
+      const sentResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations/sent', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (sentResponse.ok) {
+        const data = await sentResponse.json();
+        setSentInvitations(data.sent_invitations);
+      }
+    } catch (err) {
+      console.error("Failed to fetch invitations", err);
+    }
+  };
 
   useEffect(() => {
-    const fetchMeetings = async () => {
-      try {
-        const token = localStorage.getItem('penpals_token');
-        // Note: In a real app we might get token from a context or prop, assuming localStorage 'token' exists based on typical auth flows.
-        // If not found, we might need to rely on cookie or other mechanism.
-        if (!token) return;
-
-        const response = await fetch('http://127.0.0.1:5001/api/meetings', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUpcomingMeetings(data.meetings);
-        }
-      } catch (err) {
-        console.error("Failed to fetch meetings", err);
-      }
-    };
     fetchMeetings();
-    // Set up a polling interval to refresh meetings every minute
-    const interval = setInterval(fetchMeetings, 60000);
+    fetchInvitations();
+    // Set up a polling interval to refresh meetings and invitations every minute
+    const interval = setInterval(() => {
+      fetchMeetings();
+      fetchInvitations();
+    }, 60000);
     return () => clearInterval(interval);
   }, [currentAccount.id]);
 
@@ -145,6 +203,81 @@ export default function SidePanel({
   }, [currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+
+  const handleAcceptInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/accept`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const message = data.meeting.web_link
+          ? `Meeting invitation accepted! Meeting link: ${data.meeting.web_link}`
+          : "Meeting invitation accepted! The meeting has been created.";
+        toast.success(message);
+        // Refresh both lists
+        fetchInvitations();
+        fetchMeetings();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to accept invitation");
+      }
+    } catch (err) {
+      console.error("Failed to accept invitation", err);
+      toast.error("Error accepting invitation");
+    }
+  };
+
+  const handleDeclineInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/decline`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        toast.success("Invitation declined");
+        fetchInvitations();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to decline invitation");
+      }
+    } catch (err) {
+      console.error("Failed to decline invitation", err);
+      toast.error("Error declining invitation");
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: number) => {
+    try {
+      const token = localStorage.getItem('penpals_token');
+      if (!token) return;
+
+      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        toast.success("Invitation cancelled");
+        fetchInvitations();
+      } else {
+        const error = await response.json();
+        toast.error(error.msg || "Failed to cancel invitation");
+      }
+    } catch (err) {
+      console.error("Failed to cancel invitation", err);
+      toast.error("Error cancelling invitation");
+    }
+  };
 
   // Create Classroom Dialog State
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
@@ -211,22 +344,107 @@ export default function SidePanel({
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [editingAccountLocation, setEditingAccountLocation] = useState(false);
 
-  const allInterests = [...AVAILABLE_SUBJECTS];
+  // Helper: Convert string to title case
+  const toTitleCase = (str: string): string => {
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
-  const toggleInterest = (interest: string) => {
+  // Deduplicate and clean interests (remove empty strings and case-insensitive duplicates)
+  const cleanedInterests = useMemo(() => {
+    const normalized = new Map<string, string>();
+    (currentAccount.interests || []).forEach((interest) => {
+      const trimmed = interest.trim();
+      if (trimmed) {
+        const lowercase = trimmed.toLowerCase();
+        normalized.set(lowercase, trimmed);
+      }
+    });
+    return Array.from(normalized.values());
+  }, [currentAccount.interests]);
+
+  // Combine predefined subjects with custom interests from database
+  const allInterests = useMemo(() => {
+    const combined = new Set([...AVAILABLE_SUBJECTS, ...cleanedInterests]);
+    return Array.from(combined);
+  }, [cleanedInterests]);
+
+  const sortedInterests = useMemo(() => {
+    return [...allInterests].sort((a, b) => {
+      const aChecked = currentAccount.interests.includes(a);
+      const bChecked = currentAccount.interests.includes(b);
+      if (aChecked !== bChecked) return aChecked ? -1 : 1;
+      return a.localeCompare(b);
+    });
+  }, [allInterests, currentAccount.interests]);
+
+  const toggleInterest = async (interest: string) => {
     const newInterests = currentAccount.interests.includes(interest)
       ? currentAccount.interests.filter(i => i !== interest)
       : [...currentAccount.interests, interest];
 
+    // Update UI immediately for responsiveness
     onAccountUpdate({ ...currentAccount, interests: newInterests });
+
+    // Persist to database with title case
+    setIsSavingInterests(true);
+    try {
+      const { ClassroomService } = await import('../services/classroom');
+      const titleCaseInterests = newInterests.map(toTitleCase);
+      await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: titleCaseInterests });
+      toast.success('Interest updated');
+    } catch (error) {
+      console.error('Failed to save interest:', error);
+      toast.error('Failed to save interest');
+      // Revert optimistic update if save fails
+      onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
+    } finally {
+      setIsSavingInterests(false);
+    }
   };
 
-  const addCustomInterest = () => {
-    if (customInterest.trim() && !allInterests.includes(customInterest.trim())) {
-      const newInterests = [...currentAccount.interests, customInterest.trim()];
+  const addCustomInterest = async () => {
+    const trimmedInput = customInterest.trim();
+    if (!trimmedInput) return;
+
+    const titleCaseInput = toTitleCase(trimmedInput);
+    
+    // Check if it exists in the list (case-insensitive)
+    const existingInterest = allInterests.find(
+      (interest) => interest.toLowerCase() === titleCaseInput.toLowerCase()
+    );
+
+    if (existingInterest) {
+      // If it exists, toggle it
+      await toggleInterest(existingInterest);
+    } else {
+      // If it doesn't exist, add it as a new custom interest
+      const newInterests = [...currentAccount.interests, titleCaseInput];
+
+      // Update UI immediately for responsiveness
       onAccountUpdate({ ...currentAccount, interests: newInterests });
       setCustomInterest('');
+
+      // Persist to database
+      setIsSavingInterests(true);
+      try {
+        const { ClassroomService } = await import('../services/classroom');
+        await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: newInterests });
+        toast.success('Interest added');
+      } catch (error) {
+        console.error('Failed to save custom interest:', error);
+        toast.error('Failed to save interest');
+        // Revert optimistic update if save fails
+        onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
+      } finally {
+        setIsSavingInterests(false);
+      }
     }
+
+    setCustomInterest('');
   };
 
   // Helper: Format schedule array to string (e.g., [9, 10, 11] -> "9, 10, 11")
@@ -346,19 +564,20 @@ export default function SidePanel({
 
   const createNewAccount = () => {
     if (accounts.length >= 12) {
-      return; // Don't create if at limit
+      return;
     }
 
-    // Reset form and open dialog
+    const defaultDescription = `Classroom managed by: `;
+
     setNewClassroomData({
       name: '',
       size: 20,
-      description: '',
+      description: defaultDescription,
     });
     setCreateClassroomDialogOpen(true);
   };
 
-  const submitCreateClassroom = () => {
+  const submitCreateClassroom = async () => {
     toast.info('Attempting to create classroom...'); // DEBUG
     try {
       // Validate
@@ -373,19 +592,32 @@ export default function SidePanel({
         return;
       }
 
-      const newAccount: Account = {
-        id: `account-${Date.now()}`,
-        classroomName: newClassroomData.name.trim(),
-        location: currentAccount.location, // Inherit location
-        size: newClassroomData.size,
-        description: newClassroomData.description,
+      const classroomResponse = await ClassroomService.createClassroom({
+        name: newClassroomData.name.trim(),
+        location: currentAccount.location,
+        latitude: currentAccount.y.toString(),
+        longitude: currentAccount.x.toString(),
+        class_size: newClassroomData.size,
         interests: [],
+      });
+
+      const backendClassroom = classroomResponse.classroom;
+
+      const newAccount: Account = {
+        id: String(backendClassroom.id),
+        classroomName: backendClassroom.name,
+        location: backendClassroom.location || currentAccount.location,
+        size: backendClassroom.class_size || 20,
+        description: newClassroomData.description,
+        interests: backendClassroom.interests || [],
         schedule: {},
-        // Inherit coordinates from the current account
-        x: currentAccount.x,
-        y: currentAccount.y,
+        // Use coordinates from backend or fallback to current
+        x: backendClassroom.longitude ? parseFloat(backendClassroom.longitude) : currentAccount.x,
+        y: backendClassroom.latitude ? parseFloat(backendClassroom.latitude) : currentAccount.y,
         recentCalls: [],
         friends: [],
+        receivedFriendRequests: [],
+        notifications: [],
       };
 
       onAccountCreate(newAccount);
@@ -393,7 +625,7 @@ export default function SidePanel({
       toast.success('New classroom created!');
     } catch (err: any) {
       console.error(err);
-      toast.error('Error creating classroom: ' + err.message);
+      toast.error('Error creating classroom: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -466,113 +698,152 @@ export default function SidePanel({
       });
   }, [searchQuery, currentAccount.interests, currentAccount.schedule]);
 
-  const handleClassroomClick = (classroom: Classroom) => {
+  const openClassroomDetails = (classroom: Classroom) => {
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
   };
 
+  const handleClassroomClick = (classroom: Classroom) => {
+    if (selectedClassroom?.id !== classroom.id) {
+      onClassroomSelect(classroom);
+    }
+    openClassroomDetails(classroom);
+  };
+
   useEffect(() => {
     if (selectedClassroom) {
-      handleClassroomClick(selectedClassroom);
+      openClassroomDetails(selectedClassroom);
     }
   }, [selectedClassroom]);
 
-  const removeFriend = (friendId: string) => {
-    const friend = (currentAccount.friends || []).find(f => f.id === friendId);
-    const updatedFriends = (currentAccount.friends || []).filter(f => f.id !== friendId);
-    onAccountUpdate({ ...currentAccount, friends: updatedFriends });
-    if (friend) {
-      toast.success(`Removed ${friend.classroomName} from friends`);
+
+
+  // ...
+
+  const removeFriend = async (friendId: string) => {
+    try {
+      await FriendsService.removeFriend(friendId);
+
+      const updatedFriends = (currentAccount.friends || []).filter(f => f.classroomId !== friendId && f.id !== friendId);
+      onAccountUpdate({ ...currentAccount, friends: updatedFriends });
+      toast.success('Removed friend');
+    } catch (error) {
+      console.error("Failed to remove friend", error);
+      toast.error("Failed to remove friend");
     }
   };
 
-  const addFriend = (classroom: Classroom) => {
-    const newFriend: Friend = {
-      id: `friend-${Date.now()}`,
-      classroomId: classroom.id,
-      classroomName: classroom.name,
-      location: classroom.location,
-      addedDate: new Date(),
-      friendshipStatus: 'pending',
-    };
-    const updatedFriends = [...(currentAccount.friends || []), newFriend];
+  const addFriend = async (classroom: Classroom) => {
+    try {
+      await FriendsService.sendRequest(classroom.id);
 
-    // Add notification for the other user (simulated)
-    const notification: Notification = {
-      id: `notif-${Date.now()}`,
-      type: 'friend_request_received',
-      title: 'New Friend Request',
-      message: `${currentAccount.classroomName} sent you a friend request!`,
-      timestamp: new Date(),
-      read: false,
-      relatedId: classroom.id,
-    };
-    const updatedNotifications = [...(currentAccount.notifications || []), notification];
+      // Optimistically add to some local state or just notify user
+      // Since it's pending, we might not show it in "Friends" list yet, 
+      // but maybe show "Pending Sent" button state.
+      // For now, let's just show success message.
+      toast.success(`Friend request sent to ${classroom.name}`);
 
-    onAccountUpdate({ ...currentAccount, friends: updatedFriends, notifications: updatedNotifications });
-    toast.success(`Friend request sent to ${classroom.name}`);
+      // If we want to show it as "Pending" immediately without reload:
+      // We would need a "sentRequests" array in user state, which we don't strictly have deep implemented yet.
+      // But we can reload user data.
+
+    } catch (error: any) {
+      console.error("Failed to send friend request", error);
+      toast.error(error.message || "Failed to send request");
+    }
   };
 
-  const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' => {
+  const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' | 'received' => {
+    // Check accepted friends
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
-    if (!friend) return 'none';
-    return friend.friendshipStatus || 'none';
+    if (friend) return 'accepted';
+
+    // Check if we received a request from them
+    const received = (currentAccount.receivedFriendRequests || []).find(r => r.senderId === classroomId.toString());
+    if (received) return 'received';
+
+    // We don't track sent requests cleanly in frontend state yet without reload, 
+    // unless we add 'sentRequests' to Account interface. 
+    // For now, 'none' is safe fallback.
+    return 'none';
   };
 
+  // Improved toggle function
   const toggleFriendRequest = (classroom: Classroom) => {
     const status = getFriendshipStatus(classroom.id);
 
     if (status === 'accepted') {
-      // Unfriend
-      const friendToRemove = currentAccount.friends?.find(f => f.classroomId === classroom.id);
-      if (friendToRemove) removeFriend(friendToRemove.id);
-    } else if (status === 'pending') {
-      // Cancel request
-      const friendToRemove = currentAccount.friends?.find(f => f.classroomId === classroom.id);
-      if (friendToRemove) {
-        const updatedFriends = (currentAccount.friends || []).filter(f => f.id !== friendToRemove.id);
-        onAccountUpdate({ ...currentAccount, friends: updatedFriends });
-        toast.success(`Friend request to ${classroom.name} cancelled`);
+      // Confirm before deleting?
+      if (confirm(`Remove ${classroom.name} from friends?`)) {
+        removeFriend(classroom.id);
       }
+    } else if (status === 'received') {
+      // Accept request
+      acceptFriendRequest(classroom.id);
     } else {
-      // Send friend request
+      // Send request
       addFriend(classroom);
     }
   };
 
-  const acceptFriendRequest = (classroomId: string) => {
-    const updatedFriends = (currentAccount.friends || []).map(f =>
-      f.classroomId === classroomId ? { ...f, friendshipStatus: 'accepted' as const } : f
-    );
+  const acceptFriendRequest = async (senderId: string, requestId?: string) => {
+    try {
+      await FriendsService.acceptRequest(requestId, senderId);
 
-    // Add notification
-    const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
-    if (friend) {
-      const notification: Notification = {
-        id: `notif-${Date.now()}`,
-        type: 'friend_request_accepted',
-        title: 'Friend Request Accepted',
-        message: `${friend.classroomName} accepted your friend request!`,
-        timestamp: new Date(),
-        read: false,
-        relatedId: classroomId,
-      };
-      const updatedNotifications = [...(currentAccount.notifications || []), notification];
-      onAccountUpdate({ ...currentAccount, friends: updatedFriends, notifications: updatedNotifications });
-      toast.success(`You are now friends with ${friend.classroomName}!`);
+      // Optimistic Update
+      // Remove from requests
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+
+      // Add to friends
+      // We need classroom details for this. 
+      // If called from SidePanel list, we have `classroom` object. 
+      // If called from Notification, we might fetch it or just reload.
+
+      // Easiest is to force reload user data if possible, or just update requests
+      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+
+      toast.success("Friend request accepted!");
+      // Trigger a reload of user data in parent if possible, or we rely on next poll/action
+
+    } catch (error) {
+      console.error("Failed to accept request", error);
+      toast.error("Failed to accept request");
     }
   };
 
-  const markNotificationAsRead = (notificationId: string) => {
-    const updatedNotifications = (currentAccount.notifications || []).map(n =>
-      n.id === notificationId ? { ...n, read: true } : n
-    );
-    onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+  const rejectFriendRequest = async (senderId: string, requestId?: string) => {
+    try {
+      await FriendsService.rejectRequest(requestId, senderId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+      toast.success("Friend request rejected");
+    } catch (error) {
+      console.error("Failed to reject request", error);
+      toast.error("Failed to reject request");
+    }
+  }
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      await FriendsService.markNotificationRead(notificationId);
+      const updatedNotifications = (currentAccount.notifications || []).map(n =>
+        n.id === notificationId ? { ...n, read: true } : n
+      );
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    } catch (e) { console.error(e); }
   };
 
-  const clearNotification = (notificationId: string) => {
-    const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
-    onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+  const clearNotification = async (notificationId: string) => {
+    try {
+      await FriendsService.deleteNotification(notificationId);
+      const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    } catch (e) {
+      console.error(e);
+      // optimistic remove anyway
+      const updatedNotifications = (currentAccount.notifications || []).filter(n => n.id !== notificationId);
+      onAccountUpdate({ ...currentAccount, notifications: updatedNotifications });
+    }
   };
 
 
@@ -829,57 +1100,62 @@ export default function SidePanel({
                   <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
                     <ChevronDown className={`transition-transform ${interestsOpen ? '' : '-rotate-90'}`} size={16} />
                     <BookOpen className="text-blue-600 dark:text-blue-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Your Interests & Subjects</h3>
+                    <h3 className="text-slate-900 dark:text-slate-100">Your Interests & subjects</h3>
                   </CollapsibleTrigger>
 
                   <CollapsibleContent>
-
-                    <ScrollArea className="h-64">
-                      <div className="space-y-3 pr-4">
-                        {allInterests.map((subject) => (
-                          <div key={subject} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={subject}
-                              checked={currentAccount.interests.includes(subject)}
-                              onCheckedChange={() => toggleInterest(subject)}
-                            />
-                            <Label
-                              htmlFor={subject}
-                              className="text-slate-900 dark:text-slate-100 cursor-pointer"
-                            >
-                              {subject}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-
-                    <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    {/* Search/Add Input */}
+                    <div className="flex gap-2 mb-4">
                       <Input
                         type="text"
                         value={customInterest}
                         onChange={(e) => setCustomInterest(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addCustomInterest()}
-                        placeholder="Add custom interest..."
-                        className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                        onKeyPress={(e) => e.key === 'Enter' && !isSavingInterests && addCustomInterest()}
+                        placeholder="Add or search interests..."
+                        disabled={isSavingInterests}
+                        className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 disabled:opacity-50"
                       />
                       <button
                         onClick={addCustomInterest}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                        disabled={isSavingInterests || !customInterest.trim()}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-md transition-colors"
                       >
                         <Plus size={16} className="text-white" />
                       </button>
                     </div>
 
-                    {currentAccount.interests.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        {currentAccount.interests.map((interest) => (
-                          <Badge key={interest} variant="secondary" className="bg-blue-600 text-white">
-                            {interest}
-                          </Badge>
-                        ))}
+                    {/* Interest Count */}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                      {cleanedInterests.length} interests selected
+                    </p>
+
+                    {/* Checkbox List */}
+                    <ScrollArea className="h-64 border border-slate-200 dark:border-slate-700 rounded-md p-3">
+                      <div className="space-y-3 pr-4">
+                        {sortedInterests.length === 0 ? (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">
+                            No interests found
+                          </p>
+                        ) : (
+                          sortedInterests.map((subject) => (
+                            <div key={subject} className="flex items-center gap-3">
+                              <Checkbox
+                                id={subject}
+                                checked={currentAccount.interests.includes(subject)}
+                                onCheckedChange={() => !isSavingInterests && toggleInterest(subject)}
+                                disabled={isSavingInterests}
+                              />
+                              <Label
+                                htmlFor={subject}
+                                className="text-slate-900 dark:text-slate-100 cursor-pointer text-sm"
+                              >
+                                {toTitleCase(subject)}
+                              </Label>
+                            </div>
+                          ))
+                        )}
                       </div>
-                    )}
+                    </ScrollArea>
                   </CollapsibleContent>
                 </div>
               </Card>
@@ -990,9 +1266,7 @@ export default function SidePanel({
                                   <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
                                   <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                     <Clock size={12} />
-                                    {new Date(meeting.start_time).toLocaleString(undefined, {
-                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                    })}
+                                    {formatMeetingDateTime(meeting.start_time)}
                                   </div>
                                   <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                     Host: {meeting.creator_name}
@@ -1000,14 +1274,146 @@ export default function SidePanel({
                                 </div>
                                 <Button
                                   size="sm"
-                                  onClick={() => window.open(meeting.web_link, '_blank')}
-                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2"
+                                  onClick={() => meeting.web_link && window.open(meeting.web_link, '_blank')}
+                                  disabled={!meeting.web_link}
+                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Join
                                 </Button>
                               </div>
                             </div>
                           ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Meeting Invitations Widget - Unified with Toggle */}
+            <Collapsible open={invitationsOpen} onOpenChange={setInvitationsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
+                    <ChevronDown className={`transition-transform ${invitationsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Phone className="text-blue-600 dark:text-blue-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Meeting Invitations</h3>
+                    {(invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length) > 0 && (
+                      <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length}
+                      </Badge>
+                    )}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    {/* Tab Toggle */}
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        size="sm"
+                        variant={invitationsTab === 'received' ? 'default' : 'outline'}
+                        onClick={() => setInvitationsTab('received')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Received
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={invitationsTab === 'sent' ? 'default' : 'outline'}
+                        onClick={() => setInvitationsTab('sent')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Sent
+                      </Button>
+                    </div>
+
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2 pr-4">
+                        {invitationsTab === 'received' ? (
+                          // Received Invitations
+                          <>
+                            {receivedInvitations.length === 0 ? (
+                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                                No incoming invitations
+                              </div>
+                            ) : (
+                              receivedInvitations.map((invitation) => (
+                                <div
+                                  key={invitation.id}
+                                  className={`p-3 rounded-lg border bg-green-50 dark:bg-slate-700 border-green-200 dark:border-slate-600`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                        <Clock size={12} />
+                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
+                                      </div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                        From: {invitation.sender_name}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleAcceptInvitation(invitation.id)}
+                                      className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+                                    >
+                                      Accept
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="flex-1 h-7 text-xs"
+                                      onClick={() => handleDeclineInvitation(invitation.id)}
+                                    >
+                                      Decline
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </>
+                        ) : (
+                          // Sent Invitations
+                          <>
+                            {sentInvitations.length === 0 ? (
+                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                                No pending outgoing invitations
+                              </div>
+                            ) : (
+                              sentInvitations.map((invitation) => (
+                                <div
+                                  key={invitation.id}
+                                  className={`p-3 rounded-lg border bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                        <Clock size={12} />
+                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
+                                      </div>
+                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                        To: {invitation.receiver_name}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      onClick={() => handleCancelInvitation(invitation.id)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </>
                         )}
                       </div>
                     </ScrollArea>
@@ -1286,7 +1692,7 @@ export default function SidePanel({
                 {editingAccountLocation ? (
                   <div className="space-y-3">
                     <LocationAutocomplete
-                      label="Account Location"
+                      label=""
                       placeholder="Search for your location..."
                       value={selectedLocation}
                       onChange={setSelectedLocation}
@@ -1419,6 +1825,7 @@ export default function SidePanel({
               onCreatePost={onCreatePost}
               onLikePost={onLikePost}
               likedPosts={likedPosts}
+              isLoading={loadingPosts}
             />
           </TabsContent>
         </Tabs>
@@ -1428,10 +1835,16 @@ export default function SidePanel({
       <ClassroomDetailDialog
         classroom={detailDialogClassroom}
         open={showDetailDialog}
-        onOpenChange={setShowDetailDialog}
+        onOpenChange={(open) => {
+          setShowDetailDialog(open);
+          if (!open) {
+            onClassroomSelect(null as any);
+          }
+        }}
         mySchedule={currentAccount.schedule}
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
+        accountLon={currentAccount.x}
       />
 
       {/* Delete Classroom Confirmation Dialog */}
@@ -1505,9 +1918,8 @@ export default function SidePanel({
               Cancel
             </Button>
             <Button
-              variant="outline"
               onClick={submitCreateClassroom}
-              className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               Create Classroom
             </Button>

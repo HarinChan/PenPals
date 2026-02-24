@@ -17,6 +17,9 @@ node_modules/*
 npm-debug.log*
 obj/*
 package-lock.json
+chroma_db/
+penpals_db/
+penpals.db
 penpals-backend/chroma_db
 penpals-backend/penpals_db/
 penpals-backend/src/build/*
@@ -29,6 +32,7 @@ penpals-frontend/src-tauri/Cargo.toml
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+models/qwen3-1.7b-int4-ov/
 penpals-backend/src/chroma_db/*
 penpals-backend/src/penpals_db/*
 

@@ -50,6 +50,11 @@ export default function LocationAutocomplete({
 
     if (query.length >= 3) {
       debounceRef.current = window.setTimeout(async () => {
+        // Don't search if a location is already selected and query matches
+        if (value && query === value.name) {
+          return;
+        }
+        
         setIsLoading(true);
         try {
           const results = await LocationService.searchLocations(query);
@@ -73,7 +78,7 @@ export default function LocationAutocomplete({
         clearTimeout(debounceRef.current);
       }
     };
-  }, [query]);
+  }, [query, value]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
@@ -87,8 +92,16 @@ export default function LocationAutocomplete({
 
   const handleSuggestionClick = (suggestion: LocationSuggestion) => {
     const location = LocationService.suggestionToLocation(suggestion);
+    
+    // Clear any pending debounced search
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
+    
     setQuery(location.name);
     onChange(location);
+    setSuggestions([]);
     setShowSuggestions(false);
     setSelectedIndex(-1);
   };
@@ -124,7 +137,8 @@ export default function LocationAutocomplete({
   };
 
   const handleFocus = () => {
-    if (suggestions.length > 0) {
+    // Only show suggestions if there are any and no location is selected
+    if (suggestions.length > 0 && (!value || query !== value.name)) {
       setShowSuggestions(true);
     }
   };
@@ -165,10 +179,8 @@ export default function LocationAutocomplete({
         />
         
         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-          {isLoading ? (
+          {isLoading && (
             <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-          ) : (
-            <MapPin className="w-4 h-4 text-slate-400" />
           )}
         </div>
       </div>
