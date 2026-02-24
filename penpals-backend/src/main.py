@@ -45,6 +45,7 @@ def validate_meeting_schedule(start_time: datetime, end_time: datetime):
         return f"Meetings can be scheduled up to {MEETING_MAX_ADVANCE_DAYS} days in advance"
 
     return None
+LOCALLOWCATION = os.path.join(os.getenv('LOCALAPPDATA'), 'Penpals')
 
 def print_tables():
     with application.app_context():
@@ -91,7 +92,8 @@ webex_service = WebexService()
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
 
-chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
+chroma_persist_directory = os.path.join(LOCALLOWCATION, "chroma_db")
+chroma_service = ChromaDBService(persist_directory=chroma_persist_directory, collection_name="penpals_documents")
 
 _CLASSROOM_TAG_RE = re.compile(r'<classroom\s+id="[^"]+"\s*/>')
 

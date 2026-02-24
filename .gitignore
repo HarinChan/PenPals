@@ -22,6 +22,8 @@ penpals_db/
 penpals.db
 penpals-backend/chroma_db
 penpals-backend/penpals_db/
+penpals-backend/src/build/*
+penpals-backend/src/app.spec
 penpals-frontend/src-tauri/build
 penpals-frontend/build
 penpals-frontend/src-tauri/gen/*
@@ -31,3 +33,9 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 models/qwen3-1.7b-int4-ov/
+penpals-backend/src/chroma_db/*
+penpals-backend/src/penpals_db/*
+
+*.db
+*.sqlite3
+penpals_installer.exe
