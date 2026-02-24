@@ -7,13 +7,18 @@ Account and classroom management is handled by separate blueprints.
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta, datetime
 import re
 import os
+import bcrypt
+from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
+load_dotenv(dotenv_path=SRC_ROOT / '.env')
 
 from sqlalchemy import desc
 from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
@@ -21,6 +26,25 @@ from webex_service import WebexService
 
 from account import account_bp
 from classroom import classroom_bp
+
+MEETING_MIN_DURATION_MINUTES = 15
+MEETING_MAX_DURATION_MINUTES = 60
+MEETING_MAX_ADVANCE_DAYS = 14
+
+
+def validate_meeting_schedule(start_time: datetime, end_time: datetime):
+    if end_time <= start_time:
+        return "end_time must be after start_time"
+
+    duration_minutes = (end_time - start_time).total_seconds() / 60
+    if duration_minutes < MEETING_MIN_DURATION_MINUTES or duration_minutes > MEETING_MAX_DURATION_MINUTES:
+        return f"Meeting duration must be between {MEETING_MIN_DURATION_MINUTES} and {MEETING_MAX_DURATION_MINUTES} minutes"
+
+    max_allowed_start = datetime.utcnow() + timedelta(days=MEETING_MAX_ADVANCE_DAYS)
+    if start_time > max_allowed_start:
+        return f"Meetings can be scheduled up to {MEETING_MAX_ADVANCE_DAYS} days in advance"
+
+    return None
 
 def print_tables():
     with application.app_context():
@@ -37,15 +61,15 @@ application.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key
 application.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///penpals_db/penpals.db')
-if db_uri.startswith('sqlite:///') and not db_uri.startswith('sqlite:////'):
-    rel_path = db_uri.replace('sqlite:///', '', 1)
-    # Ensure the directory exists
-    db_dir = os.path.dirname(rel_path)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-    abs_path = os.path.abspath(rel_path)
-    db_uri = f'sqlite:///{abs_path}'
+default_db_uri = f"sqlite:///{(BACKEND_ROOT / 'penpals_db' / 'penpals.db').resolve()}"
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI', default_db_uri)
+if db_uri.startswith('sqlite:///'):
+    sqlite_path = db_uri.replace('sqlite:///', '', 1)
+    if sqlite_path != ':memory:':
+        abs_path = Path(sqlite_path) if sqlite_path.startswith('/') else (BACKEND_ROOT / sqlite_path)
+        abs_path = abs_path.resolve()
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        db_uri = f'sqlite:///{abs_path}'
 application.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -159,25 +183,12 @@ def register():
     if not email or not password:
         return jsonify({"msg": "Missing required fields"}), 400
     
-    # Password validation: at least 8 chars, one uppercase, one lowercase, one digit, one special char
-    has_upper = any(c in capital_letters for c in password)
-    has_lower = any(c in lowercase_letters for c in password)
-    has_digit = any(c in digits for c in password)
-    has_special = any(
-        c not in capital_letters and c not in lowercase_letters and c not in digits
-        for c in password
-    )
-    if not (len(password) >= 8 and has_upper and has_lower and has_digit and has_special):
-        return jsonify({
-            "msg": "Password must be at least 8 characters and include one uppercase, one lowercase, one digit, and one special character."
-        }), 400
-    
     # Check if account exists
     if Account.query.filter_by(email=email).first():
         return jsonify({"msg": "Account already exists"}), 409
-    
-    # Hash password using werkzeug
-    password_hash = generate_password_hash(password)
+
+    # Password is a client-side SHA-256 hash; bcrypt it for storage
+    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(10)).decode()
     
     # Create account (no automatic profile creation)
     account = Account(email=email, password_hash=password_hash, organization=organization)
@@ -203,7 +214,8 @@ def login():
     
     account = Account.query.filter_by(email=email).first()
     
-    if not account or not check_password_hash(account.password_hash, password):
+    # Password is a client-side SHA-256 hash; bcrypt it and compare
+    if not account or not bcrypt.checkpw(password.encode(), account.password_hash.encode()):
         return jsonify({"msg": "Invalid credentials"}), 401
     
     # Create JWT token with account ID as identity
@@ -507,6 +519,10 @@ def create_webex_meeting():
         except ValueError:
             return jsonify({"msg": "Invalid date format"}), 400
 
+    schedule_error = validate_meeting_schedule(start_time, end_time)
+    if schedule_error:
+        return jsonify({"msg": schedule_error}), 400
+
     # Create invitation instead of meeting
     new_invitation = MeetingInvitation(
         sender_profile_id=creator_profile.id,
@@ -623,6 +639,10 @@ def manage_meeting(meeting_id):
             if end_time_str:
                 if end_time_str.endswith('Z'): end_time_str = end_time_str[:-1]
                 meeting.end_time = datetime.fromisoformat(end_time_str)
+
+            schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
+            if schedule_error:
+                return jsonify({"msg": schedule_error}), 400
                 
             # Update WebEx
             if meeting.webex_id:
