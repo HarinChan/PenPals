@@ -32,6 +32,36 @@ const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date()
 // Helper function to get timezone from coordinates
 import tzLookup from 'tz-lookup';
 
+// Format minutes (e.g., 570) to time string (e.g., "09:30")
+const formatMinutes = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+};
+
+// Get day label from date (e.g., "Mon", "Tue", etc.)
+const getDayLabel = (date: Date): string => {
+  const dayIndex = date.getDay();
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[dayIndex];
+};
+
+// Convert date to YYYY-MM-DD format
+const toYmd = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Format date for meeting display
+const formatMeetingDay = (date: Date): string => {
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+  const day = date.toLocaleDateString(undefined, { day: 'numeric' });
+  const month = date.toLocaleDateString(undefined, { month: 'short' });
+  return `${weekday} ${day} ${month}`;
+};
+
 const getClassroomTimezone = (lat: number, lon: number): string => {
   try {
     return tzLookup(lat, lon);
