@@ -30,4 +30,3 @@ penpals-frontend/src-tauri/Cargo.toml
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-models/qwen3-1.7b-int4-ov/

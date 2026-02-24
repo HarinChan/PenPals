@@ -9,7 +9,7 @@ import sys
 import argparse
 
 
-def find_open_port(start_port=5001, end_port=6000, host='127.0.0.1'):
+def find_open_port(start_port=5000, end_port=6000, host='127.0.0.1'):
     """
     Find an available port in the given range.
     
@@ -27,7 +27,7 @@ def find_open_port(start_port=5001, end_port=6000, host='127.0.0.1'):
                 s.settimeout(1)  # 1 second timeout
                 result = s.connect_ex((host, port))
                 if result != 0:  # Port is available
-                    return 5001
+                    return port
         except socket.error:
             continue
     return -1

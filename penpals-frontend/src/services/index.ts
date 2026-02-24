@@ -5,7 +5,6 @@ export * from './auth';
 export * from './account';
 export * from './classroom';
 export * from './chromadb';
-export * from './chat';
 export * from './webex';
 
 // Re-export commonly used types
@@ -45,11 +44,6 @@ export type {
   ChromaDBQueryResponse,
   PostMetadata,
 } from './chromadb';
-
-export type {
-  ChatMessage,
-  ChatResponse,
-} from './chat';
 
 // Service classes
 export { ApiClient } from './api';
