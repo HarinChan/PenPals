@@ -12,6 +12,13 @@ export interface ChatResponse {
   message?: string;
 }
 
+export interface TranscribeResponse {
+  status: 'success' | 'error';
+  transcript?: string;
+  raw?: unknown;
+  message?: string;
+}
+
 export async function sendChatMessage(
   message: string,
   history: ChatMessage[] = [],
@@ -21,5 +28,21 @@ export async function sendChatMessage(
     message,
     history,
     n_results: nResults,
+  });
+}
+
+export async function transcribeChatAudio(
+  audioBlob: Blob,
+  hotwords?: string
+): Promise<TranscribeResponse> {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, `chat-${Date.now()}.webm`);
+  if (hotwords?.trim()) {
+    formData.append('hotwords', hotwords.trim());
+  }
+
+  return ApiClient.request<TranscribeResponse>('/chat/transcribe', {
+    method: 'POST',
+    body: formData,
   });
 }
