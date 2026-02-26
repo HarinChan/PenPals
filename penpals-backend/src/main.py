@@ -306,9 +306,14 @@ def transcribe_chat_audio():
       - hotwords: optional comma-separated context words
     """
     try:
-        audio_file = request.files.get('audio')
+        audio_file = request.files.get('audio') or request.files.get('file') or request.files.get('recording')
         if audio_file is None:
-            return jsonify({"status": "error", "message": "Missing 'audio' file in form data"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Missing 'audio' file in form data",
+                "received_file_keys": list(request.files.keys()),
+                "content_type": request.content_type,
+            }), 400
 
         audio_bytes = audio_file.read()
         if not audio_bytes:
