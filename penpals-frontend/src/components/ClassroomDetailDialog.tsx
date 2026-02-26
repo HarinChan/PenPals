@@ -128,6 +128,8 @@ export default function ClassroomDetailDialog({
   const [selectedStartMinutes, setSelectedStartMinutes] = useState<number | null>(null);
   const [localTime, setLocalTime] = useState<string>('');
   const [localDate, setLocalDate] = useState<string>('');
+  const [isPublicMeeting, setIsPublicMeeting] = useState<boolean>(false);
+  const [maxParticipants, setMaxParticipants] = useState<string>('20');
 
   // Update local time every second
   useEffect(() => {
@@ -223,6 +225,8 @@ export default function ClassroomDetailDialog({
 
   const handleScheduleCall = () => {
     setShowScheduleCall(true);
+    setIsPublicMeeting(false);
+    setMaxParticipants('20');
     if (dateOptions.length > 0) {
       setSelectedDate(dateOptions[0].value);
       setDurationMinutes(30);
@@ -233,7 +237,12 @@ export default function ClassroomDetailDialog({
     }
   };
 
-  const createMeeting = async (title: string, start: Date | null, end: Date | null) => {
+  const createMeeting = async (
+    title: string,
+    start: Date | null,
+    end: Date | null,
+    options?: { isPublic?: boolean; maxParticipants?: number }
+  ) => {
     try {
       const token = localStorage.getItem('penpals_token');
       if (!token) {
@@ -251,7 +260,9 @@ export default function ClassroomDetailDialog({
           title,
           start_time: start?.toISOString(),
           end_time: end?.toISOString(),
-          classroom_id: classroom.id
+          classroom_id: options?.isPublic ? undefined : classroom.id,
+          is_public: !!options?.isPublic,
+          max_participants: options?.maxParticipants,
         })
       });
 
@@ -265,7 +276,7 @@ export default function ClassroomDetailDialog({
       }
 
       const data = await response.json();
-      return data.invitation;
+      return data;
 
     } catch (error: any) {
       toast.error(error.message);
@@ -298,13 +309,27 @@ export default function ClassroomDetailDialog({
       return;
     }
 
-    toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
+    let parsedCapacity: number | undefined = undefined;
+    if (isPublicMeeting) {
+      parsedCapacity = Number.parseInt(maxParticipants, 10);
+      if (!Number.isFinite(parsedCapacity) || parsedCapacity < 2) {
+        toast.error('Public meetings require a capacity of at least 2.');
+        return;
+      }
+    }
+
+    toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime, {
+      isPublic: isPublicMeeting,
+      maxParticipants: parsedCapacity,
+    }), {
       loading: 'Sending meeting invitation...',
       success: (data) => {
         if (data) {
           setShowScheduleCall(false);
           setSelectedStartMinutes(null);
-          return `Meeting invitation sent to ${classroom.name}!`;
+          return isPublicMeeting
+            ? 'Public meeting published successfully!'
+            : `Meeting invitation sent to ${classroom.name}!`;
         }
         throw new Error('Failed');
       },
@@ -505,6 +530,31 @@ export default function ClassroomDetailDialog({
                             </p>
                           </div>
                         )}
+
+                        <div className="space-y-3 p-3 rounded-lg border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-800">
+                          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={isPublicMeeting}
+                              onChange={(e) => setIsPublicMeeting(e.target.checked)}
+                              className="rounded border-slate-400"
+                            />
+                            Make this meeting public (any logged-in classroom can join)
+                          </label>
+
+                          {isPublicMeeting && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-600 dark:text-slate-400">Maximum participants</label>
+                              <input
+                                type="number"
+                                min={2}
+                                value={maxParticipants}
+                                onChange={(e) => setMaxParticipants(e.target.value)}
+                                className="w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -576,15 +626,14 @@ export default function ClassroomDetailDialog({
               disabled={!isCurrentlyAvailable()}
               onClick={async () => {
                 toast.promise(createMeeting(`Instant Call with ${classroom.name}`, null, null), {
-                  loading: 'Starting call...',
+                  loading: 'Sending instant meeting invitation...',
                   success: (data) => {
                     if (data) {
-                      window.open(data.web_link, '_blank');
-                      return 'Call started in new tab';
+                      return 'Invitation sent. The call starts after acceptance.';
                     }
                     throw new Error("Failed");
                   },
-                  error: 'Failed to start call'
+                  error: 'Failed to send invitation'
                 });
               }}
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed"

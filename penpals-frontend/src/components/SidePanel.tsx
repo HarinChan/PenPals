@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
 import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
-import { WebexService, ClassroomService } from '../services';
+import { WebexService, ClassroomService, MeetingsService } from '../services';
+import type { MeetingDto } from '../services/meetings';
 import { FriendsService } from '../services/friends';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -133,21 +134,31 @@ export default function SidePanel({
   const [invitationsTab, setInvitationsTab] = useState<'received' | 'sent'>('received');
   const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
   const [sentInvitations, setSentInvitations] = useState<any[]>([]);
+  const [publicMeetingsOpen, setPublicMeetingsOpen] = useState(true);
+  const [publicMeetingsTab, setPublicMeetingsTab] = useState<'browse' | 'trending'>('browse');
+  const [publicMeetings, setPublicMeetings] = useState<MeetingDto[]>([]);
+  const [trendingMeetings, setTrendingMeetings] = useState<MeetingDto[]>([]);
 
   const fetchMeetings = async () => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      const response = await fetch('http://127.0.0.1:5001/api/meetings', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUpcomingMeetings(data.meetings);
-      }
+      const data = await MeetingsService.getUpcoming();
+      setUpcomingMeetings(data.meetings);
     } catch (err) {
       console.error("Failed to fetch meetings", err);
+    }
+  };
+
+  const fetchPublicMeetings = async () => {
+    try {
+      const [browseData, trendingData] = await Promise.all([
+        MeetingsService.getPublicMeetings(),
+        MeetingsService.getTrendingMeetings(),
+      ]);
+
+      setPublicMeetings(browseData.meetings || []);
+      setTrendingMeetings(trendingData.meetings || []);
+    } catch (err) {
+      console.error("Failed to fetch public meetings", err);
     }
   };
 
@@ -181,10 +192,12 @@ export default function SidePanel({
   useEffect(() => {
     fetchMeetings();
     fetchInvitations();
+    fetchPublicMeetings();
     // Set up a polling interval to refresh meetings and invitations every minute
     const interval = setInterval(() => {
       fetchMeetings();
       fetchInvitations();
+      fetchPublicMeetings();
     }, 60000);
     return () => clearInterval(interval);
   }, [currentAccount.id]);
@@ -263,6 +276,17 @@ export default function SidePanel({
     } catch (err) {
       console.error("Failed to cancel invitation", err);
       toast.error("Error cancelling invitation");
+    }
+  };
+
+  const handleJoinPublicMeeting = async (meetingId: number) => {
+    try {
+      const response = await MeetingsService.joinPublicMeeting(meetingId);
+      toast.success(response.msg || 'Joined public meeting');
+      fetchMeetings();
+      fetchPublicMeetings();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to join public meeting');
     }
   };
 
@@ -1257,6 +1281,87 @@ export default function SidePanel({
                                   className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Join
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
+            {/* Public Meetings Widget */}
+            <Collapsible open={publicMeetingsOpen} onOpenChange={setPublicMeetingsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
+                    <ChevronDown className={`transition-transform ${publicMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Users className="text-indigo-600 dark:text-indigo-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Public Meetings</h3>
+                    {(publicMeetingsTab === 'browse' ? publicMeetings.length : trendingMeetings.length) > 0 && (
+                      <Badge className="ml-2 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                        {publicMeetingsTab === 'browse' ? publicMeetings.length : trendingMeetings.length}
+                      </Badge>
+                    )}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        size="sm"
+                        variant={publicMeetingsTab === 'browse' ? 'default' : 'outline'}
+                        onClick={() => setPublicMeetingsTab('browse')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Browse
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={publicMeetingsTab === 'trending' ? 'default' : 'outline'}
+                        onClick={() => setPublicMeetingsTab('trending')}
+                        className="flex-1 h-8 text-xs"
+                      >
+                        Trending
+                      </Button>
+                    </div>
+
+                    <ScrollArea className="h-52">
+                      <div className="space-y-2 pr-4">
+                        {(publicMeetingsTab === 'browse' ? publicMeetings : trendingMeetings).length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No public meetings available
+                          </div>
+                        ) : (
+                          (publicMeetingsTab === 'browse' ? publicMeetings : trendingMeetings).map((meeting) => (
+                            <div
+                              key={meeting.id}
+                              className="p-3 rounded-lg border bg-indigo-50 dark:bg-slate-700 border-indigo-200 dark:border-slate-600"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                    <Clock size={12} />
+                                    {formatMeetingDateTime(meeting.start_time)}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    Host: {meeting.creator_name}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    Participants: {meeting.participant_count}
+                                    {meeting.max_participants ? ` / ${meeting.max_participants}` : ''}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleJoinPublicMeeting(meeting.id)}
+                                  disabled={meeting.is_full}
+                                  className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {meeting.is_full ? 'Full' : 'Join'}
                                 </Button>
                               </div>
                             </div>
