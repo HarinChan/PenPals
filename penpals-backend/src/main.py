@@ -72,6 +72,31 @@ def _meeting_has_profile(meeting: Meeting, profile: Profile) -> bool:
     return meeting.creator_id == profile.id or any(p.id == profile.id for p in meeting.participants)
 
 
+def _normalize_invitee_ids(classroom_ids, creator_profile_id: int):
+    if classroom_ids is None:
+        return [], None
+
+    if not isinstance(classroom_ids, list):
+        return None, "classroom_ids must be an array"
+
+    normalized_ids = []
+    for classroom_id in classroom_ids:
+        if isinstance(classroom_id, str) and classroom_id.startswith('dummy_'):
+            return None, "Cannot invite dummy classrooms. Please use real classrooms from your network."
+        try:
+            parsed_id = int(classroom_id)
+        except (ValueError, TypeError):
+            return None, "Invalid classroom_id format"
+
+        if parsed_id == creator_profile_id:
+            return None, "You cannot invite your own classroom"
+
+        if parsed_id not in normalized_ids:
+            normalized_ids.append(parsed_id)
+
+    return normalized_ids, None
+
+
 def _serialize_meeting(meeting: Meeting, profile: Profile = None):
     participant_count = _get_participant_count(meeting)
     return {
@@ -765,18 +790,9 @@ def create_webex_meeting():
     if legacy_classroom_id is not None:
         classroom_ids.append(legacy_classroom_id)
 
-    normalized_ids = []
-    for classroom_id in classroom_ids:
-        if isinstance(classroom_id, str) and classroom_id.startswith('dummy_'):
-            return jsonify({"msg": "Cannot invite dummy classrooms. Please use real classrooms from your network."}), 400
-        try:
-            parsed_id = int(classroom_id)
-        except (ValueError, TypeError):
-            return jsonify({"msg": "Invalid classroom_id format"}), 400
-        if parsed_id == creator_profile.id:
-            return jsonify({"msg": "You cannot invite your own classroom"}), 400
-        if parsed_id not in normalized_ids:
-            normalized_ids.append(parsed_id)
+    normalized_ids, normalize_error = _normalize_invitee_ids(classroom_ids, creator_profile.id)
+    if normalize_error:
+        return jsonify({"msg": normalize_error}), 400
 
     if not is_public and len(normalized_ids) == 0:
         return jsonify({"msg": "classroom_id or classroom_ids is required for private meetings"}), 400
@@ -973,6 +989,12 @@ def manage_meeting(meeting_id):
                     meeting.end_time,
                     meeting.title
                 )
+
+            pending_invitations = MeetingInvitation.query.filter_by(meeting_id=meeting.id, status='pending').all()
+            for invitation in pending_invitations:
+                invitation.title = meeting.title
+                invitation.start_time = meeting.start_time
+                invitation.end_time = meeting.end_time
             
             db.session.commit()
             return jsonify({"msg": "Meeting updated successfully"}), 200
@@ -980,6 +1002,99 @@ def manage_meeting(meeting_id):
              return jsonify({"msg": "Invalid date format"}), 400
         except Exception as e:
             return jsonify({"msg": f"Failed to update meeting: {str(e)}"}), 500
+
+
+@application.route('/api/webex/meeting/<int:meeting_id>/invitees', methods=['POST'])
+@jwt_required()
+def invite_meeting_invitees(meeting_id):
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    sender_profile = _get_primary_profile(account)
+    if not sender_profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+
+    meeting = Meeting.query.get(meeting_id)
+    if not meeting:
+        return jsonify({"msg": "Meeting not found"}), 404
+
+    if meeting.creator_id != sender_profile.id:
+        return jsonify({"msg": "Only creator can invite classrooms"}), 403
+
+    if meeting.status == 'cancelled':
+        return jsonify({"msg": "Cannot invite to a cancelled meeting"}), 409
+
+    data = request.json or {}
+    classroom_ids = data.get('classroom_ids')
+    normalized_ids, normalize_error = _normalize_invitee_ids(classroom_ids, sender_profile.id)
+    if normalize_error:
+        return jsonify({"msg": normalize_error}), 400
+
+    if len(normalized_ids) == 0:
+        return jsonify({"msg": "classroom_ids is required"}), 400
+
+    created = []
+    skipped = []
+
+    for receiver_id in normalized_ids:
+        receiver_profile = Profile.query.get(receiver_id)
+        if not receiver_profile:
+            skipped.append({"receiver_id": receiver_id, "reason": "not_found"})
+            continue
+
+        if _meeting_has_profile(meeting, receiver_profile):
+            skipped.append({"receiver_id": receiver_id, "receiver_name": receiver_profile.name, "reason": "already_participant"})
+            continue
+
+        existing_pending = MeetingInvitation.query.filter_by(
+            meeting_id=meeting.id,
+            receiver_profile_id=receiver_profile.id,
+            status='pending'
+        ).first()
+        if existing_pending:
+            skipped.append({"receiver_id": receiver_id, "receiver_name": receiver_profile.name, "reason": "already_pending"})
+            continue
+
+        invitation = MeetingInvitation(
+            sender_profile_id=sender_profile.id,
+            receiver_profile_id=receiver_profile.id,
+            title=meeting.title,
+            start_time=meeting.start_time,
+            end_time=meeting.end_time,
+            status='pending',
+            meeting_id=meeting.id
+        )
+        db.session.add(invitation)
+        db.session.flush()
+
+        created.append({
+            "id": invitation.id,
+            "receiver_id": invitation.receiver_profile_id,
+            "receiver_name": receiver_profile.name,
+            "title": invitation.title,
+            "start_time": invitation.start_time.isoformat(),
+            "end_time": invitation.end_time.isoformat(),
+            "status": invitation.status,
+            "meeting_id": invitation.meeting_id
+        })
+
+    db.session.commit()
+
+    if len(created) == 0:
+        return jsonify({
+            "msg": "No new invitations were created",
+            "invitations": created,
+            "skipped": skipped
+        }), 200
+
+    return jsonify({
+        "msg": "Invitations sent successfully",
+        "invitations": created,
+        "skipped": skipped
+    }), 201
 
 @application.route('/api/meetings', methods=['GET'])
 @jwt_required()

@@ -13,6 +13,7 @@ import { Input } from './ui/input';
 import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
 import type { Classroom } from '../types';
 import { toast } from 'sonner';
+import { ClassroomService } from '../services/classroom';
 
 interface ClassroomDetailDialogProps {
   classroom: Classroom | null;
@@ -29,6 +30,12 @@ const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
 const CURRENT_HOUR = new Date().getHours();
 const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+
+interface InviteClassroomOption {
+  id: number;
+  name: string;
+  location: string;
+}
 
 // Helper function to get timezone from coordinates
 import tzLookup from 'tz-lookup';
@@ -132,6 +139,10 @@ export default function ClassroomDetailDialog({
   const [isPublicMeeting, setIsPublicMeeting] = useState<boolean>(false);
   const [maxParticipants, setMaxParticipants] = useState<string>('20');
   const [customMeetingTitle, setCustomMeetingTitle] = useState<string>('');
+  const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
+  const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
+  const [inviteSearch, setInviteSearch] = useState<string>('');
+  const [selectedInviteeIds, setSelectedInviteeIds] = useState<number[]>([]);
 
   // Update local time every second
   useEffect(() => {
@@ -148,7 +159,45 @@ export default function ClassroomDetailDialog({
     }
   }, [classroom]);
 
+  useEffect(() => {
+    if (!open || !showScheduleCall) return;
+
+    let isCancelled = false;
+    const loadClassrooms = async () => {
+      setIsLoadingInvitees(true);
+      try {
+        const response = await ClassroomService.fetchAllClassrooms();
+        if (isCancelled) return;
+
+        const parsedClassrooms = response.classrooms
+          .map((item) => ({
+            id: Number.parseInt(String(item.id), 10),
+            name: item.name,
+            location: item.location || '',
+          }))
+          .filter((item) => Number.isFinite(item.id));
+
+        setAvailableInvitees(parsedClassrooms);
+      } catch (error) {
+        if (!isCancelled) {
+          toast.error('Failed to load classrooms for invitations');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingInvitees(false);
+        }
+      }
+    };
+
+    loadClassrooms();
+    return () => {
+      isCancelled = true;
+    };
+  }, [open, showScheduleCall]);
+
   if (!classroom) return null;
+
+  const primaryInviteeId = Number.parseInt(String(classroom.id), 10);
 
   // Get classroom timezone for display
   const classroomTimezone = getClassroomTimezone(classroom.lat, classroom.lon);
@@ -230,6 +279,8 @@ export default function ClassroomDetailDialog({
     setIsPublicMeeting(false);
     setMaxParticipants('20');
     setCustomMeetingTitle('');
+    setInviteSearch('');
+    setSelectedInviteeIds([]);
     if (dateOptions.length > 0) {
       setSelectedDate(dateOptions[0].value);
       setDurationMinutes(30);
@@ -244,7 +295,7 @@ export default function ClassroomDetailDialog({
     title: string,
     start: Date | null,
     end: Date | null,
-    options?: { isPublic?: boolean; maxParticipants?: number }
+    options?: { isPublic?: boolean; maxParticipants?: number; classroomIds?: number[] }
   ) => {
     try {
       const token = localStorage.getItem('penpals_token');
@@ -263,7 +314,7 @@ export default function ClassroomDetailDialog({
           title,
           start_time: start?.toISOString(),
           end_time: end?.toISOString(),
-          classroom_id: options?.isPublic ? undefined : classroom.id,
+          classroom_ids: options?.classroomIds,
           is_public: !!options?.isPublic,
           max_participants: options?.maxParticipants,
         })
@@ -322,10 +373,25 @@ export default function ClassroomDetailDialog({
     }
 
     const meetingTitle = customMeetingTitle.trim() || `Call with ${classroom.name}`;
+    const inviteeIds = new Set<number>();
+    if (!isPublicMeeting && Number.isFinite(primaryInviteeId)) {
+      inviteeIds.add(primaryInviteeId);
+    }
+    selectedInviteeIds.forEach((id) => {
+      if (Number.isFinite(id)) {
+        inviteeIds.add(id);
+      }
+    });
+
+    if (!isPublicMeeting && inviteeIds.size === 0) {
+      toast.error('Select at least one classroom to invite.');
+      return;
+    }
 
     toast.promise(createMeeting(meetingTitle, startTime, endTime, {
       isPublic: isPublicMeeting,
       maxParticipants: parsedCapacity,
+      classroomIds: Array.from(inviteeIds),
     }), {
       loading: 'Sending meeting invitation...',
       success: (data) => {
@@ -569,6 +635,65 @@ export default function ClassroomDetailDialog({
                               />
                             </div>
                           )}
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-slate-600 dark:text-slate-400">Invite classrooms (search)</label>
+                            {!isPublicMeeting && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                Primary invitee: {classroom.name}
+                              </div>
+                            )}
+                            <Input
+                              value={inviteSearch}
+                              onChange={(event) => setInviteSearch(event.target.value)}
+                              placeholder="Search classrooms by name or location"
+                              className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                            />
+
+                            {selectedInviteeIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {selectedInviteeIds.map((id) => {
+                                  const invitee = availableInvitees.find((item) => item.id === id);
+                                  if (!invitee) return null;
+                                  return (
+                                    <Badge
+                                      key={id}
+                                      className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-pointer"
+                                      onClick={() => setSelectedInviteeIds((prev) => prev.filter((value) => value !== id))}
+                                    >
+                                      {invitee.name} ×
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div className="max-h-36 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-600 p-2">
+                              {isLoadingInvitees ? (
+                                <div className="text-xs text-slate-500 dark:text-slate-400">Loading classrooms...</div>
+                              ) : (
+                                availableInvitees
+                                  .filter((item) => {
+                                    if (!isPublicMeeting && item.id === primaryInviteeId) return false;
+                                    if (selectedInviteeIds.includes(item.id)) return false;
+                                    const query = inviteSearch.trim().toLowerCase();
+                                    if (!query) return true;
+                                    return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query);
+                                  })
+                                  .slice(0, 8)
+                                  .map((item) => (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => setSelectedInviteeIds((prev) => [...prev, item.id])}
+                                      className="w-full text-left px-2 py-1 rounded text-xs bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200"
+                                    >
+                                      {item.name}
+                                      {item.location ? ` • ${item.location}` : ''}
+                                    </button>
+                                  ))
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

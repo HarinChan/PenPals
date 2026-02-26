@@ -14,6 +14,8 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Calendar, Clock, Link as LinkIcon, Lock, Copy, Trash2, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
+import { ClassroomService } from '../services/classroom';
+import { MeetingsService } from '../services/meetings';
 
 const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
@@ -52,6 +54,12 @@ interface MeetingDetails {
     visibility?: 'private' | 'public';
 }
 
+interface InviteClassroomOption {
+    id: number;
+    name: string;
+    location: string;
+}
+
 export default function MeetingDetailsDialog({
     meetingId,
     open,
@@ -65,6 +73,11 @@ export default function MeetingDetailsDialog({
     const [newDate, setNewDate] = useState<string>('');
     const [newTime, setNewTime] = useState<string>('');
     const [durationMinutes, setDurationMinutes] = useState<number>(30);
+    const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
+    const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
+    const [inviteSearch, setInviteSearch] = useState<string>('');
+    const [selectedInviteeIds, setSelectedInviteeIds] = useState<number[]>([]);
+    const [isInviting, setIsInviting] = useState<boolean>(false);
 
     useEffect(() => {
         if (open && meetingId) {
@@ -72,6 +85,42 @@ export default function MeetingDetailsDialog({
             setIsRescheduling(false);
         }
     }, [open, meetingId]);
+
+    useEffect(() => {
+        if (!open || !meeting?.is_creator) return;
+
+        let isCancelled = false;
+        const loadClassrooms = async () => {
+            setIsLoadingInvitees(true);
+            try {
+                const response = await ClassroomService.fetchAllClassrooms();
+                if (isCancelled) return;
+
+                const parsedClassrooms = response.classrooms
+                    .map((item) => ({
+                        id: Number.parseInt(String(item.id), 10),
+                        name: item.name,
+                        location: item.location || '',
+                    }))
+                    .filter((item) => Number.isFinite(item.id));
+
+                setAvailableInvitees(parsedClassrooms);
+            } catch (error) {
+                if (!isCancelled) {
+                    toast.error('Failed to load classrooms for invitations');
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsLoadingInvitees(false);
+                }
+            }
+        };
+
+        loadClassrooms();
+        return () => {
+            isCancelled = true;
+        };
+    }, [open, meeting?.is_creator]);
 
     const fetchMeetingDetails = async (id: number) => {
         setLoading(true);
@@ -228,6 +277,32 @@ export default function MeetingDetailsDialog({
         toast.error('Meeting link is not available yet');
     };
 
+    const handleInviteClassrooms = async () => {
+        if (!meeting || selectedInviteeIds.length === 0) {
+            toast.error('Select at least one classroom to invite.');
+            return;
+        }
+
+        try {
+            setIsInviting(true);
+            const response = await MeetingsService.inviteToMeeting(meeting.id, selectedInviteeIds);
+
+            if (response.invitations.length > 0) {
+                toast.success(`${response.invitations.length} invitation(s) sent`);
+            } else {
+                toast.error(response.msg || 'No new invitations were created');
+            }
+
+            setSelectedInviteeIds([]);
+            setInviteSearch('');
+            onMeetingUpdated();
+        } catch (error: any) {
+            toast.error(error?.message || 'Failed to send invitations');
+        } finally {
+            setIsInviting(false);
+        }
+    };
+
     if (!open || !meeting) return null; // or loading spinner
 
     const startDate = new Date(meeting.start_time);
@@ -317,6 +392,70 @@ export default function MeetingDetailsDialog({
                         {/* Actions for Creator */}
                         {meeting.is_creator && (
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <Label className="text-xs">Invite classrooms</Label>
+                                    <Input
+                                        value={inviteSearch}
+                                        onChange={(e) => setInviteSearch(e.target.value)}
+                                        placeholder="Search classrooms by name or location"
+                                        className="bg-white dark:bg-slate-900"
+                                    />
+
+                                    {selectedInviteeIds.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {selectedInviteeIds.map((id) => {
+                                                const invitee = availableInvitees.find((item) => item.id === id);
+                                                if (!invitee) return null;
+                                                return (
+                                                    <Badge
+                                                        key={id}
+                                                        className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-pointer"
+                                                        onClick={() => setSelectedInviteeIds((prev) => prev.filter((value) => value !== id))}
+                                                    >
+                                                        {invitee.name} ×
+                                                    </Badge>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="max-h-32 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+                                        {isLoadingInvitees ? (
+                                            <div className="text-xs text-slate-500">Loading classrooms...</div>
+                                        ) : (
+                                            availableInvitees
+                                                .filter((item) => {
+                                                    if (selectedInviteeIds.includes(item.id)) return false;
+                                                    const query = inviteSearch.trim().toLowerCase();
+                                                    if (!query) return true;
+                                                    return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query);
+                                                })
+                                                .slice(0, 8)
+                                                .map((item) => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => setSelectedInviteeIds((prev) => [...prev, item.id])}
+                                                        className="w-full text-left px-2 py-1 rounded text-xs bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
+                                                    >
+                                                        {item.name}
+                                                        {item.location ? ` • ${item.location}` : ''}
+                                                    </button>
+                                                ))
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleInviteClassrooms}
+                                            disabled={isInviting || selectedInviteeIds.length === 0}
+                                        >
+                                            {isInviting ? 'Sending...' : 'Send Invites'}
+                                        </Button>
+                                    </div>
+                                </div>
+
                                 {isRescheduling ? (
                                     <div className="space-y-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                                         <h4 className="font-medium text-blue-900 dark:text-blue-100 flex items-center gap-2">

@@ -20,6 +20,17 @@ export interface MeetingDto {
   trending_score?: number;
 }
 
+export interface MeetingInvitationResult {
+  id: number;
+  receiver_id: number;
+  receiver_name: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled';
+  meeting_id: number;
+}
+
 export const MeetingsService = {
   getUpcoming: async () => {
     return ApiClient.get<{ meetings: MeetingDto[] }>('/meetings');
@@ -39,5 +50,13 @@ export const MeetingsService = {
 
   cancelMeeting: async (meetingId: number) => {
     return ApiClient.delete<{ msg: string }>(`/webex/meeting/${meetingId}`);
+  },
+
+  inviteToMeeting: async (meetingId: number, classroomIds: number[]) => {
+    return ApiClient.post<{
+      msg: string;
+      invitations: MeetingInvitationResult[];
+      skipped: Array<{ receiver_id: number; receiver_name?: string; reason: string }>;
+    }>(`/webex/meeting/${meetingId}/invitees`, { classroom_ids: classroomIds });
   },
 };
