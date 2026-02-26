@@ -9,6 +9,7 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
+import { Input } from './ui/input';
 import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
 import type { Classroom } from '../types';
 import { toast } from 'sonner';
@@ -130,6 +131,7 @@ export default function ClassroomDetailDialog({
   const [localDate, setLocalDate] = useState<string>('');
   const [isPublicMeeting, setIsPublicMeeting] = useState<boolean>(false);
   const [maxParticipants, setMaxParticipants] = useState<string>('20');
+  const [customMeetingTitle, setCustomMeetingTitle] = useState<string>('');
 
   // Update local time every second
   useEffect(() => {
@@ -227,6 +229,7 @@ export default function ClassroomDetailDialog({
     setShowScheduleCall(true);
     setIsPublicMeeting(false);
     setMaxParticipants('20');
+    setCustomMeetingTitle('');
     if (dateOptions.length > 0) {
       setSelectedDate(dateOptions[0].value);
       setDurationMinutes(30);
@@ -318,7 +321,9 @@ export default function ClassroomDetailDialog({
       }
     }
 
-    toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime, {
+    const meetingTitle = customMeetingTitle.trim() || `Call with ${classroom.name}`;
+
+    toast.promise(createMeeting(meetingTitle, startTime, endTime, {
       isPublic: isPublicMeeting,
       maxParticipants: parsedCapacity,
     }), {
@@ -425,6 +430,16 @@ export default function ClassroomDetailDialog({
 
                 {dateOptions.length > 0 ? (
                   <>
+                    <div className="space-y-2">
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Meeting Title (optional)</label>
+                      <Input
+                        value={customMeetingTitle}
+                        onChange={(event) => setCustomMeetingTitle(event.target.value)}
+                        placeholder={`Call with ${classroom.name}`}
+                        className="bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+
                     <div className="space-y-2">
                       <label className="text-sm text-slate-700 dark:text-slate-300">Select Day (up to 2 weeks)</label>
                       <div className="flex gap-2 flex-wrap">

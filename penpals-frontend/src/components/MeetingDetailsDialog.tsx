@@ -44,10 +44,12 @@ interface MeetingDetails {
     title: string;
     start_time: string;
     end_time: string;
-    web_link: string;
-    password?: string;
+    web_link?: string | null;
+    password?: string | null;
     creator_name: string;
     is_creator: boolean;
+    is_participant?: boolean;
+    visibility?: 'private' | 'public';
 }
 
 export default function MeetingDetailsDialog({
@@ -59,6 +61,7 @@ export default function MeetingDetailsDialog({
     const [meeting, setMeeting] = useState<MeetingDetails | null>(null);
     const [loading, setLoading] = useState(false);
     const [isRescheduling, setIsRescheduling] = useState(false);
+    const [newTitle, setNewTitle] = useState<string>('');
     const [newDate, setNewDate] = useState<string>('');
     const [newTime, setNewTime] = useState<string>('');
     const [durationMinutes, setDurationMinutes] = useState<number>(30);
@@ -87,6 +90,7 @@ export default function MeetingDetailsDialog({
                 const startDate = new Date(data.start_time);
                 const endDate = new Date(data.end_time);
                 const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+                setNewTitle(data.title || '');
                 setNewDate(startDate.toISOString().split('T')[0]);
                 setNewTime(startDate.toTimeString().slice(0, 5));
                 setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
@@ -133,6 +137,11 @@ export default function MeetingDetailsDialog({
 
     const handleReschedule = async () => {
         if (!meeting || !newDate || !newTime) return;
+        const trimmedTitle = newTitle.trim();
+        if (!trimmedTitle) {
+            toast.error('Meeting title cannot be empty.');
+            return;
+        }
 
         try {
             const startDateTime = new Date(`${newDate}T${newTime}`);
@@ -158,6 +167,7 @@ export default function MeetingDetailsDialog({
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
+                    title: trimmedTitle,
                     start_time: startDateTime.toISOString(),
                     end_time: endDateTime.toISOString()
                 })
@@ -176,6 +186,46 @@ export default function MeetingDetailsDialog({
         } catch (error) {
             toast.error("Error rescheduling meeting");
         }
+    };
+
+    const handleJoinMeeting = async () => {
+        if (!meeting) return;
+
+        if (meeting.visibility === 'public' && !meeting.is_creator && !meeting.is_participant) {
+            try {
+                const token = localStorage.getItem('penpals_token');
+                const response = await fetch(`http://127.0.0.1:5001/api/meetings/${meeting.id}/join`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const link = data?.meeting?.web_link;
+                    toast.success(data?.msg || 'Joined meeting');
+                    onMeetingUpdated();
+                    await fetchMeetingDetails(meeting.id);
+                    if (link) {
+                        window.open(link, '_blank');
+                    }
+                    return;
+                }
+
+                const error = await response.json();
+                toast.error(error.msg || 'Failed to join meeting');
+                return;
+            } catch (error) {
+                toast.error('Error joining meeting');
+                return;
+            }
+        }
+
+        if (meeting.web_link) {
+            window.open(meeting.web_link, '_blank');
+            return;
+        }
+
+        toast.error('Meeting link is not available yet');
     };
 
     if (!open || !meeting) return null; // or loading spinner
@@ -227,13 +277,14 @@ export default function MeetingDetailsDialog({
                                 <div className="flex gap-2">
                                     <Input
                                         readOnly
-                                        value={meeting.web_link}
+                                        value={meeting.web_link || 'Link will be created when the first participant joins'}
                                         className="bg-slate-50 dark:bg-slate-800 font-mono text-xs"
                                     />
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        onClick={() => handleCopy(meeting.web_link, "Link")}
+                                        onClick={() => meeting.web_link && handleCopy(meeting.web_link, "Link")}
+                                        disabled={!meeting.web_link}
                                     >
                                         <Copy size={16} />
                                     </Button>
@@ -271,6 +322,14 @@ export default function MeetingDetailsDialog({
                                         <h4 className="font-medium text-blue-900 dark:text-blue-100 flex items-center gap-2">
                                             <CalendarClock size={16} /> Reschedule Meeting
                                         </h4>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Title</Label>
+                                            <Input
+                                                value={newTitle}
+                                                onChange={e => setNewTitle(e.target.value)}
+                                                className="bg-white dark:bg-slate-900"
+                                            />
+                                        </div>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Date</Label>
@@ -338,9 +397,9 @@ export default function MeetingDetailsDialog({
                         {!meeting.is_creator && (
                             <Button
                                 className="w-full bg-purple-600 hover:bg-purple-700"
-                                onClick={() => window.open(meeting.web_link, '_blank')}
+                                onClick={handleJoinMeeting}
                             >
-                                Join Meeting
+                                {meeting.visibility === 'public' && !meeting.is_participant ? 'Join Meeting' : 'Open Meeting'}
                             </Button>
                         )}
 

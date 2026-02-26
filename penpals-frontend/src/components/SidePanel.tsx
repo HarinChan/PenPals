@@ -279,14 +279,24 @@ export default function SidePanel({
     }
   };
 
-  const handleJoinPublicMeeting = async (meetingId: number) => {
+  const handleJoinPublicMeeting = async (meeting: MeetingDto) => {
+    setSelectedMeetingId(meeting.id);
+    setMeetingDetailsOpen(true);
+  };
+
+  const handleCancelPublicMeeting = async (meeting: MeetingDto) => {
+    if (!confirm('Cancel this public meeting?')) {
+      return;
+    }
+
     try {
-      const response = await MeetingsService.joinPublicMeeting(meetingId);
-      toast.success(response.msg || 'Joined public meeting');
+      const response = await MeetingsService.cancelMeeting(meeting.id);
+      toast.success(response.msg || 'Meeting cancelled');
       fetchMeetings();
+      fetchInvitations();
       fetchPublicMeetings();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to join public meeting');
+      toast.error(error?.message || 'Failed to cancel meeting');
     }
   };
 
@@ -1336,9 +1346,19 @@ export default function SidePanel({
                           </div>
                         ) : (
                           (publicMeetingsTab === 'browse' ? publicMeetings : trendingMeetings).map((meeting) => (
+                            (() => {
+                              const isMeetingHost = String(meeting.creator_id) === String(currentAccount.id);
+                              const canOpenDirectly = !!meeting.web_link && !!meeting.is_participant;
+                              const isJoinDisabled = !isMeetingHost && !canOpenDirectly && !!meeting.is_full;
+
+                              return (
                             <div
                               key={meeting.id}
-                              className="p-3 rounded-lg border bg-indigo-50 dark:bg-slate-700 border-indigo-200 dark:border-slate-600"
+                              onClick={() => {
+                                setSelectedMeetingId(meeting.id);
+                                setMeetingDetailsOpen(true);
+                              }}
+                              className="p-3 rounded-lg border bg-indigo-50 dark:bg-slate-700 border-indigo-200 dark:border-slate-600 cursor-pointer hover:bg-indigo-100 dark:hover:bg-slate-650"
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
@@ -1357,14 +1377,32 @@ export default function SidePanel({
                                 </div>
                                 <Button
                                   size="sm"
-                                  onClick={() => handleJoinPublicMeeting(meeting.id)}
-                                  disabled={meeting.is_full}
-                                  className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (isMeetingHost) {
+                                      handleCancelPublicMeeting(meeting);
+                                    } else {
+                                      setSelectedMeetingId(meeting.id);
+                                      setMeetingDetailsOpen(true);
+                                    }
+                                  }}
+                                  disabled={isJoinDisabled}
+                                  className={`h-7 text-xs ${isMeetingHost
+                                    ? 'bg-red-600 hover:bg-red-700'
+                                    : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
                                 >
-                                  {meeting.is_full ? 'Full' : 'Join'}
+                                  {isMeetingHost
+                                    ? 'Cancel'
+                                    : canOpenDirectly
+                                      ? 'Open'
+                                      : meeting.is_full
+                                        ? 'Full'
+                                        : 'Join'}
                                 </Button>
                               </div>
                             </div>
+                              );
+                            })()
                           ))
                         )}
                       </div>

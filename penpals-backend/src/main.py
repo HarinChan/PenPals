@@ -884,8 +884,12 @@ def manage_meeting(meeting_id):
         
     is_creator = meeting.creator_id == profile.id
     is_participant = _meeting_has_profile(meeting, profile) and not is_creator
-    
-    if not (is_creator or is_participant):
+
+    can_view_public = meeting.visibility == 'public' and meeting.status in ['pending_setup', 'active']
+    if request.method == 'GET':
+        if not (is_creator or is_participant or can_view_public):
+            return jsonify({"msg": "Unauthorized"}), 403
+    elif not (is_creator or is_participant):
         return jsonify({"msg": "Unauthorized"}), 403
 
     # Relaxed WebEx check: Only strict for modifying/deleting. GET is allowed for participants without WebEx.
@@ -912,34 +916,41 @@ def manage_meeting(meeting_id):
     if request.method == 'DELETE':
         if not is_creator:
             return jsonify({"msg": "Only default creator can delete meetings"}), 403
-            
-        if not account.webex_access_token:
-             return jsonify({"msg": "WebEx not connected. Cannot delete meeting."}), 403
-            
+
         try:
             # Delete from WebEx
             if meeting.webex_id:
+                if not account.webex_access_token:
+                    return jsonify({"msg": "WebEx not connected. Cannot delete active meeting."}), 403
                 webex_service.delete_meeting(account.webex_access_token, meeting.webex_id)
-            
-            # Delete from DB
-            db.session.delete(meeting)
+
+            # Soft-cancel meeting so invite/history references remain valid
+            meeting.status = 'cancelled'
+            pending_invitations = MeetingInvitation.query.filter_by(meeting_id=meeting.id, status='pending').all()
+            for invitation in pending_invitations:
+                invitation.status = 'cancelled'
+
             db.session.commit()
-            return jsonify({"msg": "Meeting deleted successfully"}), 200
+            return jsonify({"msg": "Meeting cancelled successfully"}), 200
         except Exception as e:
-            return jsonify({"msg": f"Failed to delete meeting: {str(e)}"}), 500
+            return jsonify({"msg": f"Failed to cancel meeting: {str(e)}"}), 500
 
     if request.method == 'PUT':
         if not is_creator:
             return jsonify({"msg": "Only creator can update meetings"}), 403
-            
-        if not account.webex_access_token:
-             return jsonify({"msg": "WebEx not connected. Cannot update meeting."}), 403
-            
-        data = request.json
+
+        data = request.json or {}
+        title = data.get('title')
         start_time_str = data.get('start_time')
         end_time_str = data.get('end_time')
-        
+        if title is not None:
+            title = str(title).strip()
+            if not title:
+                return jsonify({"msg": "title cannot be empty"}), 400
+
         try:
+            if title is not None:
+                meeting.title = title
             if start_time_str:
                 if start_time_str.endswith('Z'): start_time_str = start_time_str[:-1]
                 meeting.start_time = datetime.fromisoformat(start_time_str)
@@ -950,14 +961,17 @@ def manage_meeting(meeting_id):
             schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
             if schedule_error:
                 return jsonify({"msg": schedule_error}), 400
-                
+
             # Update WebEx
             if meeting.webex_id:
+                if not account.webex_access_token:
+                    return jsonify({"msg": "WebEx not connected. Cannot update active meeting."}), 403
                 webex_service.update_meeting(
                     account.webex_access_token, 
                     meeting.webex_id,
                     meeting.start_time,
-                    meeting.end_time
+                    meeting.end_time,
+                    meeting.title
                 )
             
             db.session.commit()
@@ -986,11 +1000,15 @@ def get_upcoming_meetings():
     # Meetings created by me
     created_meetings = Meeting.query.filter(
         Meeting.creator_id == profile.id,
-        Meeting.start_time >= now
+        Meeting.start_time >= now,
+        Meeting.status.in_(['pending_setup', 'active'])
     ).all()
     
     # Meetings I am participating in
-    participating_meetings = [m for m in profile.meetings if m.start_time >= now]
+    participating_meetings = [
+        m for m in profile.meetings
+        if m.start_time >= now and m.status in ['pending_setup', 'active']
+    ]
     
     all_meetings = list(set(created_meetings + participating_meetings))
     all_meetings.sort(key=lambda x: x.start_time)
@@ -1075,6 +1093,9 @@ def join_public_meeting(meeting_id):
 
     if meeting.visibility != 'public':
         return jsonify({"msg": "Only public meetings can be joined directly"}), 403
+
+    if meeting.status == 'cancelled':
+        return jsonify({"msg": "Meeting has been cancelled"}), 409
 
     if _meeting_has_profile(meeting, profile):
         return jsonify({"msg": "Already joined", "meeting": _serialize_meeting(meeting, profile)}), 200

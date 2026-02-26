@@ -36,4 +36,8 @@ export const MeetingsService = {
   joinPublicMeeting: async (meetingId: number) => {
     return ApiClient.post<{ msg: string; meeting: MeetingDto }>(`/meetings/${meetingId}/join`);
   },
+
+  cancelMeeting: async (meetingId: number) => {
+    return ApiClient.delete<{ msg: string }>(`/webex/meeting/${meetingId}`);
+  },
 };
