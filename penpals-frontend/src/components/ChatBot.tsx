@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, MapPin, Users, Sparkles, Bot } from 'lucide-react';
+import { Send, Loader2, MapPin, Users, Bot, Mic, Square } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { sendChatMessage, ChatMessage } from '../services/chat';
+import { sendChatMessage, transcribeChatAudio, ChatMessage } from '../services/chat';
 import type { Account, Classroom } from '../types';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 
@@ -50,6 +50,11 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
     const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -72,6 +77,13 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
         return () => window.clearInterval(timer);
     }, [loading]);
 
+    useEffect(() => {
+        return () => {
+            mediaRecorderRef.current?.stop();
+            mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+        };
+    }, []);
+
     const openClassroomDetails = (classroom: Classroom) => {
         setDetailDialogClassroom(classroom);
         setDetailDialogOpen(true);
@@ -84,7 +96,7 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
     };
 
     const handleSend = async () => {
-        if (!input.trim() || loading) return;
+        if (!input.trim() || loading || isTranscribing) return;
 
         const nextMessage: ChatMessageWithClassrooms = { role: 'user', content: input.trim() };
         const nextHistory = [...messages, nextMessage];
@@ -114,6 +126,73 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
         } finally {
             setLoading(false);
         }
+    };
+
+    const transcribeBlob = async (blob: Blob) => {
+        setIsTranscribing(true);
+        setError(null);
+
+        try {
+            const result = await transcribeChatAudio(blob);
+            if (result.status === 'success' && result.transcript?.trim()) {
+                setInput(result.transcript.trim());
+            } else {
+                setError(result.message || 'Transcription failed. Please try again.');
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to transcribe audio.';
+            setError(message);
+        } finally {
+            setIsTranscribing(false);
+        }
+    };
+
+    const startRecording = async () => {
+        if (isRecording || isTranscribing || loading) return;
+        setError(null);
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            mediaStreamRef.current = stream;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event: BlobEvent) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const mimeType = mediaRecorder.mimeType || 'audio/webm';
+                const blob = new Blob(audioChunksRef.current, { type: mimeType });
+
+                mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+                mediaRecorderRef.current = null;
+                setIsRecording(false);
+
+                if (blob.size > 0) {
+                    void transcribeBlob(blob);
+                }
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unable to access microphone.';
+            setError(message);
+            setIsRecording(false);
+            mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+            mediaRecorderRef.current = null;
+        }
+    };
+
+    const stopRecording = () => {
+        if (!isRecording || !mediaRecorderRef.current) return;
+        mediaRecorderRef.current.stop();
     };
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -276,14 +355,33 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                             onChange={(event) => setInput(event.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Ask about classrooms, topics, or help..."
-                            disabled={loading}
-                            className="pr-14 pl-4 py-6 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 shadow-sm transition-all text-base"
+                            disabled={loading || isTranscribing}
+                            className="pr-24 pl-4 py-6 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 shadow-sm transition-all text-base"
                         />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                            <Button
+                                type="button"
+                                size="icon"
+                                onClick={isRecording ? stopRecording : startRecording}
+                                disabled={loading || isTranscribing}
+                                className={`h-9 w-9 rounded-full transition-all duration-200 ${
+                                    isRecording
+                                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                                        : 'bg-transparent text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                {isTranscribing ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : isRecording ? (
+                                    <Square className="h-4 w-4" />
+                                ) : (
+                                    <Mic className="h-4 w-4" />
+                                )}
+                            </Button>
                             <Button 
                                 type="submit" 
                                 size="icon" 
-                                disabled={!input.trim() || loading}
+                                disabled={!input.trim() || loading || isTranscribing || isRecording}
                                 className={`h-9 w-9 rounded-full transition-all duration-200 ${
                                     input.trim() 
                                         ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20' 
