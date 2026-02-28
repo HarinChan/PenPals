@@ -4,7 +4,6 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Moon, Sun } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import LocationAutocomplete from './LocationAutocomplete';
 import type { SelectedLocation } from '../services/location';
@@ -108,18 +107,6 @@ export default function LoginDialog({
                 Connect with classrooms around the world
               </DialogDescription>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="h-9 w-9 rounded-full"
-            >
-              {theme === 'light' ? (
-                <Moon className="h-4 w-4 text-slate-700" />
-              ) : (
-                <Sun className="h-4 w-4 text-slate-300" />
-              )}
-            </Button>
           </div>
         </DialogHeader>
 
