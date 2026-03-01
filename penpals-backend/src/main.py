@@ -97,8 +97,12 @@ def _normalize_invitee_ids(classroom_ids, creator_profile_id: int):
     return normalized_ids, None
 
 
-def _serialize_meeting(meeting: Meeting, profile: Profile = None, include_invitees: bool = False):
+def _serialize_meeting(meeting: Meeting, profile: Profile = None, account: Account = None, include_invitees: bool = False):
     participant_count = _get_participant_count(meeting)
+    is_creator_for_viewer = bool(
+        (account and meeting.creator and meeting.creator.account_id == account.id)
+        or (profile and meeting.creator_id == profile.id)
+    )
     payload = {
         "id": meeting.id,
         "title": meeting.title,
@@ -113,7 +117,7 @@ def _serialize_meeting(meeting: Meeting, profile: Profile = None, include_invite
         "max_participants": meeting.max_participants,
         "participant_count": participant_count,
         "join_count": meeting.join_count,
-        "is_creator": bool(profile and meeting.creator_id == profile.id),
+        "is_creator": is_creator_for_viewer,
         "is_participant": bool(profile and _meeting_has_profile(meeting, profile)),
         "is_full": bool(meeting.max_participants and participant_count >= meeting.max_participants),
     }
@@ -894,7 +898,7 @@ def create_webex_meeting():
     message = "Public meeting created successfully" if is_public else "Meeting invitation sent successfully"
     return jsonify({
         "msg": message,
-        "meeting": _serialize_meeting(new_meeting, creator_profile),
+        "meeting": _serialize_meeting(new_meeting, creator_profile, account),
         "invitation": invitations_payload[0] if len(invitations_payload) == 1 else None,
         "invitations": invitations_payload
     }), 201
@@ -918,7 +922,7 @@ def manage_meeting(meeting_id):
     if not profile:
         return jsonify({"msg": "Profile not found"}), 404
         
-    is_creator = meeting.creator_id == profile.id
+    is_creator = bool(meeting.creator and meeting.creator.account_id == account.id)
     is_participant = _meeting_has_profile(meeting, profile) and not is_creator
 
     can_view_public = meeting.visibility == 'public' and meeting.status in ['pending_setup', 'active']
@@ -947,7 +951,7 @@ def manage_meeting(meeting_id):
 
 
     if request.method == 'GET':
-        return jsonify(_serialize_meeting(meeting, profile, include_invitees=True)), 200
+        return jsonify(_serialize_meeting(meeting, profile, account, include_invitees=True)), 200
 
     if request.method == 'DELETE':
         if not is_creator:
@@ -979,10 +983,27 @@ def manage_meeting(meeting_id):
         title = data.get('title')
         start_time_str = data.get('start_time')
         end_time_str = data.get('end_time')
+        visibility = data.get('visibility')
+        max_participants = data.get('max_participants')
         if title is not None:
             title = str(title).strip()
             if not title:
                 return jsonify({"msg": "title cannot be empty"}), 400
+
+        if visibility is not None and visibility not in ['private', 'public']:
+            return jsonify({"msg": "visibility must be 'private' or 'public'"}), 400
+
+        parsed_max_participants = meeting.max_participants
+        if max_participants is not None:
+            if max_participants == '':
+                parsed_max_participants = None
+            else:
+                try:
+                    parsed_max_participants = int(max_participants)
+                except (ValueError, TypeError):
+                    return jsonify({"msg": "max_participants must be a number"}), 400
+                if parsed_max_participants < 2:
+                    return jsonify({"msg": "max_participants must be at least 2"}), 400
 
         try:
             if title is not None:
@@ -993,10 +1014,18 @@ def manage_meeting(meeting_id):
             if end_time_str:
                 if end_time_str.endswith('Z'): end_time_str = end_time_str[:-1]
                 meeting.end_time = datetime.fromisoformat(end_time_str)
+            if visibility is not None:
+                meeting.visibility = visibility
+            if max_participants is not None:
+                meeting.max_participants = parsed_max_participants
 
             schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
             if schedule_error:
                 return jsonify({"msg": schedule_error}), 400
+
+            participant_count = _get_participant_count(meeting)
+            if meeting.max_participants and meeting.max_participants < participant_count:
+                return jsonify({"msg": f"max_participants cannot be lower than current participant count ({participant_count})"}), 400
 
             # Update WebEx
             if meeting.webex_id:
@@ -1033,16 +1062,14 @@ def invite_meeting_invitees(meeting_id):
     if not account:
         return jsonify({"msg": "User not found"}), 404
 
-    sender_profile = _get_primary_profile(account)
-    if not sender_profile:
-        return jsonify({"msg": "No profile found for account"}), 400
-
     meeting = Meeting.query.get(meeting_id)
     if not meeting:
         return jsonify({"msg": "Meeting not found"}), 404
 
-    if meeting.creator_id != sender_profile.id:
+    if not meeting.creator or meeting.creator.account_id != account.id:
         return jsonify({"msg": "Only creator can invite classrooms"}), 403
+
+    sender_profile = meeting.creator
 
     if meeting.status == 'cancelled':
         return jsonify({"msg": "Cannot invite to a cancelled meeting"}), 409
@@ -1150,7 +1177,7 @@ def get_upcoming_meetings():
     
     result = []
     for m in all_meetings:
-        result.append(_serialize_meeting(m, profile))
+        result.append(_serialize_meeting(m, profile, account))
         
     return jsonify({"meetings": result}), 200
 
@@ -1172,7 +1199,7 @@ def get_public_meetings():
         Meeting.status.in_(['pending_setup', 'active'])
     ).order_by(Meeting.start_time.asc()).all()
 
-    return jsonify({"meetings": [_serialize_meeting(meeting, profile) for meeting in meetings]}), 200
+    return jsonify({"meetings": [_serialize_meeting(meeting, profile, account) for meeting in meetings]}), 200
 
 
 @application.route('/api/meetings/public/trending', methods=['GET'])
@@ -1203,7 +1230,7 @@ def get_public_trending_meetings():
     ranked = sorted(meetings, key=score, reverse=True)
     payload = []
     for meeting in ranked[:25]:
-        serialized = _serialize_meeting(meeting, profile)
+        serialized = _serialize_meeting(meeting, profile, account)
         serialized['trending_score'] = round(score(meeting), 4)
         payload.append(serialized)
 
@@ -1233,7 +1260,7 @@ def join_public_meeting(meeting_id):
         return jsonify({"msg": "Meeting has been cancelled"}), 409
 
     if _meeting_has_profile(meeting, profile):
-        return jsonify({"msg": "Already joined", "meeting": _serialize_meeting(meeting, profile)}), 200
+        return jsonify({"msg": "Already joined", "meeting": _serialize_meeting(meeting, profile, account)}), 200
 
     participant_count = _get_participant_count(meeting)
     if meeting.max_participants and participant_count >= meeting.max_participants:
@@ -1249,7 +1276,7 @@ def join_public_meeting(meeting_id):
 
     return jsonify({
         "msg": "Joined public meeting successfully",
-        "meeting": _serialize_meeting(meeting, profile)
+        "meeting": _serialize_meeting(meeting, profile, account)
     }), 200
 
 
@@ -1387,7 +1414,7 @@ def accept_invitation(invitation_id):
     
     return jsonify({
         "msg": "Invitation accepted. Meeting joined successfully!",
-        "meeting": _serialize_meeting(meeting, receiver_profile)
+        "meeting": _serialize_meeting(meeting, receiver_profile, account)
     }), 201
 
 
