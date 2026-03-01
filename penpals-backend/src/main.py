@@ -97,9 +97,9 @@ def _normalize_invitee_ids(classroom_ids, creator_profile_id: int):
     return normalized_ids, None
 
 
-def _serialize_meeting(meeting: Meeting, profile: Profile = None):
+def _serialize_meeting(meeting: Meeting, profile: Profile = None, include_invitees: bool = False):
     participant_count = _get_participant_count(meeting)
-    return {
+    payload = {
         "id": meeting.id,
         "title": meeting.title,
         "start_time": meeting.start_time.isoformat(),
@@ -117,6 +117,26 @@ def _serialize_meeting(meeting: Meeting, profile: Profile = None):
         "is_participant": bool(profile and _meeting_has_profile(meeting, profile)),
         "is_full": bool(meeting.max_participants and participant_count >= meeting.max_participants),
     }
+
+    if include_invitees:
+        invitations = MeetingInvitation.query.filter(
+            MeetingInvitation.meeting_id == meeting.id,
+            MeetingInvitation.status.in_(['pending', 'accepted'])
+        ).order_by(MeetingInvitation.created_at.desc()).all()
+
+        invited_by_receiver = {}
+        for invitation in invitations:
+            if invitation.receiver_profile_id in invited_by_receiver:
+                continue
+            invited_by_receiver[invitation.receiver_profile_id] = {
+                "receiver_id": invitation.receiver_profile_id,
+                "receiver_name": invitation.receiver.name if invitation.receiver else "Unknown Classroom",
+                "status": invitation.status,
+            }
+
+        payload["invited_classrooms"] = list(invited_by_receiver.values())
+
+    return payload
 
 
 def _refresh_webex_if_needed(account: Account):
@@ -927,7 +947,7 @@ def manage_meeting(meeting_id):
 
 
     if request.method == 'GET':
-        return jsonify(_serialize_meeting(meeting, profile)), 200
+        return jsonify(_serialize_meeting(meeting, profile, include_invitees=True)), 200
 
     if request.method == 'DELETE':
         if not is_creator:

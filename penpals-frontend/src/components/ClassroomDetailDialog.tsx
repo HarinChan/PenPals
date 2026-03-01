@@ -270,6 +270,7 @@ export default function ClassroomDetailDialog({
 
   const allStartTimes = getAllStartTimes();
   const hasValidTimeRange = allStartTimes.some(m => isTimeSelectable(m));
+  const inviteQuery = inviteSearch.trim().toLowerCase();
 
   // Get account timezone for display
   const accountTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -671,14 +672,14 @@ export default function ClassroomDetailDialog({
                             <div className="max-h-36 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-600 p-2">
                               {isLoadingInvitees ? (
                                 <div className="text-xs text-slate-500 dark:text-slate-400">Loading classrooms...</div>
+                              ) : !inviteQuery ? (
+                                <div className="text-xs text-slate-500 dark:text-slate-400">Start typing to search classrooms.</div>
                               ) : (
                                 availableInvitees
                                   .filter((item) => {
                                     if (!isPublicMeeting && item.id === primaryInviteeId) return false;
                                     if (selectedInviteeIds.includes(item.id)) return false;
-                                    const query = inviteSearch.trim().toLowerCase();
-                                    if (!query) return true;
-                                    return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query);
+                                    return item.name.toLowerCase().includes(inviteQuery) || item.location.toLowerCase().includes(inviteQuery);
                                   })
                                   .slice(0, 8)
                                   .map((item) => (

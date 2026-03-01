@@ -52,6 +52,11 @@ interface MeetingDetails {
     is_creator: boolean;
     is_participant?: boolean;
     visibility?: 'private' | 'public';
+    invited_classrooms?: Array<{
+        receiver_id: number;
+        receiver_name: string;
+        status: 'pending' | 'accepted';
+    }>;
 }
 
 interface InviteClassroomOption {
@@ -311,6 +316,8 @@ export default function MeetingDetailsDialog({
     const latestDate = new Date();
     latestDate.setDate(today.getDate() + SCHEDULE_WINDOW_DAYS);
 
+    const inviteQuery = inviteSearch.trim().toLowerCase();
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
@@ -387,6 +394,21 @@ export default function MeetingDetailsDialog({
                                     </div>
                                 </div>
                             )}
+
+                            <div className="space-y-2">
+                                <Label className="text-slate-700 dark:text-slate-300">Currently invited</Label>
+                                {meeting.invited_classrooms && meeting.invited_classrooms.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {meeting.invited_classrooms.map((invitee) => (
+                                            <Badge key={invitee.receiver_id} variant="secondary" className="gap-1">
+                                                {invitee.receiver_name} ({invitee.status})
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">No active invitations yet.</p>
+                                )}
+                            </div>
                         </div>
 
                         {/* Actions for Creator */}
@@ -422,13 +444,13 @@ export default function MeetingDetailsDialog({
                                     <div className="max-h-32 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
                                         {isLoadingInvitees ? (
                                             <div className="text-xs text-slate-500">Loading classrooms...</div>
+                                        ) : !inviteQuery ? (
+                                            <div className="text-xs text-slate-500">Start typing to search classrooms.</div>
                                         ) : (
                                             availableInvitees
                                                 .filter((item) => {
                                                     if (selectedInviteeIds.includes(item.id)) return false;
-                                                    const query = inviteSearch.trim().toLowerCase();
-                                                    if (!query) return true;
-                                                    return item.name.toLowerCase().includes(query) || item.location.toLowerCase().includes(query);
+                                                    return item.name.toLowerCase().includes(inviteQuery) || item.location.toLowerCase().includes(inviteQuery);
                                                 })
                                                 .slice(0, 8)
                                                 .map((item) => (
