@@ -133,9 +133,11 @@ def _serialize_meeting(meeting: Meeting, profile: Profile = None, account: Accou
             if invitation.receiver_profile_id in invited_by_receiver:
                 continue
             invited_by_receiver[invitation.receiver_profile_id] = {
+                "invitation_id": invitation.id,
                 "receiver_id": invitation.receiver_profile_id,
                 "receiver_name": invitation.receiver.name if invitation.receiver else "Unknown Classroom",
                 "status": invitation.status,
+                "can_withdraw": invitation.status == 'pending',
             }
 
         payload["invited_classrooms"] = list(invited_by_receiver.values())

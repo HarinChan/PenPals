@@ -54,9 +54,11 @@ interface MeetingDetails {
     visibility?: 'private' | 'public';
     max_participants?: number | null;
     invited_classrooms?: Array<{
+        invitation_id?: number;
         receiver_id: number;
         receiver_name: string;
         status: 'pending' | 'accepted';
+        can_withdraw?: boolean;
     }>;
 }
 
@@ -82,6 +84,7 @@ export default function MeetingDetailsDialog({
     const [newVisibility, setNewVisibility] = useState<'private' | 'public'>('private');
     const [newMaxParticipants, setNewMaxParticipants] = useState<string>('20');
     const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
+    const [withdrawingInvitationId, setWithdrawingInvitationId] = useState<number | null>(null);
     const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
     const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
     const [inviteSearch, setInviteSearch] = useState<string>('');
@@ -377,6 +380,33 @@ export default function MeetingDetailsDialog({
         }
     };
 
+    const handleWithdrawInvitation = async (invitationId: number) => {
+        if (!meeting) return;
+
+        try {
+            setWithdrawingInvitationId(invitationId);
+            const token = localStorage.getItem('penpals_token');
+            const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                toast.error(error.msg || 'Failed to withdraw invitation');
+                return;
+            }
+
+            toast.success('Invitation withdrawn');
+            await fetchMeetingDetails(meeting.id);
+            onMeetingUpdated();
+        } catch (error) {
+            toast.error('Error withdrawing invitation');
+        } finally {
+            setWithdrawingInvitationId(null);
+        }
+    };
+
     if (!open || !meeting) return null; // or loading spinner
 
     const startDate = new Date(meeting.start_time);
@@ -467,11 +497,24 @@ export default function MeetingDetailsDialog({
                             <div className="space-y-2">
                                 <Label className="text-slate-700 dark:text-slate-300">Currently invited</Label>
                                 {meeting.invited_classrooms && meeting.invited_classrooms.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="space-y-2">
                                         {meeting.invited_classrooms.map((invitee) => (
-                                            <Badge key={invitee.receiver_id} variant="secondary" className="gap-1">
-                                                {invitee.receiver_name} ({invitee.status})
-                                            </Badge>
+                                            <div key={invitee.receiver_id} className="flex items-center justify-between gap-2 rounded border border-slate-200 dark:border-slate-700 px-2 py-1">
+                                                <Badge variant="secondary" className="gap-1">
+                                                    {invitee.receiver_name} ({invitee.status})
+                                                </Badge>
+                                                {meeting.is_creator && invitee.can_withdraw && invitee.invitation_id && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-6 text-xs text-red-600 hover:text-red-700"
+                                                        disabled={withdrawingInvitationId === invitee.invitation_id}
+                                                        onClick={() => handleWithdrawInvitation(invitee.invitation_id!)}
+                                                    >
+                                                        {withdrawingInvitationId === invitee.invitation_id ? 'Withdrawing...' : 'Withdraw'}
+                                                    </Button>
+                                                )}
+                                            </div>
                                         ))}
                                     </div>
                                 ) : (

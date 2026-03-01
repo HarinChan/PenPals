@@ -135,9 +135,37 @@ export default function SidePanel({
   const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
   const [sentInvitations, setSentInvitations] = useState<any[]>([]);
   const [publicMeetingsOpen, setPublicMeetingsOpen] = useState(true);
-  const [publicMeetingsTab, setPublicMeetingsTab] = useState<'browse' | 'trending'>('browse');
-  const [publicMeetings, setPublicMeetings] = useState<MeetingDto[]>([]);
   const [trendingMeetings, setTrendingMeetings] = useState<MeetingDto[]>([]);
+
+  const groupedSentInvitations = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      meetingId: number | null;
+      title: string;
+      start_time: string;
+      end_time: string;
+      invitations: any[];
+    }>();
+
+    sentInvitations.forEach((invitation) => {
+      const groupKey = invitation.meeting_id ? `meeting-${invitation.meeting_id}` : `inv-${invitation.id}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.invitations.push(invitation);
+      } else {
+        groups.set(groupKey, {
+          key: groupKey,
+          meetingId: invitation.meeting_id ?? null,
+          title: invitation.title,
+          start_time: invitation.start_time,
+          end_time: invitation.end_time,
+          invitations: [invitation],
+        });
+      }
+    });
+
+    return Array.from(groups.values());
+  }, [sentInvitations]);
 
   const fetchMeetings = async () => {
     try {
@@ -150,12 +178,7 @@ export default function SidePanel({
 
   const fetchPublicMeetings = async () => {
     try {
-      const [browseData, trendingData] = await Promise.all([
-        MeetingsService.getPublicMeetings(),
-        MeetingsService.getTrendingMeetings(),
-      ]);
-
-      setPublicMeetings(browseData.meetings || []);
+      const trendingData = await MeetingsService.getTrendingMeetings();
       setTrendingMeetings(trendingData.meetings || []);
     } catch (err) {
       console.error("Failed to fetch public meetings", err);
@@ -232,7 +255,7 @@ export default function SidePanel({
     if (publicMeetingsOpen) {
       fetchPublicMeetings();
     }
-  }, [publicMeetingsOpen, publicMeetingsTab, currentAccount.id]);
+  }, [publicMeetingsOpen, currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
@@ -1343,41 +1366,22 @@ export default function SidePanel({
                     <ChevronDown className={`transition-transform ${publicMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
                     <Users className="text-indigo-600 dark:text-indigo-400" size={18} />
                     <h3 className="text-slate-900 dark:text-slate-100">Public Meetings</h3>
-                    {(publicMeetingsTab === 'browse' ? publicMeetings.length : trendingMeetings.length) > 0 && (
+                    {trendingMeetings.length > 0 && (
                       <Badge className="ml-2 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                        {publicMeetingsTab === 'browse' ? publicMeetings.length : trendingMeetings.length}
+                        {trendingMeetings.length}
                       </Badge>
                     )}
                   </CollapsibleTrigger>
 
                   <CollapsibleContent>
-                    <div className="flex gap-2 mb-4">
-                      <Button
-                        size="sm"
-                        variant={publicMeetingsTab === 'browse' ? 'default' : 'outline'}
-                        onClick={() => setPublicMeetingsTab('browse')}
-                        className="flex-1 h-8 text-xs"
-                      >
-                        Browse
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={publicMeetingsTab === 'trending' ? 'default' : 'outline'}
-                        onClick={() => setPublicMeetingsTab('trending')}
-                        className="flex-1 h-8 text-xs"
-                      >
-                        Trending
-                      </Button>
-                    </div>
-
                     <ScrollArea className="h-52">
                       <div className="space-y-2 pr-4">
-                        {(publicMeetingsTab === 'browse' ? publicMeetings : trendingMeetings).length === 0 ? (
+                        {trendingMeetings.length === 0 ? (
                           <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
                             No public meetings available
                           </div>
                         ) : (
-                          (publicMeetingsTab === 'browse' ? publicMeetings : trendingMeetings).map((meeting) => (
+                          trendingMeetings.map((meeting) => (
                             (() => {
                               const isMeetingHost = String(meeting.creator_id) === String(currentAccount.id);
                               const canOpenDirectly = !!meeting.web_link && !!meeting.is_participant;
@@ -1452,9 +1456,9 @@ export default function SidePanel({
                     <ChevronDown className={`transition-transform ${invitationsOpen ? '' : '-rotate-90'}`} size={16} />
                     <Phone className="text-blue-600 dark:text-blue-400" size={18} />
                     <h3 className="text-slate-900 dark:text-slate-100">Meeting Invitations</h3>
-                    {(invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length) > 0 && (
+                    {(invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length) > 0 && (
                       <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length}
+                        {invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length}
                       </Badge>
                     )}
                   </CollapsibleTrigger>
@@ -1531,37 +1535,42 @@ export default function SidePanel({
                         ) : (
                           // Sent Invitations
                           <>
-                            {sentInvitations.length === 0 ? (
+                            {groupedSentInvitations.length === 0 ? (
                               <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
                                 No pending outgoing invitations
                               </div>
                             ) : (
-                              sentInvitations.map((invitation) => (
+                              groupedSentInvitations.map((group) => (
                                 <div
-                                  key={invitation.id}
+                                  key={group.key}
                                   className={`p-3 rounded-lg border bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600`}
                                 >
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
-                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{group.title}</div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                         <Clock size={12} />
-                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
+                                        {formatMeetingTimeRange(group.start_time, group.end_time)}
                                       </div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                        To: {invitation.receiver_name}
+                                        Invited classrooms: {group.invitations.length}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex gap-2 mt-3">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                      onClick={() => handleCancelInvitation(invitation.id)}
-                                    >
-                                      Cancel
-                                    </Button>
+                                  <div className="mt-3 space-y-1">
+                                    {group.invitations.map((invitation) => (
+                                      <div key={invitation.id} className="flex items-center justify-between gap-2 rounded border border-amber-200 dark:border-slate-600 px-2 py-1">
+                                        <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{invitation.receiver_name}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                          onClick={() => handleCancelInvitation(invitation.id)}
+                                        >
+                                          Withdraw
+                                        </Button>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               ))
