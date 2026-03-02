@@ -23,6 +23,7 @@ interface ClassroomDetailDialogProps {
   friendshipStatus: 'none' | 'pending' | 'accepted' | 'received';
   onToggleFriend?: (classroom: Classroom) => void;
   accountLon?: number;
+  onMeetingCreated?: () => void;
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -129,6 +130,7 @@ export default function ClassroomDetailDialog({
   friendshipStatus = 'none',
   onToggleFriend,
   accountLon = 0,
+  onMeetingCreated,
 }: ClassroomDetailDialogProps) {
   const [showScheduleCall, setShowScheduleCall] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -399,6 +401,7 @@ export default function ClassroomDetailDialog({
         if (data) {
           setShowScheduleCall(false);
           setSelectedStartMinutes(null);
+          onMeetingCreated?.();
           return isPublicMeeting
             ? 'Public meeting published successfully!'
             : `Meeting invitation sent to ${classroom.name}!`;

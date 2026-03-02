@@ -300,6 +300,7 @@ export default function MeetingDetailsDialog({
 
             setSelectedInviteeIds([]);
             setInviteSearch('');
+            await fetchMeetingDetails(meeting.id);
             onMeetingUpdated();
         } catch (error: any) {
             toast.error(error?.message || 'Failed to send invitations');

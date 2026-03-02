@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -189,18 +189,50 @@ export default function SidePanel({
     }
   };
 
-  useEffect(() => {
+  const refreshMeetingWidgets = useCallback(() => {
     fetchMeetings();
     fetchInvitations();
     fetchPublicMeetings();
+  }, [currentAccount.id]);
+
+  useEffect(() => {
+    refreshMeetingWidgets();
     // Set up a polling interval to refresh meetings and invitations every minute
     const interval = setInterval(() => {
-      fetchMeetings();
-      fetchInvitations();
-      fetchPublicMeetings();
+      refreshMeetingWidgets();
     }, 60000);
     return () => clearInterval(interval);
+  }, [refreshMeetingWidgets]);
+
+  useEffect(() => {
+    const checkWebexStatus = async () => {
+      try {
+        const status = await WebexService.getStatus();
+        setWebexConnected(status.connected);
+      } catch (e) {
+        console.error("Failed to check WebEx status", e);
+      }
+    };
+    checkWebexStatus();
   }, [currentAccount.id]);
+
+  useEffect(() => {
+    if (invitationsOpen) {
+      fetchInvitations();
+    }
+  }, [invitationsOpen, invitationsTab, currentAccount.id]);
+
+  useEffect(() => {
+    if (upcomingMeetingsOpen) {
+      fetchMeetings();
+    }
+  }, [upcomingMeetingsOpen, currentAccount.id]);
+
+  useEffect(() => {
+    if (publicMeetingsOpen) {
+      fetchPublicMeetings();
+    }
+  }, [publicMeetingsOpen, publicMeetingsTab, currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
@@ -1803,6 +1835,7 @@ export default function SidePanel({
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
         accountLon={currentAccount.x}
+        onMeetingCreated={refreshMeetingWidgets}
       />
 
       {/* Delete Classroom Confirmation Dialog */}
@@ -1888,18 +1921,7 @@ export default function SidePanel({
         meetingId={selectedMeetingId}
         open={meetingDetailsOpen}
         onOpenChange={setMeetingDetailsOpen}
-        onMeetingUpdated={() => {
-          // Re-fetch meetings immediately
-          // Note: We need to expose fetchMeetings or duplicate the logic, 
-          // but since fetchMeetings is inside useEffect/callback it's hard to trigger directly.
-          // However, the interval will catch it, or we can just hope the dialog close triggers something.
-          // Ideally we move fetchMeetings out or use a context/ref.
-          // For now, let's just force a re-render or similar.
-          // Actually, we can just toggle upcomingMeetingsOpen to force a refresh if we had a refresher there, but we don't.
-          // Let's just rely on the interval or add a manual refresh button later if needed.
-          // Better: Add a dependency to the useEffect, but that's complex.
-          // We can add a refresh trigger state.
-        }}
+        onMeetingUpdated={refreshMeetingWidgets}
       />
     </div>
   );
