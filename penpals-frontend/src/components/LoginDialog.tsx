@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import logoImage from '../assets/PenPals_Logo.png';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
@@ -100,13 +101,10 @@ export default function LoginDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md backdrop-blur-sm">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-slate-900 dark:text-slate-100">Welcome to MirrorMirror</DialogTitle>
-              <DialogDescription className="text-slate-600 dark:text-slate-400">
-                Connect with classrooms around the world
-              </DialogDescription>
-            </div>
+          <div className="flex flex-col items-center justify-center w-full pb-4">
+            <img src={logoImage} alt="PenPals Logo" className="h-20 w-auto" />
+            <DialogTitle className="sr-only">Login to PenPals</DialogTitle>
+            <DialogDescription className="sr-only">Access your account or create a new one</DialogDescription>
           </div>
         </DialogHeader>
 

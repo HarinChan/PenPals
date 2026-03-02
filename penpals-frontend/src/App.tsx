@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logoImage from './assets/PenPals_Logo.png';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
@@ -579,9 +580,7 @@ function AppContent() {
     return (
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center animate-pulse">
-            <GraduationCap className="w-6 h-6 text-white" />
-          </div>
+          <img src={logoImage} alt="PenPals Logo" className="w-[200px] h-auto animate-pulse" />
           <p className="text-slate-600 dark:text-slate-400">Loading...</p>
         </div>
       </div>
@@ -616,11 +615,8 @@ function AppContent() {
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-slate-900 dark:text-slate-100 text-xl hidden sm:block">PenPals AI</h1>
-            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block">powered by MirrorMirror</span>
+            <img src={logoImage} alt="PenPals" className="h-10 w-auto" />
+            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block font-medium">powered by MirrorMirror</span>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <Button
