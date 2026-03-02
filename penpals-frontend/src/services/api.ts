@@ -6,7 +6,7 @@ const runtimeImportMeta = import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 };
 
-const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
+const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://192.168.1.163:5001/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;

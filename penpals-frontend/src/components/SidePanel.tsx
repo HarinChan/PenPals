@@ -191,7 +191,7 @@ export default function SidePanel({
       if (!token) return;
 
       // Fetch received invitations
-      const receivedResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations', {
+      const receivedResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (receivedResponse.ok) {
@@ -200,7 +200,7 @@ export default function SidePanel({
       }
 
       // Fetch sent invitations
-      const sentResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations/sent', {
+      const sentResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations/sent', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (sentResponse.ok) {
@@ -264,7 +264,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/accept`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/accept`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -293,7 +293,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/decline`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/decline`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -316,7 +316,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/cancel`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

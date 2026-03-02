@@ -143,7 +143,7 @@ export default function MeetingDetailsDialog({
             const token = localStorage.getItem('penpals_token');
             if (!token) return;
 
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${id}`, {
+            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -184,7 +184,7 @@ export default function MeetingDetailsDialog({
 
         try {
             const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
+            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -236,7 +236,7 @@ export default function MeetingDetailsDialog({
             const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
 
             const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
+            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -289,7 +289,7 @@ export default function MeetingDetailsDialog({
         try {
             setIsSavingSettings(true);
             const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
+            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -325,7 +325,7 @@ export default function MeetingDetailsDialog({
         if (meeting.visibility === 'public' && !meeting.is_creator && !meeting.is_participant) {
             try {
                 const token = localStorage.getItem('penpals_token');
-                const response = await fetch(`http://127.0.0.1:5001/api/meetings/${meeting.id}/join`, {
+                const response = await fetch(`http://192.168.1.163:5001/api/meetings/${meeting.id}/join`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -392,7 +392,7 @@ export default function MeetingDetailsDialog({
         try {
             setWithdrawingInvitationId(invitationId);
             const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+            const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/cancel`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

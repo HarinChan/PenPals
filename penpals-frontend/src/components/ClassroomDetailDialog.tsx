@@ -309,7 +309,7 @@ export default function ClassroomDetailDialog({
         return;
       }
 
-      const response = await fetch('http://127.0.0.1:5001/api/webex/meeting', {
+      const response = await fetch('http://192.168.1.163:5001/api/webex/meeting', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
