@@ -268,7 +268,6 @@ application.register_blueprint(classroom_bp)
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 
 _CLASSROOM_TAG_RE = re.compile(r'<classroom\s+id="[^"]+"\s*/>')
-<<<<<<< HEAD
 TRANSCRIBE_MAX_AUDIO_BYTES = int(os.getenv('TRANSCRIBE_MAX_AUDIO_BYTES', str(20 * 1024 * 1024)))
 FASTER_WHISPER_MODEL_SIZE = os.getenv('FASTER_WHISPER_MODEL_SIZE', 'base')
 FASTER_WHISPER_DEVICE = os.getenv('FASTER_WHISPER_DEVICE', 'cpu')
@@ -277,7 +276,6 @@ FASTER_WHISPER_BEAM_SIZE = int(os.getenv('FASTER_WHISPER_BEAM_SIZE', '1'))
 
 _FASTER_WHISPER_MODEL = None
 _FASTER_WHISPER_MODEL_LOCK = threading.Lock()
-=======
 _MEETING_TAG_RE = re.compile(r'<meeting\s+id="[^"]+"\s*/>')
 
 
@@ -333,7 +331,6 @@ def _sync_meeting_in_chroma(meeting: Meeting):
         )
     except Exception as e:
         application.logger.warning("Failed indexing meeting in ChromaDB: %s", e)
->>>>>>> 62c71a6 (add RAG for meeting descriptions)
 
 
 def _extract_context_classroom_ids(context_docs, limit: int = 3):
