@@ -1675,7 +1675,8 @@ def query_documents():
     {
         "query": "search text",
         "n_results": 5,  // optional, defaults to 5
-        "where": {"key": "value"}  // optional metadata filter
+        "where": {"key": "value"},  // optional metadata filter
+        "min_similarity": 0.75  // optional, defaults to 0.75
     }
     """
     try:
@@ -1687,11 +1688,23 @@ def query_documents():
         query_text = data.get('query')
         n_results = data.get('n_results', 5)
         where = data.get('where', None)
+        min_similarity = data.get('min_similarity', 0.75)
         
         if not isinstance(query_text, str) or len(query_text.strip()) == 0:
             return jsonify({"status": "error", "message": "'query' must be a non-empty string"}), 400
+
+        if not isinstance(n_results, int) or n_results <= 0:
+            return jsonify({"status": "error", "message": "'n_results' must be a positive integer"}), 400
+
+        if where is not None and not isinstance(where, dict):
+            return jsonify({"status": "error", "message": "'where' must be an object when provided"}), 400
+
+        if not isinstance(min_similarity, (int, float)):
+            return jsonify({"status": "error", "message": "'min_similarity' must be a number between 0 and 1"}), 400
+        if min_similarity < 0 or min_similarity > 1:
+            return jsonify({"status": "error", "message": "'min_similarity' must be between 0 and 1"}), 400
         
-        result = chroma_service.query_documents(query_text, n_results, where)
+        result = chroma_service.query_documents(query_text, n_results, where, float(min_similarity))
         
         if result['status'] == 'success':
             return jsonify(result), 200

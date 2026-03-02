@@ -72,7 +72,8 @@ export async function uploadPostToChromaDB(
  */
 export async function queryPostsFromChromaDB(
   query: string,
-  nResults: number = 5
+  nResults: number = 5,
+  minSimilarity: number = 0.78
 ): Promise<ChromaDBQueryResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/documents/query`, {
@@ -83,6 +84,8 @@ export async function queryPostsFromChromaDB(
       body: JSON.stringify({
         query,
         n_results: nResults,
+        where: { source: 'post' },
+        min_similarity: minSimilarity,
       }),
     });
 
