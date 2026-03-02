@@ -8,6 +8,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -424,7 +425,7 @@ export default function MeetingDetailsDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+            <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                         <Calendar className="text-purple-600" size={24} />
@@ -436,9 +437,10 @@ export default function MeetingDetailsDialog({
                 </DialogHeader>
 
                 {loading ? (
-                    <div className="py-8 text-center text-slate-500">Loading details...</div>
+                    <div className="px-6 pb-6 py-8 text-center text-slate-500">Loading details...</div>
                 ) : (
-                    <div className="space-y-6 py-4">
+                    <ScrollArea className="max-h-[600px]">
+                        <div className="space-y-6 py-4 pr-4">
 
                         {/* Time Display */}
                         <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
@@ -763,7 +765,8 @@ export default function MeetingDetailsDialog({
                             </Button>
                         )}
 
-                    </div>
+                        </div>
+                    </ScrollArea>
                 )}
             </DialogContent>
         </Dialog >
