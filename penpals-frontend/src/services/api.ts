@@ -1,6 +1,12 @@
 // Base API configuration and utilities
+// /api/classroom CHNAGE TO /api/profile
+// Setting for URL
 
-const API_BASE_URL = 'http://localhost:5001/api';
+const runtimeImportMeta = import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+};
+
+const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -26,6 +32,39 @@ export class ApiError extends Error {
 export class ApiClient {
   private static token: string | null = null;
 
+  private static buildFallbackUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'localhost') {
+        parsed.hostname = '127.0.0.1';
+        return parsed.toString();
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static async doFetch(url: string, options: RequestInit): Promise<Response> {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      const fallbackUrl = this.buildFallbackUrl(url);
+      if (fallbackUrl) {
+        return await fetch(fallbackUrl, options);
+      }
+      throw error;
+    }
+  }
+
+  private static isFormDataBody(body: BodyInit | null | undefined): boolean {
+    if (!body) return false;
+    if (typeof FormData === 'undefined') return false;
+
+    return body instanceof FormData ||
+      Object.prototype.toString.call(body) === '[object FormData]';
+  }
+
   static setToken(token: string) {
     this.token = token;
     localStorage.setItem('penpals_token', token);
@@ -50,17 +89,18 @@ export class ApiClient {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = this.getToken();
 
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
+    const headers = new Headers(options.headers || {});
+
+    if (!this.isFormDataBody(options.body) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     if (token) {
-      headers.Authorization = `Bearer ${token}`;
+      headers.set('Authorization', `Bearer ${token}`);
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.doFetch(url, {
         ...options,
         headers,
       });
@@ -88,8 +128,11 @@ export class ApiClient {
       if (error instanceof ApiError) {
         throw error;
       }
+      const fallbackHint = url.includes('localhost')
+        ? ' If you are on macOS, localhost can fail in WebView networking; 127.0.0.1 is used as a fallback.'
+        : '';
       throw new ApiError(
-        error instanceof Error ? error.message : 'Network error',
+        `${error instanceof Error ? error.message : 'Network error'}. Unable to reach backend API at ${url}.${fallbackHint}`,
         0
       );
     }
