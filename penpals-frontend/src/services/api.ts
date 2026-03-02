@@ -1,6 +1,4 @@
 // Base API configuration and utilities
-// /api/classroom CHNAGE TO /api/profile
-// Setting for URL
 
 const API_BASE_URL = 'http://localhost:5001/api';
 
@@ -28,14 +26,6 @@ export class ApiError extends Error {
 export class ApiClient {
   private static token: string | null = null;
 
-  private static isFormDataBody(body: BodyInit | null | undefined): boolean {
-    if (!body) return false;
-    if (typeof FormData === 'undefined') return false;
-
-    return body instanceof FormData ||
-      Object.prototype.toString.call(body) === '[object FormData]';
-  }
-
   static setToken(token: string) {
     this.token = token;
     localStorage.setItem('penpals_token', token);
@@ -60,14 +50,13 @@ export class ApiClient {
     const url = `${API_BASE_URL}${endpoint}`;
     const token = this.getToken();
 
-    const headers = new Headers(options.headers || {});
-
-    if (!this.isFormDataBody(options.body) && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
-    }
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
 
     if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
+      headers.Authorization = `Bearer ${token}`;
     }
 
     try {
