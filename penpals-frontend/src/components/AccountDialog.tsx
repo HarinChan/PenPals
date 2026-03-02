@@ -44,15 +44,15 @@ export default function AccountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-85vh flex flex-col bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-slate-900 dark:text-slate-100">Account Settings</DialogTitle>
           <DialogDescription className="text-slate-600 dark:text-slate-400">
             Manage your location, integration settings, and view account overview.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4 flex-1">
+        <div className="space-y-6 py-4 flex-1 overflow-y-auto">
           {/* Account Location Management */}
           <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="p-6 space-y-4">
