@@ -117,6 +117,7 @@ class Meeting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     webex_id = db.Column(db.String(255), nullable=True)
     title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     web_link = db.Column(db.String(1000), nullable=True)  # Nullable until invitation accepted

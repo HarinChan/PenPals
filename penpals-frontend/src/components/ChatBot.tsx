@@ -7,6 +7,7 @@ import { Badge } from './ui/badge';
 import { sendChatMessage, transcribeChatAudio, ChatMessage } from '../services/chat';
 import type { Account, Classroom } from '../types';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
+import MeetingDetailsDialog from './MeetingDetailsDialog';
 
 interface ChatBotProps {
     onClose?: () => void;
@@ -16,15 +17,37 @@ interface ChatBotProps {
 
 interface ChatMessageWithClassrooms extends ChatMessage {
     classroomIds?: string[];
+    meetingIds?: string[];
+    meetingSuggestions?: MeetingSuggestion[];
+}
+
+interface MeetingSuggestion {
+    id: string;
+    title: string;
+    description?: string;
+    startTime?: string;
+    creatorName?: string;
+    similarity?: number;
 }
 
 const CLASSROOM_TAG_RE = /<classroom\s+id="([^"]+)"\s*\/>/g;
+const MEETING_TAG_RE = /<meeting\s+id="([^"]+)"\s*\/>/g;
+const MEETING_CONTEXT_THRESHOLD = 0.35;
 
-const parseClassroomTags = (content: string) => {
+const parseAssistantTags = (content: string) => {
     const classroomIds: string[] = [];
-    const cleaned = content.replace(CLASSROOM_TAG_RE, (_match, id) => {
+    const meetingIds: string[] = [];
+
+    let cleaned = content.replace(CLASSROOM_TAG_RE, (_match, id) => {
         if (!classroomIds.includes(id)) {
             classroomIds.push(id);
+        }
+        return '';
+    });
+
+    cleaned = cleaned.replace(MEETING_TAG_RE, (_match, id) => {
+        if (!meetingIds.includes(id)) {
+            meetingIds.push(id);
         }
         return '';
     });
@@ -32,7 +55,43 @@ const parseClassroomTags = (content: string) => {
     return {
         cleaned: cleaned.replace(/\n{3,}/g, '\n\n').trim(),
         classroomIds: classroomIds.slice(0, 3),
+        meetingIds: meetingIds.slice(0, 3),
     };
+};
+
+const buildMeetingSuggestions = (meetingIds: string[], context?: Array<Record<string, any>>): MeetingSuggestion[] => {
+    if (!Array.isArray(context) || meetingIds.length === 0) {
+        return [];
+    }
+
+    const suggestions: MeetingSuggestion[] = [];
+    const seen = new Set<string>();
+
+    for (const meetingId of meetingIds) {
+        const match = context.find((doc) => {
+            const metadata = doc?.metadata || {};
+            if (metadata?.source !== 'meeting') return false;
+            if (String(metadata?.meeting_id) !== String(meetingId)) return false;
+            const similarity = Number(doc?.similarity ?? 0);
+            return Number.isFinite(similarity) && similarity >= MEETING_CONTEXT_THRESHOLD;
+        });
+
+        if (!match) continue;
+        if (seen.has(String(meetingId))) continue;
+
+        const metadata = match.metadata || {};
+        suggestions.push({
+            id: String(metadata.meeting_id || meetingId),
+            title: String(metadata.title || 'Public Meeting'),
+            description: metadata.description ? String(metadata.description) : undefined,
+            startTime: metadata.start_time ? String(metadata.start_time) : undefined,
+            creatorName: metadata.creator_name ? String(metadata.creator_name) : undefined,
+            similarity: Number(match.similarity ?? 0),
+        });
+        seen.add(String(meetingId));
+    }
+
+    return suggestions;
 };
 
 export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBotProps) {
@@ -49,6 +108,8 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
     const bottomRef = useRef<HTMLDivElement>(null);
     const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+    const [meetingDetailsOpen, setMeetingDetailsOpen] = useState(false);
+    const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
@@ -108,13 +169,16 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
         try {
             const result = await sendChatMessage(nextMessage.content, messages, 5);
             if (result.status === 'success' && result.reply) {
-                const parsed = parseClassroomTags(result.reply as string);
+                const parsed = parseAssistantTags(result.reply as string);
+                const meetingSuggestions = buildMeetingSuggestions(parsed.meetingIds, result.context);
                 setMessages(prev => [
                     ...prev,
                     {
                         role: 'assistant',
                         content: parsed.cleaned,
                         classroomIds: parsed.classroomIds,
+                        meetingIds: parsed.meetingIds,
+                        meetingSuggestions,
                     },
                 ]);
             } else {
@@ -322,6 +386,44 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                                                 ))}
                                         </div>
                                     )}
+
+                                    {message.role === 'assistant' && message.meetingSuggestions && message.meetingSuggestions.length > 0 && (
+                                        <div className="w-full mt-2 grid gap-3 min-w-[280px]">
+                                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">Suggested Public Meetings</p>
+                                            {message.meetingSuggestions.map((meeting) => (
+                                                <button
+                                                    key={`chat-meeting-${meeting.id}`}
+                                                    onClick={() => {
+                                                        setSelectedMeetingId(Number(meeting.id));
+                                                        setMeetingDetailsOpen(true);
+                                                    }}
+                                                    className="group/card relative w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all duration-200 text-left overflow-hidden"
+                                                >
+                                                    <div className="absolute top-0 right-0 p-2 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                                        <div className="bg-indigo-50 dark:bg-indigo-900/30 p-1.5 rounded-full">
+                                                            <Sparkles className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5 pr-6">
+                                                        <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{meeting.title}</div>
+                                                        {meeting.startTime && (
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                                {new Date(meeting.startTime).toLocaleString()}
+                                                            </div>
+                                                        )}
+                                                        {meeting.creatorName && (
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">Host: {meeting.creatorName}</div>
+                                                        )}
+                                                        {meeting.description && (
+                                                            <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                                                                {meeting.description}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -413,6 +515,13 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                 mySchedule={currentAccount.schedule}
                 friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
                 accountLon={currentAccount.x}
+            />
+
+            <MeetingDetailsDialog
+                meetingId={selectedMeetingId}
+                open={meetingDetailsOpen}
+                onOpenChange={setMeetingDetailsOpen}
+                onMeetingUpdated={() => {}}
             />
         </Card>
     );

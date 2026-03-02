@@ -3,6 +3,7 @@ import { ApiClient } from './api';
 export interface MeetingDto {
   id: number;
   title: string;
+  description?: string | null;
   start_time: string;
   end_time: string;
   web_link?: string | null;

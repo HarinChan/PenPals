@@ -39,6 +39,7 @@ MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
 MEETING_MAX_ADVANCE_DAYS = 14
 TRENDING_LOOKAHEAD_DAYS = 14
+MEETING_RAG_SIMILARITY_THRESHOLD = 0.35
 
 
 def validate_meeting_schedule(start_time: datetime, end_time: datetime):
@@ -106,6 +107,7 @@ def _serialize_meeting(meeting: Meeting, profile: Profile = None, account: Accou
     payload = {
         "id": meeting.id,
         "title": meeting.title,
+        "description": meeting.description,
         "start_time": meeting.start_time.isoformat(),
         "end_time": meeting.end_time.isoformat(),
         "web_link": meeting.web_link,
@@ -206,6 +208,8 @@ def ensure_meeting_schema_columns():
         alterations.append("ALTER TABLE meetings ADD COLUMN join_count INTEGER NOT NULL DEFAULT 0")
     if 'created_at' not in meeting_columns:
         alterations.append("ALTER TABLE meetings ADD COLUMN created_at DATETIME")
+    if 'description' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN description TEXT")
 
     for query in alterations:
         try:
@@ -264,6 +268,7 @@ application.register_blueprint(classroom_bp)
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 
 _CLASSROOM_TAG_RE = re.compile(r'<classroom\s+id="[^"]+"\s*/>')
+<<<<<<< HEAD
 TRANSCRIBE_MAX_AUDIO_BYTES = int(os.getenv('TRANSCRIBE_MAX_AUDIO_BYTES', str(20 * 1024 * 1024)))
 FASTER_WHISPER_MODEL_SIZE = os.getenv('FASTER_WHISPER_MODEL_SIZE', 'base')
 FASTER_WHISPER_DEVICE = os.getenv('FASTER_WHISPER_DEVICE', 'cpu')
@@ -272,6 +277,63 @@ FASTER_WHISPER_BEAM_SIZE = int(os.getenv('FASTER_WHISPER_BEAM_SIZE', '1'))
 
 _FASTER_WHISPER_MODEL = None
 _FASTER_WHISPER_MODEL_LOCK = threading.Lock()
+=======
+_MEETING_TAG_RE = re.compile(r'<meeting\s+id="[^"]+"\s*/>')
+
+
+def _build_meeting_index_document(meeting: Meeting) -> str:
+    description = (meeting.description or "").strip()
+    return (
+        f"Meeting: {meeting.title}\n"
+        f"Description: {description}\n"
+        f"Host: {meeting.creator.name if meeting.creator else 'Unknown'}\n"
+        f"Starts: {meeting.start_time.isoformat()}\n"
+        f"Ends: {meeting.end_time.isoformat()}"
+    )
+
+
+def _sync_meeting_in_chroma(meeting: Meeting):
+    if not meeting:
+        return
+
+    doc_id = f"meeting-{meeting.id}"
+    description = (meeting.description or "").strip()
+    should_index = meeting.visibility == 'public' and meeting.status != 'cancelled' and len(description) > 0
+
+    if not should_index:
+        try:
+            chroma_service.delete_documents([doc_id])
+        except Exception as e:
+            application.logger.warning("Failed removing meeting from ChromaDB: %s", e)
+        return
+
+    metadata = {
+        "source": "meeting",
+        "meeting_id": str(meeting.id),
+        "title": meeting.title,
+        "description": description,
+        "creator_name": meeting.creator.name if meeting.creator else "Unknown",
+        "creator_id": str(meeting.creator_id),
+        "start_time": meeting.start_time.isoformat(),
+        "end_time": meeting.end_time.isoformat(),
+        "visibility": meeting.visibility,
+        "status": meeting.status,
+    }
+
+    try:
+        chroma_service.delete_documents([doc_id])
+    except Exception:
+        pass
+
+    try:
+        chroma_service.add_documents(
+            [_build_meeting_index_document(meeting)],
+            metadatas=[metadata],
+            ids=[doc_id]
+        )
+    except Exception as e:
+        application.logger.warning("Failed indexing meeting in ChromaDB: %s", e)
+>>>>>>> 62c71a6 (add RAG for meeting descriptions)
 
 
 def _extract_context_classroom_ids(context_docs, limit: int = 3):
@@ -413,6 +475,55 @@ def _transcribe_with_faster_whisper(audio_bytes: bytes, mime_type: str, hotwords
                 os.remove(temp_path)
             except OSError:
                 pass
+def _extract_context_meeting_ids(context_docs, limit: int = 3):
+    meeting_ids = []
+    if not isinstance(context_docs, list):
+        return meeting_ids
+
+    for doc in context_docs:
+        if not isinstance(doc, dict):
+            continue
+
+        similarity = doc.get("similarity", 0.0)
+        try:
+            similarity = float(similarity)
+        except (ValueError, TypeError):
+            similarity = 0.0
+
+        metadata = doc.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+
+        if metadata.get("source") != "meeting":
+            continue
+        if metadata.get("visibility") != "public":
+            continue
+        if similarity < MEETING_RAG_SIMILARITY_THRESHOLD:
+            continue
+
+        meeting_id = metadata.get("meeting_id")
+        if meeting_id:
+            meeting_id = str(meeting_id)
+            if meeting_id not in meeting_ids:
+                meeting_ids.append(meeting_id)
+        if len(meeting_ids) >= limit:
+            break
+
+    return meeting_ids
+
+
+def _inject_meeting_tags(reply: str, context_docs, limit: int = 3) -> str:
+    if not isinstance(reply, str) or not reply:
+        return reply
+    if _MEETING_TAG_RE.search(reply):
+        return reply
+
+    meeting_ids = _extract_context_meeting_ids(context_docs, limit)
+    if not meeting_ids:
+        return reply
+
+    tags = "\n".join(f'<meeting id="{mid}"/>' for mid in meeting_ids)
+    return reply.rstrip() + "\n" + tags
 
 
 @application.route('/api/chat', methods=['POST'])
@@ -442,18 +553,42 @@ def chat():
             n_results = 5
 
         query_result = chroma_service.query_documents(message, n_results)
+        meeting_query_result = chroma_service.query_documents(
+            message,
+            n_results,
+            where={"source": "meeting", "visibility": "public"}
+        )
+
         context_docs = []
         if isinstance(query_result, dict) and query_result.get('status') == 'success':
             context_docs = query_result.get('results', [])
 
+        meeting_context_docs = []
+        if isinstance(meeting_query_result, dict) and meeting_query_result.get('status') == 'success':
+            meeting_context_docs = meeting_query_result.get('results', [])
+
+        merged_docs = []
+        seen_doc_ids = set()
+        for source_docs in [context_docs, meeting_context_docs]:
+            for doc in source_docs:
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = str(doc.get('id', ''))
+                if doc_id and doc_id in seen_doc_ids:
+                    continue
+                if doc_id:
+                    seen_doc_ids.add(doc_id)
+                merged_docs.append(doc)
+
         messages = history + [{"role": "user", "content": message}]
-        reply = generate_reply(messages, context_docs)
-        reply = _inject_classroom_tags(reply, context_docs, 3)
+        reply = generate_reply(messages, merged_docs)
+        reply = _inject_classroom_tags(reply, merged_docs, 3)
+        reply = _inject_meeting_tags(reply, meeting_context_docs, 3)
 
         return jsonify({
             "status": "success",
             "reply": reply,
-            "context": context_docs
+            "context": merged_docs
         }), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -806,6 +941,7 @@ def create_webex_meeting():
     
     data = request.json or {}
     title = data.get('title', 'Classroom Meeting')
+    description = str(data.get('description') or '').strip()
     start_time_str = data.get('start_time')
     end_time_str = data.get('end_time')
     is_public = bool(data.get('is_public', False))
@@ -854,6 +990,7 @@ def create_webex_meeting():
 
     new_meeting = Meeting(
         title=title,
+        description=description,
         start_time=start_time,
         end_time=end_time,
         creator_id=creator_profile.id,
@@ -885,6 +1022,7 @@ def create_webex_meeting():
         invitations.append(invitation)
 
     db.session.commit()
+    _sync_meeting_in_chroma(new_meeting)
 
     invitations_payload = [{
         "id": inv.id,
@@ -973,6 +1111,7 @@ def manage_meeting(meeting_id):
                 invitation.status = 'cancelled'
 
             db.session.commit()
+            _sync_meeting_in_chroma(meeting)
             return jsonify({"msg": "Meeting cancelled successfully"}), 200
         except Exception as e:
             return jsonify({"msg": f"Failed to cancel meeting: {str(e)}"}), 500
@@ -987,10 +1126,13 @@ def manage_meeting(meeting_id):
         end_time_str = data.get('end_time')
         visibility = data.get('visibility')
         max_participants = data.get('max_participants')
+        description = data.get('description')
         if title is not None:
             title = str(title).strip()
             if not title:
                 return jsonify({"msg": "title cannot be empty"}), 400
+        if description is not None:
+            description = str(description).strip()
 
         if visibility is not None and visibility not in ['private', 'public']:
             return jsonify({"msg": "visibility must be 'private' or 'public'"}), 400
@@ -1020,6 +1162,8 @@ def manage_meeting(meeting_id):
                 meeting.visibility = visibility
             if max_participants is not None:
                 meeting.max_participants = parsed_max_participants
+            if description is not None:
+                meeting.description = description
 
             schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
             if schedule_error:
@@ -1048,6 +1192,7 @@ def manage_meeting(meeting_id):
                 invitation.end_time = meeting.end_time
             
             db.session.commit()
+            _sync_meeting_in_chroma(meeting)
             return jsonify({"msg": "Meeting updated successfully"}), 200
         except ValueError:
              return jsonify({"msg": "Invalid date format"}), 400

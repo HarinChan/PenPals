@@ -44,6 +44,7 @@ interface MeetingDetailsDialogProps {
 interface MeetingDetails {
     id: number;
     title: string;
+    description?: string | null;
     start_time: string;
     end_time: string;
     web_link?: string | null;
@@ -81,6 +82,7 @@ export default function MeetingDetailsDialog({
     const [newDate, setNewDate] = useState<string>('');
     const [newTime, setNewTime] = useState<string>('');
     const [durationMinutes, setDurationMinutes] = useState<number>(30);
+    const [newDescription, setNewDescription] = useState<string>('');
     const [newVisibility, setNewVisibility] = useState<'private' | 'public'>('private');
     const [newMaxParticipants, setNewMaxParticipants] = useState<string>('20');
     const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
@@ -152,6 +154,7 @@ export default function MeetingDetailsDialog({
                 const endDate = new Date(data.end_time);
                 const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
                 setNewTitle(data.title || '');
+                setNewDescription(data.description || '');
                 setNewDate(startDate.toISOString().split('T')[0]);
                 setNewTime(startDate.toTimeString().slice(0, 5));
                 setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
@@ -240,6 +243,7 @@ export default function MeetingDetailsDialog({
                 },
                 body: JSON.stringify({
                     title: trimmedTitle,
+                    description: newDescription.trim(),
                     start_time: startDateTime.toISOString(),
                     end_time: endDateTime.toISOString(),
                     visibility: newVisibility,
@@ -292,6 +296,7 @@ export default function MeetingDetailsDialog({
                 },
                 body: JSON.stringify({
                     title: trimmedTitle,
+                    description: newDescription.trim(),
                     visibility: newVisibility,
                     max_participants: parsedCapacity,
                 })
@@ -534,6 +539,15 @@ export default function MeetingDetailsDialog({
                                             value={newTitle}
                                             onChange={(e) => setNewTitle(e.target.value)}
                                             className="bg-white dark:bg-slate-900"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Description</Label>
+                                        <textarea
+                                            value={newDescription}
+                                            onChange={(e) => setNewDescription(e.target.value)}
+                                            placeholder="Add meeting details for participants"
+                                            className="w-full min-h-[72px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
                                         />
                                     </div>
                                     <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">

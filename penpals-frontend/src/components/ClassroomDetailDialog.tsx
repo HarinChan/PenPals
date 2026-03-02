@@ -141,6 +141,7 @@ export default function ClassroomDetailDialog({
   const [isPublicMeeting, setIsPublicMeeting] = useState<boolean>(false);
   const [maxParticipants, setMaxParticipants] = useState<string>('20');
   const [customMeetingTitle, setCustomMeetingTitle] = useState<string>('');
+  const [customMeetingDescription, setCustomMeetingDescription] = useState<string>('');
   const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
   const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
   const [inviteSearch, setInviteSearch] = useState<string>('');
@@ -282,6 +283,7 @@ export default function ClassroomDetailDialog({
     setIsPublicMeeting(false);
     setMaxParticipants('20');
     setCustomMeetingTitle('');
+    setCustomMeetingDescription('');
     setInviteSearch('');
     setSelectedInviteeIds([]);
     if (dateOptions.length > 0) {
@@ -298,7 +300,7 @@ export default function ClassroomDetailDialog({
     title: string,
     start: Date | null,
     end: Date | null,
-    options?: { isPublic?: boolean; maxParticipants?: number; classroomIds?: number[] }
+    options?: { isPublic?: boolean; maxParticipants?: number; classroomIds?: number[]; description?: string }
   ) => {
     try {
       const token = localStorage.getItem('penpals_token');
@@ -317,6 +319,7 @@ export default function ClassroomDetailDialog({
           title,
           start_time: start?.toISOString(),
           end_time: end?.toISOString(),
+          description: options?.description,
           classroom_ids: options?.classroomIds,
           is_public: !!options?.isPublic,
           max_participants: options?.maxParticipants,
@@ -395,6 +398,7 @@ export default function ClassroomDetailDialog({
       isPublic: isPublicMeeting,
       maxParticipants: parsedCapacity,
       classroomIds: Array.from(inviteeIds),
+      description: customMeetingDescription.trim(),
     }), {
       loading: 'Sending meeting invitation...',
       success: (data) => {
@@ -507,6 +511,16 @@ export default function ClassroomDetailDialog({
                         onChange={(event) => setCustomMeetingTitle(event.target.value)}
                         placeholder={`Call with ${classroom.name}`}
                         className="bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Meeting Description (optional)</label>
+                      <textarea
+                        value={customMeetingDescription}
+                        onChange={(event) => setCustomMeetingDescription(event.target.value)}
+                        placeholder="What is this meeting about?"
+                        className="w-full min-h-[72px] rounded-md border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
                       />
                     </div>
 
