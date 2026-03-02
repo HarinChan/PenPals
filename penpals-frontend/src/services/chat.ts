@@ -1,4 +1,4 @@
-import { ApiClient } from './api';
+import { ApiClient, ApiError } from './api';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -41,8 +41,28 @@ export async function transcribeChatAudio(
     formData.append('hotwords', hotwords.trim());
   }
 
-  return ApiClient.request<TranscribeResponse>('/chat/transcribe', {
-    method: 'POST',
-    body: formData,
-  });
+  try {
+    return await ApiClient.request<TranscribeResponse>('/chat/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 404) {
+        return {
+          status: 'error',
+          message: 'Transcription endpoint not found. Start the latest backend and ensure /api/chat/transcribe is available.',
+        };
+      }
+
+      if (error.status === 0) {
+        return {
+          status: 'error',
+          message: 'Could not reach transcription service. Ensure backend is running on port 5001 and microphone upload is allowed.',
+        };
+      }
+    }
+
+    throw error;
+  }
 }

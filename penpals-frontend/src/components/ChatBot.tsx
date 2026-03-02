@@ -151,6 +151,17 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
         if (isRecording || isTranscribing || loading) return;
         setError(null);
 
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+            const platformMessage = navigator.userAgent.includes('Mac')
+                ? 'On macOS, ensure microphone permission is granted in System Settings > Privacy & Security > Microphone.'
+                : navigator.userAgent.includes('Windows')
+                    ? 'On Windows, ensure microphone permission is granted in Settings > Privacy & security > Microphone.'
+                    : 'Ensure microphone permissions are enabled for this app.';
+
+            setError(`Microphone recording is unavailable in this runtime. ${platformMessage}`);
+            return;
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
