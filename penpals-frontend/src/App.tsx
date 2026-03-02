@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import logoImage from './assets/PenPals_Logo.png';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
 import ChatBot from './components/ChatBot';
+import AccountDialog from './components/AccountDialog';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import { Account, Classroom } from './types';
-import { GraduationCap, Moon, Sun, LogOut, Menu, RotateCw, MessageCircle } from 'lucide-react';
+import { GraduationCap, LogOut, Menu, RotateCw, MessageCircle } from 'lucide-react';
 import { Post } from './components/PostCreator';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './components/ui/sheet';
@@ -69,6 +71,7 @@ function AppContent() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showChatBot, setShowChatBot] = useState(false);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [loginError, setLoginError] = useState<string>('');
   const [signupError, setSignupError] = useState<string>('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -577,9 +580,7 @@ function AppContent() {
     return (
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center animate-pulse">
-            <GraduationCap className="w-6 h-6 text-white" />
-          </div>
+          <img src={logoImage} alt="PenPals Logo" className="w-[200px] h-auto animate-pulse" />
           <p className="text-slate-600 dark:text-slate-400">Loading...</p>
         </div>
       </div>
@@ -614,11 +615,8 @@ function AppContent() {
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-slate-900 dark:text-slate-100 text-xl hidden sm:block">PenPals AI</h1>
-            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block">powered by MirrorMirror</span>
+            <img src={logoImage} alt="PenPals" className="h-10 w-auto" />
+            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block font-medium">powered by MirrorMirror</span>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <Button
@@ -639,18 +637,14 @@ function AppContent() {
             >
               <MessageCircle className="w-5 h-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-              title="Toggle Theme"
+
+            <button 
+              onClick={() => setShowAccountDialog(true)}
+              className="w-8 h-8 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:focus:ring-offset-slate-800"
+              title="Account Settings"
             >
-              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </Button>
-            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm">
               {currentAccount.classroomName.charAt(0)}
-            </div>
+            </button>
             <Button
               variant="ghost"
               size="icon"
@@ -775,6 +769,14 @@ function AppContent() {
           />
         </DialogContent>
       </Dialog>
+
+      <AccountDialog 
+        open={showAccountDialog} 
+        onOpenChange={setShowAccountDialog} 
+        currentAccount={currentAccount} 
+        accounts={accounts} 
+        onAccountUpdate={handleAccountUpdate} 
+      />
 
       <Toaster />
     </div>
