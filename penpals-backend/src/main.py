@@ -39,6 +39,30 @@ MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
 MEETING_MAX_ADVANCE_DAYS = 14
 TRENDING_LOOKAHEAD_DAYS = 14
+CLASSROOM_WIDGET_SIMILARITY_THRESHOLD = 0.12
+MEETING_WIDGET_SIMILARITY_THRESHOLD = 0.12
+
+
+def _get_doc_similarity(doc: dict) -> float:
+    if not isinstance(doc, dict):
+        return 0.0
+    try:
+        similarity = float(doc.get("similarity", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+    return similarity
+
+
+def _strip_model_thinking(reply: str) -> str:
+    if not isinstance(reply, str) or not reply:
+        return reply
+
+    cleaned = re.sub(r"<think>.*?</think>", "", reply, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 def validate_meeting_schedule(start_time: datetime, end_time: datetime):
     if end_time <= start_time:
         return "end_time must be after start_time"
@@ -339,6 +363,9 @@ def _extract_context_classroom_ids(context_docs, limit: int = 3):
         if not isinstance(doc, dict):
             continue
 
+        if _get_doc_similarity(doc) < CLASSROOM_WIDGET_SIMILARITY_THRESHOLD:
+            continue
+
         metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
         if isinstance(metadata, dict):
             if metadata.get("source") != "post":
@@ -483,6 +510,9 @@ def _extract_context_meeting_ids(context_docs, limit: int = 3):
         if not isinstance(doc, dict):
             continue
 
+        if _get_doc_similarity(doc) < MEETING_WIDGET_SIMILARITY_THRESHOLD:
+            continue
+
         metadata = doc.get("metadata", {})
         if not isinstance(metadata, dict):
             continue
@@ -571,6 +601,7 @@ def chat():
 
         messages = history + [{"role": "user", "content": message}]
         reply = generate_reply(messages, merged_docs)
+        reply = _strip_model_thinking(reply)
         reply = _inject_classroom_tags(reply, merged_docs, 3)
         reply = _inject_meeting_tags(reply, merged_docs, 3)
 
