@@ -489,8 +489,6 @@ def _extract_context_meeting_ids(context_docs, limit: int = 3):
 
         if metadata.get("source") != "meeting":
             continue
-        if metadata.get("visibility") != "public":
-            continue
 
         meeting_id = metadata.get("meeting_id")
         if meeting_id:
@@ -574,7 +572,7 @@ def chat():
         messages = history + [{"role": "user", "content": message}]
         reply = generate_reply(messages, merged_docs)
         reply = _inject_classroom_tags(reply, merged_docs, 3)
-        reply = _inject_meeting_tags(reply, meeting_context_docs, 3)
+        reply = _inject_meeting_tags(reply, merged_docs, 3)
 
         return jsonify({
             "status": "success",

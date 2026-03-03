@@ -59,32 +59,42 @@ const parseAssistantTags = (content: string) => {
 };
 
 const buildMeetingSuggestions = (meetingIds: string[], context?: Array<Record<string, any>>): MeetingSuggestion[] => {
-    if (!Array.isArray(context) || meetingIds.length === 0) {
+    if (meetingIds.length === 0) {
         return [];
     }
 
     const suggestions: MeetingSuggestion[] = [];
     const seen = new Set<string>();
 
-    for (const meetingId of meetingIds) {
-        const match = context.find((doc) => {
+    const meetingContextById = new Map<string, Record<string, any>>();
+    if (Array.isArray(context)) {
+        for (const doc of context) {
             const metadata = doc?.metadata || {};
-            if (metadata?.source !== 'meeting') return false;
-            if (String(metadata?.meeting_id) !== String(meetingId)) return false;
-            return true;
-        });
+            if (metadata?.source !== 'meeting') continue;
 
-        if (!match) continue;
+            const metadataMeetingId = metadata?.meeting_id;
+            if (metadataMeetingId === undefined || metadataMeetingId === null) continue;
+
+            const key = String(metadataMeetingId);
+            if (!meetingContextById.has(key)) {
+                meetingContextById.set(key, doc);
+            }
+        }
+    }
+
+    for (const meetingId of meetingIds) {
         if (seen.has(String(meetingId))) continue;
 
-        const metadata = match.metadata || {};
+        const match = meetingContextById.get(String(meetingId));
+        const metadata = match?.metadata || {};
+
         suggestions.push({
-            id: String(metadata.meeting_id || meetingId),
-            title: String(metadata.title || 'Public Meeting'),
+            id: String(meetingId),
+            title: String(metadata.title || `Meeting #${meetingId}`),
             description: metadata.description ? String(metadata.description) : undefined,
             startTime: metadata.start_time ? String(metadata.start_time) : undefined,
             creatorName: metadata.creator_name ? String(metadata.creator_name) : undefined,
-            similarity: Number(match.similarity ?? 0),
+            similarity: Number(match?.similarity ?? 0),
         });
         seen.add(String(meetingId));
     }
@@ -392,7 +402,11 @@ export default function ChatBot({ onClose, classrooms, currentAccount }: ChatBot
                                                 <button
                                                     key={`chat-meeting-${meeting.id}`}
                                                     onClick={() => {
-                                                        setSelectedMeetingId(Number(meeting.id));
+                                                        const numericMeetingId = Number(meeting.id);
+                                                        if (!Number.isFinite(numericMeetingId)) {
+                                                            return;
+                                                        }
+                                                        setSelectedMeetingId(numericMeetingId);
                                                         setMeetingDetailsOpen(true);
                                                     }}
                                                     className="group/card relative w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all duration-200 text-left overflow-hidden"
