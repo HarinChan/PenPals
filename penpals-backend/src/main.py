@@ -40,7 +40,9 @@ MEETING_MAX_DURATION_MINUTES = 60
 MEETING_MAX_ADVANCE_DAYS = 14
 TRENDING_LOOKAHEAD_DAYS = 14
 CLASSROOM_WIDGET_SIMILARITY_THRESHOLD = 0.12
+CLASSROOM_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD = 0.35
 MEETING_WIDGET_SIMILARITY_THRESHOLD = 0.12
+MEETING_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD = 0.35
 
 
 def _get_doc_similarity(doc: dict) -> float:
@@ -51,6 +53,30 @@ def _get_doc_similarity(doc: dict) -> float:
     except (TypeError, ValueError):
         return 0.0
     return similarity
+
+
+def _is_meeting_intent_query(query: str) -> bool:
+    if not isinstance(query, str):
+        return False
+
+    lowered = query.lower()
+    meeting_keywords = [
+        "meeting", "meet", "schedule", "call", "webex", "invite", "invitation",
+        "join", "host", "time", "availability", "slot", "event"
+    ]
+    return any(keyword in lowered for keyword in meeting_keywords)
+
+
+def _is_classroom_intent_query(query: str) -> bool:
+    if not isinstance(query, str):
+        return False
+
+    lowered = query.lower()
+    classroom_keywords = [
+        "classroom", "class", "school", "teacher", "student", "students",
+        "friend", "friends", "post", "posts"
+    ]
+    return any(keyword in lowered for keyword in classroom_keywords)
 
 
 def _strip_model_thinking(reply: str) -> str:
@@ -354,16 +380,23 @@ def _sync_meeting_in_chroma(meeting: Meeting):
         application.logger.warning("Failed indexing meeting in ChromaDB: %s", e)
 
 
-def _extract_context_classroom_ids(context_docs, limit: int = 3):
+def _extract_context_classroom_ids(context_docs, limit: int = 3, user_query: str = ""):
     ids = []
     if not isinstance(context_docs, list):
         return ids
+
+    is_classroom_query = _is_classroom_intent_query(user_query)
+    required_similarity = (
+        CLASSROOM_WIDGET_SIMILARITY_THRESHOLD
+        if is_classroom_query
+        else CLASSROOM_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD
+    )
 
     for doc in context_docs:
         if not isinstance(doc, dict):
             continue
 
-        if _get_doc_similarity(doc) < CLASSROOM_WIDGET_SIMILARITY_THRESHOLD:
+        if _get_doc_similarity(doc) < required_similarity:
             continue
 
         metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
@@ -380,13 +413,13 @@ def _extract_context_classroom_ids(context_docs, limit: int = 3):
     return ids
 
 
-def _inject_classroom_tags(reply: str, context_docs, limit: int = 3) -> str:
+def _inject_classroom_tags(reply: str, context_docs, limit: int = 3, user_query: str = "") -> str:
     if not isinstance(reply, str) or not reply:
         return reply
     if _CLASSROOM_TAG_RE.search(reply):
         return reply
 
-    classroom_ids = _extract_context_classroom_ids(context_docs, limit)
+    classroom_ids = _extract_context_classroom_ids(context_docs, limit, user_query)
     if not classroom_ids:
         return reply
 
@@ -501,16 +534,23 @@ def _transcribe_with_faster_whisper(audio_bytes: bytes, mime_type: str, hotwords
                 os.remove(temp_path)
             except OSError:
                 pass
-def _extract_context_meeting_ids(context_docs, limit: int = 3):
+def _extract_context_meeting_ids(context_docs, limit: int = 3, user_query: str = ""):
     meeting_ids = []
     if not isinstance(context_docs, list):
         return meeting_ids
+
+    is_meeting_query = _is_meeting_intent_query(user_query)
+    required_similarity = (
+        MEETING_WIDGET_SIMILARITY_THRESHOLD
+        if is_meeting_query
+        else MEETING_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD
+    )
 
     for doc in context_docs:
         if not isinstance(doc, dict):
             continue
 
-        if _get_doc_similarity(doc) < MEETING_WIDGET_SIMILARITY_THRESHOLD:
+        if _get_doc_similarity(doc) < required_similarity:
             continue
 
         metadata = doc.get("metadata", {})
@@ -531,13 +571,13 @@ def _extract_context_meeting_ids(context_docs, limit: int = 3):
     return meeting_ids
 
 
-def _inject_meeting_tags(reply: str, context_docs, limit: int = 3) -> str:
+def _inject_meeting_tags(reply: str, context_docs, limit: int = 3, user_query: str = "") -> str:
     if not isinstance(reply, str) or not reply:
         return reply
     if _MEETING_TAG_RE.search(reply):
         return reply
 
-    meeting_ids = _extract_context_meeting_ids(context_docs, limit)
+    meeting_ids = _extract_context_meeting_ids(context_docs, limit, user_query)
     if not meeting_ids:
         return reply
 
@@ -602,8 +642,8 @@ def chat():
         messages = history + [{"role": "user", "content": message}]
         reply = generate_reply(messages, merged_docs)
         reply = _strip_model_thinking(reply)
-        reply = _inject_classroom_tags(reply, merged_docs, 3)
-        reply = _inject_meeting_tags(reply, merged_docs, 3)
+        reply = _inject_classroom_tags(reply, merged_docs, 3, message)
+        reply = _inject_meeting_tags(reply, merged_docs, 3, message)
 
         return jsonify({
             "status": "success",
