@@ -39,9 +39,6 @@ MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
 MEETING_MAX_ADVANCE_DAYS = 14
 TRENDING_LOOKAHEAD_DAYS = 14
-MEETING_RAG_SIMILARITY_THRESHOLD = 0.35
-
-
 def validate_meeting_schedule(start_time: datetime, end_time: datetime):
     if end_time <= start_time:
         return "end_time must be after start_time"
@@ -339,8 +336,13 @@ def _extract_context_classroom_ids(context_docs, limit: int = 3):
         return ids
 
     for doc in context_docs:
+        if not isinstance(doc, dict):
+            continue
+
         metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
         if isinstance(metadata, dict):
+            if metadata.get("source") != "post":
+                continue
             classroom_id = metadata.get("classroom_id")
             if classroom_id:
                 classroom_id = str(classroom_id)
@@ -481,12 +483,6 @@ def _extract_context_meeting_ids(context_docs, limit: int = 3):
         if not isinstance(doc, dict):
             continue
 
-        similarity = doc.get("similarity", 0.0)
-        try:
-            similarity = float(similarity)
-        except (ValueError, TypeError):
-            similarity = 0.0
-
         metadata = doc.get("metadata", {})
         if not isinstance(metadata, dict):
             continue
@@ -494,8 +490,6 @@ def _extract_context_meeting_ids(context_docs, limit: int = 3):
         if metadata.get("source") != "meeting":
             continue
         if metadata.get("visibility") != "public":
-            continue
-        if similarity < MEETING_RAG_SIMILARITY_THRESHOLD:
             continue
 
         meeting_id = metadata.get("meeting_id")

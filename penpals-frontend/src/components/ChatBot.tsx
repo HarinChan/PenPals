@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, MapPin, Users, Bot, Mic, Square } from 'lucide-react';
+import { Send, Loader2, MapPin, Users, Bot, Mic, Square, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -32,7 +32,6 @@ interface MeetingSuggestion {
 
 const CLASSROOM_TAG_RE = /<classroom\s+id="([^"]+)"\s*\/>/g;
 const MEETING_TAG_RE = /<meeting\s+id="([^"]+)"\s*\/>/g;
-const MEETING_CONTEXT_THRESHOLD = 0.35;
 
 const parseAssistantTags = (content: string) => {
     const classroomIds: string[] = [];
@@ -72,8 +71,7 @@ const buildMeetingSuggestions = (meetingIds: string[], context?: Array<Record<st
             const metadata = doc?.metadata || {};
             if (metadata?.source !== 'meeting') return false;
             if (String(metadata?.meeting_id) !== String(meetingId)) return false;
-            const similarity = Number(doc?.similarity ?? 0);
-            return Number.isFinite(similarity) && similarity >= MEETING_CONTEXT_THRESHOLD;
+            return true;
         });
 
         if (!match) continue;
