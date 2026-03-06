@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { MapPin, Edit2, Link as LinkIcon, Video } from 'lucide-react';
 import LocationAutocomplete from './LocationAutocomplete';
 import type { SelectedLocation } from '../services/location';
-import { WebexService } from '../services';
+import { WebexService, ClassroomService } from '../services';
 import { toast } from 'sonner';
 import { Account } from '../types';
 
@@ -59,24 +59,40 @@ export default function AccountDialog({
               <div className="flex items-center justify-between">
                 <h3 className="text-slate-900 dark:text-slate-100 font-medium">Account Location</h3>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (editingAccountLocation) {
                       // Save location changes
                       if (selectedLocation) {
-                        // Update all classrooms with new coordinates
-                        const updatedAccounts = accounts.map(account => ({
-                          ...account,
-                          location: selectedLocation.name,
-                          x: selectedLocation.longitude,
-                          y: selectedLocation.latitude,
-                        }));
+                        try {
+                          // Update all classrooms with new coordinates in the backend
+                          const updatePromises = accounts.map(account =>
+                            ClassroomService.updateClassroom(Number(account.id), {
+                              location: selectedLocation.name,
+                              latitude: String(selectedLocation.latitude),
+                              longitude: String(selectedLocation.longitude)
+                            })
+                          );
+                          await Promise.all(updatePromises);
 
-                        // Update each account
-                        updatedAccounts.forEach(account => {
-                          onAccountUpdate(account);
-                        });
+                          // Update all classrooms with new coordinates locally
+                          const updatedAccounts = accounts.map(account => ({
+                            ...account,
+                            location: selectedLocation.name,
+                            x: selectedLocation.longitude,
+                            y: selectedLocation.latitude,
+                          }));
 
-                        toast.success('Location updated for all classrooms');
+                          // Update each account
+                          updatedAccounts.forEach(account => {
+                            onAccountUpdate(account);
+                          });
+
+                          toast.success('Location updated for all classrooms');
+                        } catch (error) {
+                          console.error('Failed to update location:', error);
+                          toast.error('Failed to update location on the server');
+                          return; // don't clear state on error
+                        }
                       }
                       setEditingAccountLocation(false);
                       setSelectedLocation(null);
