@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
-import { AuthService, ClassroomService, WebexService } from './services';
+import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
 import { fetchPosts, createPost, likePost, unlikePost, PostResponse } from './services/posts';
 import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
@@ -76,6 +76,10 @@ function AppContent() {
   const [signupError, setSignupError] = useState<string>('');
   const [authLoading, setAuthLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [selectedNetworkUrl, setSelectedNetworkUrl] = useState<string | null>(() => ApiClient.getSelectedBaseUrl());
+  const [networkHistory, setNetworkHistory] = useState<string[]>(() => ApiClient.getBaseUrlHistory());
+
+  const defaultNetworkUrl = ApiClient.getDefaultBaseUrl();
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([EMPTY_ACCOUNT]);
@@ -158,6 +162,11 @@ function AppContent() {
     handleWebExCallback();
 
     const checkAuthStatus = async () => {
+      if (!selectedNetworkUrl) {
+        setInitialLoading(false);
+        return;
+      }
+
       if (AuthService.isAuthenticated()) {
         setAuthLoading(true);
         try {
@@ -232,6 +241,14 @@ function AppContent() {
     checkAuthStatus();
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedNetworkUrl) {
+      return;
+    }
+
+    ApiClient.setBaseUrl(selectedNetworkUrl);
+  }, [selectedNetworkUrl]);
 
   const handleClassroomSelect = (classroom: Classroom) => {
     setSelectedClassroom(classroom);
@@ -337,12 +354,21 @@ function AppContent() {
   };
 
   const handleLogin = async (email: string, password: string) => {
+    if (!selectedNetworkUrl) {
+      setLoginError('Please choose a network before logging in.');
+      return;
+    }
+
     setLoginError(''); // Clear previous errors
     setAuthLoading(true);
 
     try {
+      ApiClient.setBaseUrl(selectedNetworkUrl);
+
       // Call real backend authentication
       await AuthService.login({ email, password });
+      ApiClient.saveBaseUrlToHistory(selectedNetworkUrl);
+      setNetworkHistory(ApiClient.getBaseUrlHistory());
 
       // Get user data after successful login
       const userData = await AuthService.getCurrentUser();
@@ -405,15 +431,24 @@ function AppContent() {
   };
 
   const handleSignup = async (email: string, password: string, classroomName: string, location?: SelectedLocation) => {
+    if (!selectedNetworkUrl) {
+      setSignupError('Please choose a network before signing up.');
+      return;
+    }
+
     setSignupError(''); // Clear previous errors
     setAuthLoading(true);
 
     try {
+      ApiClient.setBaseUrl(selectedNetworkUrl);
+
       // Register account with backend
       await AuthService.register({ email, password });
 
       // Login with new account
       await AuthService.login({ email, password });
+      ApiClient.saveBaseUrlToHistory(selectedNetworkUrl);
+      setNetworkHistory(ApiClient.getBaseUrlHistory());
 
       // Create first classroom with provided location
       const classroomResult = await ClassroomService.createClassroom({
@@ -481,6 +516,22 @@ function AppContent() {
     setAccounts([EMPTY_ACCOUNT]);
     setCurrentAccountId(EMPTY_ACCOUNT.id);
     toast.success('Logged out successfully');
+  };
+
+  const handleNetworkChange = (baseUrl: string) => {
+    const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+    const hasChanged = selectedNetworkUrl !== normalizedBaseUrl;
+
+    if (hasChanged && AuthService.isAuthenticated()) {
+      AuthService.logout();
+      setIsAuthenticated(false);
+    }
+
+    ApiClient.setBaseUrl(normalizedBaseUrl);
+    setSelectedNetworkUrl(normalizedBaseUrl);
+    setNetworkHistory(ApiClient.getBaseUrlHistory());
+    setLoginError('');
+    setSignupError('');
   };
 
   const handleReload = () => {
@@ -616,6 +667,10 @@ function AppContent() {
           }}
           onLogin={handleLogin}
           onSignup={handleSignup}
+          selectedNetworkUrl={selectedNetworkUrl}
+          defaultNetworkUrl={defaultNetworkUrl}
+          previousNetworks={networkHistory}
+          onNetworkChange={handleNetworkChange}
           loginError={loginError}
           signupError={signupError}
           isLoading={authLoading}
