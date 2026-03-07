@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
+import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Languages, Loader2, Trash2 } from 'lucide-react';
+import { Languages, Loader2, Trash2, RotateCcw } from 'lucide-react';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -39,15 +38,32 @@ const LANGUAGES = [
   { code: 'ja', flag: '🇯🇵', label: '日本語' },
 ];
 
+// Inline styles instead of Tailwind classes — Tailwind v4 scans source at build time and
+// cannot detect dynamically-assembled class strings (e.g. `from-${color}-500`).
+const GRADIENT_PAIRS: [string, string][] = [
+  ['#3b82f6', '#4f46e5'], // blue → indigo
+  ['#8b5cf6', '#7c3aed'], // violet → purple
+  ['#10b981', '#0d9488'], // emerald → teal
+  ['#f97316', '#ef4444'], // orange → red
+  ['#ec4899', '#e11d48'], // pink → rose
+  ['#f59e0b', '#ea580c'], // amber → orange
+  ['#06b6d4', '#3b82f6'], // cyan → blue
+  ['#84cc16', '#16a34a'], // lime → green
+];
+
+const avatarStyle = (id: string): React.CSSProperties => {
+  const idx = id.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % GRADIENT_PAIRS.length;
+  const [a, b] = GRADIENT_PAIRS[idx];
+  return { background: `linear-gradient(135deg, ${a}, ${b})` };
+};
+
 interface TranslationState {
   translatedText: string | null;
   isTranslating: boolean;
 }
 
 export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost }: PostFeedProps) {
-  const [translations, setTranslations] = useState<Record<string, TranslationState>>({}); 
-
-  // Classroom dialog state
+  const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
   const [dialogClassroom, setDialogClassroom] = useState<Classroom | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fetchingAvatarId, setFetchingAvatarId] = useState<string | null>(null);
@@ -64,7 +80,6 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
         lon: cl.longitude ? parseFloat(cl.longitude) : 0,
         interests: cl.interests || [],
         availability: (() => {
-          // Convert array [{day, time}] to {day: number[]}
           const avail: { [day: string]: number[] } = {};
           if (Array.isArray(cl.availability)) {
             for (const slot of cl.availability as { day: string; time: string }[]) {
@@ -82,20 +97,20 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
       };
       setDialogClassroom(mapped);
       setDialogOpen(true);
-    } catch (err) {
+    } catch {
       toast.error('Could not load classroom details.');
     } finally {
       setFetchingAvatarId(null);
     }
-  };;
+  };
 
   const getPostState = (postId: string): TranslationState =>
     translations[postId] ?? { translatedText: null, isTranslating: false };
 
   const setPostState = (postId: string, patch: Partial<TranslationState>) => {
     setTranslations(prev => {
-      const currentState = prev[postId] ?? { translatedText: null, isTranslating: false };
-      return { ...prev, [postId]: { ...currentState, ...patch } };
+      const cur = prev[postId] ?? { translatedText: null, isTranslating: false };
+      return { ...prev, [postId]: { ...cur, ...patch } };
     });
   };
 
@@ -104,189 +119,203 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
     try {
       const translated = await translateText(post.content, langCode);
       setPostState(post.id, { translatedText: translated, isTranslating: false });
-    } catch (err) {
-      console.error('Translation failed:', err);
+    } catch {
       toast.error('Translation failed. Please try again.');
       setPostState(post.id, { isTranslating: false });
     }
   };
 
   const formatTimestamp = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
+    const diff = Date.now() - date.getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
   };
 
+  // ── Loading skeleton ──────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+          <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5 shadow-sm">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-1/3" />
-                <div className="h-16 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-full" />
+              <div className="w-11 h-11 rounded-full animate-pulse shrink-0" style={{ background: 'linear-gradient(135deg,#e2e8f0,#cbd5e1)' }} />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse w-1/4" />
+                <div className="h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full animate-pulse w-1/6" />
+                <div className="h-12 bg-slate-100 dark:bg-slate-700 rounded-xl animate-pulse w-full mt-2" />
               </div>
             </div>
-          </Card>
+          </div>
         ))}
       </div>
     );
   }
 
+  // ── Empty state ───────────────────────────────────────────────────
   if (posts.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-        No posts yet. Be the first to share something!
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <span className="text-4xl">✍️</span>
+        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">No posts yet — be the first!</p>
       </div>
     );
   }
 
+  // ── Post list ─────────────────────────────────────────────────────
   return (
     <>
-    <div className="space-y-4">
-      {posts.map((post) => {
-        const state = getPostState(post.id);
+      <div className="space-y-3">
+        {posts.map((post) => {
+          const state = getPostState(post.id);
+          const isOwn = post.authorId === currentUserId;
 
-        return (
-          <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-            <div className="flex items-start gap-3">
-              {/* Clickable avatar — opens ClassroomDetailDialog (disabled for own posts) */}
-              <button
-                type="button"
-                onClick={() => handleAvatarClick(post.authorId)}
-                disabled={fetchingAvatarId === post.authorId || post.authorId === currentUserId}
-                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-blue-600 text-white
-                  focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all
-                  ${
-                    post.authorId === currentUserId
-                      ? 'cursor-default'
-                      : 'hover:ring-2 hover:ring-blue-400 cursor-pointer disabled:opacity-70'
-                  }`}
-                title={post.authorId === currentUserId ? undefined : `View ${post.authorName}'s classroom`}
-              >
-                {fetchingAvatarId === post.authorId
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : post.authorAvatar
-                    ? <span className="text-xl leading-none">{post.authorAvatar}</span>
-                    : <span className="font-medium">{post.authorName.charAt(0)}</span>
-                }
-              </button>
+          return (
+            <article
+              key={post.id}
+              className="group bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700
+                         shadow-sm hover:shadow-md transition-shadow duration-200"
+            >
+              <div className="pt-2 pb-4 pr-4 pl-3">
+                <div className="flex items-start gap-3">
 
-              <div className="flex-1 min-w-0">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-900 dark:text-slate-100 font-medium">{post.authorName}</span>
-                    <span className="text-slate-500 dark:text-slate-400 text-sm">
-                      {formatTimestamp(post.timestamp)}
-                    </span>
-                  </div>
-
-                  {/* Actions: translate + delete (own posts only) */}
-                  <div className="flex items-center gap-1">
-                  <Popover
-                    open={state.translatedText ? false : undefined}
+                  {/* ── Avatar ── */}
+                  <button
+                    type="button"
+                    onClick={() => handleAvatarClick(post.authorId)}
+                    disabled={fetchingAvatarId === post.authorId || isOwn}
+                    style={avatarStyle(post.authorId)}
+                    className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0
+                      text-white shadow-sm focus:outline-none transition-all duration-150
+                      ${isOwn
+                        ? 'cursor-default'
+                        : 'hover:scale-105 hover:shadow-md cursor-pointer'
+                      }`}
+                    title={isOwn ? undefined : `View ${post.authorName}'s classroom`}
                   >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (state.translatedText) {
-                            // Reset to original
-                            setPostState(post.id, { translatedText: null });
-                          }
-                        }}
-                        disabled={state.isTranslating}
-                        className={`h-7 px-2 text-xs gap-1 ${
-                          state.translatedText
-                            ? 'text-blue-600 dark:text-blue-400 hover:text-slate-600 dark:hover:text-slate-400'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
-                        }`}
-                        title={state.translatedText ? 'Show original' : 'Translate post'}
-                      >
-                        {state.isTranslating ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Languages className="w-3.5 h-3.5" />
-                        )}
-                        {state.translatedText ? 'Original' : 'Translate'}
-                      </Button>
-                    </PopoverTrigger>
+                    {fetchingAvatarId === post.authorId
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : post.authorAvatar
+                        ? <span className="text-xl leading-none select-none">{post.authorAvatar}</span>
+                        : <span className="font-semibold text-sm select-none">{post.authorName.charAt(0).toUpperCase()}</span>
+                    }
+                  </button>
 
-                    {/* Only show picker when not yet translated */}
-                    {!state.translatedText && (
-                      <PopoverContent className="w-36 p-1" align="end" side="bottom">
-                        {LANGUAGES.map((lang) => (
+                  {/* ── Body ── */}
+                  <div className="flex-1 min-w-0">
+
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm leading-tight block">
+                          {post.authorName}
+                        </span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 block">
+                          {formatTimestamp(post.timestamp)}
+                        </span>
+                      </div>
+
+                      {/* Action buttons — fade in on card hover */}
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+
+                        {/* Translate */}
+                        <Popover open={state.translatedText ? false : undefined}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (state.translatedText) setPostState(post.id, { translatedText: null });
+                              }}
+                              disabled={state.isTranslating}
+                              title={state.translatedText ? 'Show original' : 'Translate'}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors focus:outline-none
+                                ${state.translatedText
+                                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                  : 'text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-400 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                              {state.isTranslating
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : state.translatedText
+                                  ? <RotateCcw className="w-3.5 h-3.5" />
+                                  : <Languages className="w-3.5 h-3.5" />}
+                              <span className="hidden sm:inline">
+                                {state.translatedText ? 'Original' : 'Translate'}
+                              </span>
+                            </button>
+                          </PopoverTrigger>
+                          {!state.translatedText && (
+                            <PopoverContent className="w-36 p-1.5 shadow-lg rounded-xl" align="end" side="bottom">
+                              {LANGUAGES.map((lang) => (
+                                <button
+                                  key={lang.code}
+                                  type="button"
+                                  onClick={() => handleTranslate(post, lang.code)}
+                                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-sm
+                                    text-slate-700 dark:text-slate-200
+                                    hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+                                >
+                                  <span className="text-base leading-none">{lang.flag}</span>
+                                  <span>{lang.label}</span>
+                                </button>
+                              ))}
+                            </PopoverContent>
+                          )}
+                        </Popover>
+
+                        {/* Delete — own posts only */}
+                        {isOwn && onDeletePost && (
                           <button
-                            key={lang.code}
                             type="button"
-                            onClick={() => handleTranslate(post, lang.code)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+                            onClick={() => onDeletePost(post.id)}
+                            title="Delete post"
+                            className="p-1.5 rounded-lg text-red-400 dark:text-red-500
+                              hover:text-red-600 dark:hover:text-red-400
+                              hover:bg-red-50 dark:hover:bg-red-900/20
+                              transition-colors focus:outline-none"
                           >
-                            <span className="text-base leading-none">{lang.flag}</span>
-                            <span>{lang.label}</span>
+                            <Trash2 size={14} />
                           </button>
-                        ))}
-                      </PopoverContent>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-slate-800 dark:text-slate-200">
+                      {state.translatedText ?? post.content}
+                    </p>
+
+                    {/* Translated badge */}
+                    {state.translatedText && (
+                      <span className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 dark:text-blue-400
+                        bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full font-medium">
+                        🌐 Translated · click to revert
+                      </span>
                     )}
-                  </Popover>
 
-                  {/* Delete button — own posts only */}
-                  {post.authorId === currentUserId && onDeletePost && (
-                    <button
-                      type="button"
-                      onClick={() => onDeletePost(post.id)}
-                      className="p-1.5 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                      title="Delete post"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                    {/* Post image */}
+                    {post.imageUrl && (
+                      <div className="mt-3 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700">
+                        <ImageWithFallback
+                          src={post.imageUrl}
+                          alt="Post image"
+                          className="w-full max-h-80 object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
-
                 </div>
-
-                {/* Post content (original or translated) */}
-                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                  {state.translatedText ?? post.content}
-                </p>
-
-                {/* "Translated" label */}
-                {state.translatedText && (
-                  <p className="mt-1 text-xs text-blue-500 dark:text-blue-400 italic">
-                    Translated — click "Original" to revert
-                  </p>
-                )}
-
-                {/* Post image */}
-                {post.imageUrl && (
-                  <div className="relative w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mt-3">
-                    <ImageWithFallback
-                      src={post.imageUrl}
-                      alt="Post image"
-                      className="w-full max-h-96 object-cover"
-                    />
-                  </div>
-                )}
               </div>
-            </div>
-          </Card>
-        );
-      })}
-    </div>
+            </article>
+          );
+        })}
+      </div>
 
-      {/* Classroom detail dialog — opened when a post avatar is clicked */}
       <ClassroomDetailDialog
         classroom={dialogClassroom}
         open={dialogOpen}
