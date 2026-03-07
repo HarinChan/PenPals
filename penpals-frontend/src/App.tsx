@@ -114,7 +114,8 @@ function AppContent() {
                 interests: c.interests || [],
                 availability: availability,
                 size: c.class_size,
-                description: c.description || `Friends: ${c.friends_count || 0}`
+                description: c.description || `Friends: ${c.friends_count || 0}`,
+                avatar: c.avatar || ''
               };
             });
 
@@ -170,6 +171,7 @@ function AppContent() {
             location: classroom.location || 'Unknown',
             size: classroom.class_size || 20,
             description: classroom.description || `Classroom managed by ${userData.account.email}`,
+            avatar: classroom.avatar || '',
             interests: classroom.interests || [],
             schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
@@ -309,6 +311,7 @@ function AppContent() {
           location: 'Unknown',
           size: 10,
           description: '',
+          avatar: '',
           interests: [],
           schedule: {},
           // Inherit coordinates from the deleted account, or use default if not available
@@ -351,6 +354,7 @@ function AppContent() {
         location: classroom.location || 'Unknown',
         size: classroom.class_size || 20,
         description: classroom.description || `Classroom managed by ${userData.account.email}`,
+        avatar: classroom.avatar || '',
         interests: classroom.interests || [],
         schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
@@ -654,7 +658,7 @@ function AppContent() {
               className="w-8 h-8 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:focus:ring-offset-slate-800"
               title="Account Settings"
             >
-              {currentAccount.classroomName.charAt(0)}
+              {currentAccount.avatar || currentAccount.classroomName.charAt(0)}
             </button>
             <Button
               variant="ghost"

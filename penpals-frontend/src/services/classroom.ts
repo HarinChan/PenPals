@@ -9,6 +9,7 @@ export interface CreateClassroomData {
   longitude?: string;
   class_size?: number;
   description?: string;
+  avatar?: string;
   availability?: Array<{
     day: string;
     time: string;
@@ -27,6 +28,7 @@ export interface ClassroomDetails {
   longitude?: string;
   class_size?: number;
   description?: string;
+  avatar?: string;
   availability?: Array<{
     day: string;
     time: string;

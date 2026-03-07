@@ -12,6 +12,7 @@ export interface Classroom {
   };
   size?: number;
   description?: string;
+  avatar?: string;
   friends?: Friend[];
 }
 
@@ -65,6 +66,7 @@ export interface Account {
   location: string;
   size: number;
   description: string;
+  avatar?: string;
   interests: string[];
   schedule: { [day: string]: number[] };
   x: number;

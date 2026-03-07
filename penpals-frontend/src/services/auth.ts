@@ -41,6 +41,7 @@ export interface Classroom {
   longitude?: string;
   class_size?: number;
   description?: string;
+  avatar?: string;
   availability?: { [day: string]: number[] };
   interests: string[];
   friends_count?: number;
