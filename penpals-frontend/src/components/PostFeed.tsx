@@ -6,10 +6,14 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Languages, Loader2 } from 'lucide-react';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
+import ClassroomDetailDialog from './ClassroomDetailDialog';
+import { ClassroomService } from '../services/classroom';
+import type { Classroom } from '../types';
 
 interface PostFeedProps {
   posts: Post[];
   isLoading?: boolean;
+  currentUserId?: string;
 }
 
 // MyMemory free translation API — no key needed, auto-detects source language
@@ -39,9 +43,50 @@ interface TranslationState {
   isTranslating: boolean;
 }
 
-export default function PostFeed({ posts, isLoading }: PostFeedProps) {
-  // Per-post translation state: { [postId]: TranslationState }
-  const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
+export default function PostFeed({ posts, isLoading, currentUserId }: PostFeedProps) {
+  const [translations, setTranslations] = useState<Record<string, TranslationState>>({}); 
+
+  // Classroom dialog state
+  const [dialogClassroom, setDialogClassroom] = useState<Classroom | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [fetchingAvatarId, setFetchingAvatarId] = useState<string | null>(null);
+
+  const handleAvatarClick = async (authorId: string) => {
+    setFetchingAvatarId(authorId);
+    try {
+      const { classroom: cl } = await ClassroomService.getClassroom(Number(authorId));
+      const mapped: Classroom = {
+        id: String(cl.id),
+        name: cl.name,
+        location: cl.location || '',
+        lat: cl.latitude ? parseFloat(cl.latitude) : 0,
+        lon: cl.longitude ? parseFloat(cl.longitude) : 0,
+        interests: cl.interests || [],
+        availability: (() => {
+          // Convert array [{day, time}] to {day: number[]}
+          const avail: { [day: string]: number[] } = {};
+          if (Array.isArray(cl.availability)) {
+            for (const slot of cl.availability as { day: string; time: string }[]) {
+              const hour = parseInt(slot.time?.split(':')[0] ?? '0', 10);
+              if (!avail[slot.day]) avail[slot.day] = [];
+              if (!avail[slot.day].includes(hour)) avail[slot.day].push(hour);
+            }
+          } else if (cl.availability && typeof cl.availability === 'object') {
+            Object.assign(avail, cl.availability);
+          }
+          return avail;
+        })(),
+        size: cl.class_size,
+        description: cl.description,
+      };
+      setDialogClassroom(mapped);
+      setDialogOpen(true);
+    } catch (err) {
+      toast.error('Could not load classroom details.');
+    } finally {
+      setFetchingAvatarId(null);
+    }
+  };;
 
   const getPostState = (postId: string): TranslationState =>
     translations[postId] ?? { translatedText: null, isTranslating: false };
@@ -106,6 +151,7 @@ export default function PostFeed({ posts, isLoading }: PostFeedProps) {
   }
 
   return (
+    <>
     <div className="space-y-4">
       {posts.map((post) => {
         const state = getPostState(post.id);
@@ -113,13 +159,27 @@ export default function PostFeed({ posts, isLoading }: PostFeedProps) {
         return (
           <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
             <div className="flex items-start gap-3">
-              {/* Avatar */}
-              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-blue-600 text-white">
-                {post.authorAvatar
-                  ? <span className="text-xl leading-none">{post.authorAvatar}</span>
-                  : <span className="font-medium">{post.authorName.charAt(0)}</span>
+              {/* Clickable avatar — opens ClassroomDetailDialog (disabled for own posts) */}
+              <button
+                type="button"
+                onClick={() => handleAvatarClick(post.authorId)}
+                disabled={fetchingAvatarId === post.authorId || post.authorId === currentUserId}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-blue-600 text-white
+                  focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all
+                  ${
+                    post.authorId === currentUserId
+                      ? 'cursor-default'
+                      : 'hover:ring-2 hover:ring-blue-400 cursor-pointer disabled:opacity-70'
+                  }`}
+                title={post.authorId === currentUserId ? undefined : `View ${post.authorName}'s classroom`}
+              >
+                {fetchingAvatarId === post.authorId
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : post.authorAvatar
+                    ? <span className="text-xl leading-none">{post.authorAvatar}</span>
+                    : <span className="font-medium">{post.authorName.charAt(0)}</span>
                 }
-              </div>
+              </button>
 
               <div className="flex-1 min-w-0">
                 {/* Header */}
@@ -210,5 +270,15 @@ export default function PostFeed({ posts, isLoading }: PostFeedProps) {
         );
       })}
     </div>
+
+      {/* Classroom detail dialog — opened when a post avatar is clicked */}
+      <ClassroomDetailDialog
+        classroom={dialogClassroom}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mySchedule={{}}
+        friendshipStatus="none"
+      />
+    </>
   );
 }
