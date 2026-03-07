@@ -7,6 +7,7 @@ export * from './classroom';
 export * from './chromadb';
 export * from './chat';
 export * from './webex';
+export * from './meetings';
 
 // Re-export commonly used types
 export type {
