@@ -122,7 +122,7 @@ export default function InterestsWidget({
                 type="text"
                 value={customInterest}
                 onChange={(e) => setCustomInterest(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !isSavingInterests && addCustomInterest()}
+                onKeyDown={(e) => e.key === 'Enter' && !isSavingInterests && addCustomInterest()}
                 placeholder="Add or search interests..."
                 disabled={isSavingInterests}
                 className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 disabled:opacity-50"

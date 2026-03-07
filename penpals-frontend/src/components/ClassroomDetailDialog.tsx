@@ -14,6 +14,7 @@ import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-reac
 import type { Classroom } from '../types';
 import { toast } from 'sonner';
 import { ClassroomService } from '../services/classroom';
+import { ApiClient } from '../services/api';
 
 interface ClassroomDetailDialogProps {
   classroom: Classroom | null;
@@ -303,43 +304,22 @@ export default function ClassroomDetailDialog({
     options?: { isPublic?: boolean; maxParticipants?: number; classroomIds?: number[]; description?: string }
   ) => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) {
-        toast.error("You must be logged in to schedule a meeting");
-        return;
-      }
-
-      const response = await fetch('http://192.168.1.163:5001/api/webex/meeting', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title,
-          start_time: start?.toISOString(),
-          end_time: end?.toISOString(),
-          description: options?.description,
-          classroom_ids: options?.classroomIds,
-          is_public: !!options?.isPublic,
-          max_participants: options?.maxParticipants,
-        })
+      const data = await ApiClient.post('/webex/meeting', {
+        title,
+        start_time: start?.toISOString(),
+        end_time: end?.toISOString(),
+        description: options?.description,
+        classroom_ids: options?.classroomIds,
+        is_public: !!options?.isPublic,
+        max_participants: options?.maxParticipants,
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        if (response.status === 403) {
-          toast.error("Please connect WebEx in Account settings first");
-          return null;
-        }
-        throw new Error(error.msg || 'Failed to schedule meeting');
-      }
-
-      const data = await response.json();
       return data;
-
     } catch (error: any) {
-      toast.error(error.message);
+      if (error.status === 403) {
+        toast.error("Please connect WebEx in Account settings first");
+        return null;
+      }
+      toast.error(error.message || 'Failed to schedule meeting');
       return null;
     }
   };

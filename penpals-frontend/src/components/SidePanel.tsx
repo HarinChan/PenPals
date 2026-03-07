@@ -8,7 +8,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Account, Classroom } from '../types';
-import { WebexService, ClassroomService, MeetingsService } from '../services';
+import { ClassroomService, MeetingsService } from '../services';
+import { ApiClient } from '../services/api';
 import type { MeetingDto } from '../services/meetings';
 import { FriendsService } from '../services/friends';
 
@@ -114,26 +115,12 @@ export default function SidePanel({
 
   const fetchInvitations = async () => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      // Fetch received invitations
-      const receivedResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (receivedResponse.ok) {
-        const data = await receivedResponse.json();
-        setReceivedInvitations(data.invitations);
-      }
-
-      // Fetch sent invitations
-      const sentResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations/sent', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (sentResponse.ok) {
-        const data = await sentResponse.json();
-        setSentInvitations(data.sent_invitations);
-      }
+      const [receivedData, sentData] = await Promise.all([
+        ApiClient.get('/webex/invitations'),
+        ApiClient.get('/webex/invitations/sent'),
+      ]);
+      setReceivedInvitations(receivedData.invitations);
+      setSentInvitations(sentData.sent_invitations);
     } catch (err) {
       console.error("Failed to fetch invitations", err);
     }
@@ -187,76 +174,38 @@ export default function SidePanel({
 
   const handleAcceptInvitation = async (invitationId: number) => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/accept`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const message = data.meeting.web_link
-          ? `Meeting invitation accepted! Meeting link: ${data.meeting.web_link}`
-          : "Meeting invitation accepted! The meeting has been created.";
-        toast.success(message);
-        // Refresh both lists
-        fetchInvitations();
-        fetchMeetings();
-      } else {
-        const error = await response.json();
-        toast.error(error.msg || "Failed to accept invitation");
-      }
-    } catch (err) {
+      const data = await ApiClient.post(`/webex/invitations/${invitationId}/accept`);
+      const message = data.meeting?.web_link
+        ? `Meeting invitation accepted! Meeting link: ${data.meeting.web_link}`
+        : "Meeting invitation accepted! The meeting has been created.";
+      toast.success(message);
+      fetchInvitations();
+      fetchMeetings();
+    } catch (err: any) {
       console.error("Failed to accept invitation", err);
-      toast.error("Error accepting invitation");
+      toast.error(err.message || "Error accepting invitation");
     }
   };
 
   const handleDeclineInvitation = async (invitationId: number) => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/decline`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        toast.success("Invitation declined");
-        fetchInvitations();
-      } else {
-        const error = await response.json();
-        toast.error(error.msg || "Failed to decline invitation");
-      }
-    } catch (err) {
+      await ApiClient.post(`/webex/invitations/${invitationId}/decline`);
+      toast.success("Invitation declined");
+      fetchInvitations();
+    } catch (err: any) {
       console.error("Failed to decline invitation", err);
-      toast.error("Error declining invitation");
+      toast.error(err.message || "Error declining invitation");
     }
   };
 
   const handleCancelInvitation = async (invitationId: number) => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/cancel`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        toast.success("Invitation cancelled");
-        fetchInvitations();
-      } else {
-        const error = await response.json();
-        toast.error(error.msg || "Failed to cancel invitation");
-      }
-    } catch (err) {
+      await ApiClient.post(`/webex/invitations/${invitationId}/cancel`);
+      toast.success("Invitation cancelled");
+      fetchInvitations();
+    } catch (err: any) {
       console.error("Failed to cancel invitation", err);
-      toast.error("Error cancelling invitation");
+      toast.error(err.message || "Error cancelling invitation");
     }
   };
 

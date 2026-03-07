@@ -8,6 +8,8 @@ import { ChevronDown, Calendar } from 'lucide-react';
 import { Account } from '../../types';
 import { DAYS } from './constants';
 import { formatScheduleToString, formatScheduleRanges, parseScheduleInput } from './helpers';
+import { ClassroomService } from '../../services';
+import { toast } from 'sonner';
 
 interface ScheduleWidgetProps {
   currentAccount: Account;
@@ -36,10 +38,12 @@ export default function ScheduleWidget({
     setScheduleInputs(prev => ({ ...prev, [day]: value }));
   };
 
-  const handleScheduleInputBlur = (day: string) => {
+  const handleScheduleInputBlur = async (day: string) => {
     const value = scheduleInputs[day] || '';
     const newSchedule = parseScheduleInput(value);
+    const previousSchedule = currentAccount.schedule;
 
+    // Optimistic update
     onAccountUpdate({
       ...currentAccount,
       schedule: { ...currentAccount.schedule, [day]: newSchedule },
@@ -49,6 +53,21 @@ export default function ScheduleWidget({
       ...prev,
       [day]: formatScheduleToString(newSchedule)
     }));
+
+    // Persist to backend — convert schedule dict to the API's availability format
+    try {
+      const fullSchedule = { ...currentAccount.schedule, [day]: newSchedule };
+      const availability = Object.entries(fullSchedule).flatMap(([d, hours]) =>
+        (hours || []).map(hour => ({ day: d, time: `${hour}:00` }))
+      );
+      await ClassroomService.updateClassroom(Number(currentAccount.id), { availability });
+      toast.success('Schedule saved');
+    } catch (error) {
+      console.error('Failed to save schedule:', error);
+      toast.error('Failed to save schedule');
+      // Rollback optimistic update
+      onAccountUpdate({ ...currentAccount, schedule: previousSchedule });
+    }
   };
 
   return (

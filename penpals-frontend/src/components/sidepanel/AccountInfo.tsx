@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -35,6 +35,18 @@ export default function AccountInfo({
     description: currentAccount.description || '',
     avatar: currentAccount.avatar || '',
   });
+
+  // Sync form state when the active classroom changes
+  useEffect(() => {
+    setIsEditing(false);
+    setFormData({
+      classroomName: currentAccount.classroomName,
+      location: currentAccount.location,
+      size: currentAccount.size,
+      description: currentAccount.description || '',
+      avatar: currentAccount.avatar || '',
+    });
+  }, [currentAccount.id]);
 
   const handleSave = () => {
     onSave(formData);
