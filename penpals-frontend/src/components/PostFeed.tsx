@@ -1,29 +1,69 @@
 import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Heart, Quote, Share2, Copy, Link as LinkIcon } from 'lucide-react';
+import { Languages, Loader2 } from 'lucide-react';
 import { Post } from './PostCreator';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
 import { toast } from 'sonner';
 
 interface PostFeedProps {
   posts: Post[];
-  onLikePost?: (postId: string) => void;
-  likedPosts?: Set<string>;
-  onQuotePost?: (post: Post) => void;
   isLoading?: boolean;
 }
 
-export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost, isLoading }: PostFeedProps) {
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+// MyMemory free translation API — no key needed, auto-detects source language
+const translateText = async (text: string, targetLang: string): Promise<string> => {
+  const response = await fetch(
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${targetLang}`
+  );
+  if (!response.ok) throw new Error('Translation request failed');
+  const data = await response.json();
+  if (data.responseStatus !== 200) throw new Error(data.responseDetails || 'Translation error');
+  return data.responseData.translatedText;
+};
+
+const LANGUAGES = [
+  { code: 'en', flag: '🇬🇧', label: 'English' },
+  { code: 'fr', flag: '🇫🇷', label: 'Français' },
+  { code: 'es', flag: '🇪🇸', label: 'Español' },
+  { code: 'de', flag: '🇩🇪', label: 'Deutsch' },
+  { code: 'pt', flag: '🇵🇹', label: 'Português' },
+  { code: 'ar', flag: '🇸🇦', label: 'العربية' },
+  { code: 'zh', flag: '🇨🇳', label: '中文' },
+  { code: 'ja', flag: '🇯🇵', label: '日本語' },
+];
+
+interface TranslationState {
+  translatedText: string | null;
+  isTranslating: boolean;
+}
+
+export default function PostFeed({ posts, isLoading }: PostFeedProps) {
+  // Per-post translation state: { [postId]: TranslationState }
+  const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
+
+  const getPostState = (postId: string): TranslationState =>
+    translations[postId] ?? { translatedText: null, isTranslating: false };
+
+  const setPostState = (postId: string, patch: Partial<TranslationState>) => {
+    setTranslations(prev => {
+      const currentState = prev[postId] ?? { translatedText: null, isTranslating: false };
+      return { ...prev, [postId]: { ...currentState, ...patch } };
+    });
+  };
+
+  const handleTranslate = async (post: Post, langCode: string) => {
+    setPostState(post.id, { isTranslating: true });
+    try {
+      const translated = await translateText(post.content, langCode);
+      setPostState(post.id, { translatedText: translated, isTranslating: false });
+    } catch (err) {
+      console.error('Translation failed:', err);
+      toast.error('Translation failed. Please try again.');
+      setPostState(post.id, { isTranslating: false });
+    }
+  };
 
   const formatTimestamp = (date: Date) => {
     const now = new Date();
@@ -37,33 +77,6 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost, i
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
-  };
-
-  const handleShareClick = (post: Post) => {
-    setSelectedPost(post);
-    setShareDialogOpen(true);
-  };
-
-  const copyPostContent = () => {
-    if (!selectedPost) return;
-
-    let content = `${selectedPost.authorName}\n\n${selectedPost.content}`;
-    if (selectedPost.imageUrl) {
-      content += `\n\nImage: ${selectedPost.imageUrl}`;
-    }
-
-    navigator.clipboard.writeText(content);
-    toast.success('Post content copied to clipboard!');
-    setShareDialogOpen(false);
-  };
-
-  const copyPostLink = () => {
-    if (!selectedPost) return;
-
-    const link = `https://mirrormirror.app/post/${selectedPost.id}`;
-    navigator.clipboard.writeText(link);
-    toast.success('Post link copied to clipboard!');
-    setShareDialogOpen(false);
   };
 
   if (isLoading) {
@@ -93,88 +106,106 @@ export default function PostFeed({ posts, onLikePost, likedPosts, onQuotePost, i
   }
 
   return (
-    <>
-      <div className="space-y-4">
-        {posts.map((post) => {
-          const isLiked = likedPosts?.has(post.id) || false;
+    <div className="space-y-4">
+      {posts.map((post) => {
+        const state = getPostState(post.id);
 
-          return (
-            <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
-                  {post.authorName.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-slate-900 dark:text-slate-100">{post.authorName}</span>
+        return (
+          <Card key={post.id} className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <div className="flex items-start gap-3">
+              {/* Avatar */}
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
+                {post.authorName.charAt(0)}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-900 dark:text-slate-100 font-medium">{post.authorName}</span>
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
                       {formatTimestamp(post.timestamp)}
                     </span>
                   </div>
-                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words mb-3">
-                    {post.content}
-                  </p>
 
-                  {/* Quoted Post Display */}
-                  {post.quotedPost && (
-                    <div className="mb-3 p-3 border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-700/50 rounded-r-lg">
-                      <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                        @{post.quotedPost.authorName}
-                      </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300">
-                        {post.quotedPost.content}
-                      </p>
-                      {post.quotedPost.imageUrl && (
-                        <div className="mt-2 w-32 h-32 rounded overflow-hidden bg-slate-100 dark:bg-slate-900">
-                          <ImageWithFallback
-                            src={post.quotedPost.imageUrl}
-                            alt="Quoted post"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {post.imageUrl && (
-                    <div className="relative w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mb-3">
-                      <ImageWithFallback
-                        src={post.imageUrl}
-                        alt="Post image"
-                        className="w-full max-h-96 object-cover"
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center gap-6 pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onLikePost?.(post.id)}
-                      className={`-ml-2 ${isLiked
-                        ? 'text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-600'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400'
+                  {/* Translate button using Popover for correct click-outside handling */}
+                  <Popover
+                    open={state.translatedText ? false : undefined}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (state.translatedText) {
+                            // Reset to original
+                            setPostState(post.id, { translatedText: null });
+                          }
+                        }}
+                        disabled={state.isTranslating}
+                        className={`h-7 px-2 text-xs gap-1 ${
+                          state.translatedText
+                            ? 'text-blue-600 dark:text-blue-400 hover:text-slate-600 dark:hover:text-slate-400'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
                         }`}
-                    >
-                      <Heart className={`w-4 h-4 mr-1 ${isLiked ? 'fill-current' : ''}`} />
-                      {post.likes > 0 && <span>{post.likes}</span>}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onQuotePost?.(post)}
-                      className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                    >
-                      <Quote className="w-4 h-4 mr-1" />
-                      Quote
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                        title={state.translatedText ? 'Show original' : 'Translate post'}
+                      >
+                        {state.isTranslating ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Languages className="w-3.5 h-3.5" />
+                        )}
+                        {state.translatedText ? 'Original' : 'Translate'}
+                      </Button>
+                    </PopoverTrigger>
 
-    </>
+                    {/* Only show picker when not yet translated */}
+                    {!state.translatedText && (
+                      <PopoverContent className="w-36 p-1" align="end" side="bottom">
+                        {LANGUAGES.map((lang) => (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={() => handleTranslate(post, lang.code)}
+                            className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
+                          >
+                            <span className="text-base leading-none">{lang.flag}</span>
+                            <span>{lang.label}</span>
+                          </button>
+                        ))}
+                      </PopoverContent>
+                    )}
+                  </Popover>
+
+                </div>
+
+                {/* Post content (original or translated) */}
+                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
+                  {state.translatedText ?? post.content}
+                </p>
+
+                {/* "Translated" label */}
+                {state.translatedText && (
+                  <p className="mt-1 text-xs text-blue-500 dark:text-blue-400 italic">
+                    Translated — click "Original" to revert
+                  </p>
+                )}
+
+                {/* Post image */}
+                {post.imageUrl && (
+                  <div className="relative w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-900 mt-3">
+                    <ImageWithFallback
+                      src={post.imageUrl}
+                      alt="Post image"
+                      className="w-full max-h-96 object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
