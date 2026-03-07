@@ -7,6 +7,7 @@ import PostSearch from './PostSearch';
 interface FeedPanelProps {
   currentUserName: string;
   currentUserId: string;
+  currentUserAvatar?: string;
   allPosts: Post[];
   myPosts: Post[];
   onCreatePost: (content: string, imageUrl?: string) => void;
@@ -16,6 +17,7 @@ interface FeedPanelProps {
 export default function FeedPanel({
   currentUserName,
   currentUserId,
+  currentUserAvatar,
   allPosts,
   myPosts,
   onCreatePost,
@@ -26,6 +28,7 @@ export default function FeedPanel({
       <PostCreator
         onCreatePost={onCreatePost}
         authorName={currentUserName}
+        authorAvatar={currentUserAvatar}
       />
 
       <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">

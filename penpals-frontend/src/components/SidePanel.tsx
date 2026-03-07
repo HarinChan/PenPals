@@ -665,12 +665,14 @@ export default function SidePanel({
             <FeedPanel
               currentUserName={currentAccount.classroomName}
               currentUserId={currentAccount.id}
+              currentUserAvatar={currentAccount.avatar}
               allPosts={allPosts}
               myPosts={myPosts}
               onCreatePost={onCreatePost}
               isLoading={loadingPosts}
             />
           </TabsContent>
+
 
         </Tabs>
       )}

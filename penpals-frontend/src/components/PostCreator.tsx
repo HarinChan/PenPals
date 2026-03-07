@@ -28,9 +28,10 @@ export interface Post {
 interface PostCreatorProps {
   onCreatePost: (content: string, imageUrl?: string) => void;
   authorName: string;
+  authorAvatar?: string;
 }
 
-export default function PostCreator({ onCreatePost, authorName }: PostCreatorProps) {
+export default function PostCreator({ onCreatePost, authorName, authorAvatar }: PostCreatorProps) {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
@@ -55,7 +56,10 @@ export default function PostCreator({ onCreatePost, authorName }: PostCreatorPro
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
-            {authorName.charAt(0)}
+            {authorAvatar
+              ? <span className="text-xl leading-none">{authorAvatar}</span>
+              : <span className="font-medium">{authorName.charAt(0)}</span>
+            }
           </div>
           <div className="flex-1 space-y-3">
             <Textarea
