@@ -258,9 +258,12 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
   // Memoized clustering logic - only recalculates when currentZoom or classrooms change
   const clusteredMarkers = useMemo(() => {
+    // Filter out user's own classroom to prevent double rendering
+    const otherClassrooms = classrooms.filter(c => String(c.id) !== String(myClassroom.id));
+
     // No clustering at zoom 8 and above
     if (currentZoom >= 8) {
-      return classrooms.map(c => ({
+      return otherClassrooms.map(c => ({
         isCluster: false,
         classroom: c,
         classrooms: [c],
@@ -271,9 +274,9 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
     // Grid-based clustering for lower zoom levels
     const gridSize = currentZoom < 4 ? 20 : currentZoom < 6 ? 10 : 5; // degrees
-    const clusters = new Map<string, typeof classrooms>();
+    const clusters = new Map<string, typeof otherClassrooms>();
 
-    classrooms.forEach(classroom => {
+    otherClassrooms.forEach(classroom => {
       const gridLat = Math.floor(classroom.lat / gridSize) * gridSize;
       const gridLon = Math.floor(classroom.lon / gridSize) * gridSize;
       const key = `${gridLat},${gridLon}`;
