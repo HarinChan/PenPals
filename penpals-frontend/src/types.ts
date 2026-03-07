@@ -12,6 +12,7 @@ export interface Classroom {
   };
   size?: number;
   description?: string;
+  friends?: Friend[];
 }
 
 export interface RecentCall {
