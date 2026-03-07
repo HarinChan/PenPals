@@ -17,6 +17,7 @@ import { Calendar, Clock, Link as LinkIcon, Lock, Copy, Trash2, CalendarClock } 
 import { toast } from 'sonner';
 import { ClassroomService } from '../services/classroom';
 import { MeetingsService } from '../services/meetings';
+import { ApiClient } from '../services/api';
 
 const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
@@ -140,34 +141,23 @@ export default function MeetingDetailsDialog({
     const fetchMeetingDetails = async (id: number) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('penpals_token');
-            if (!token) return;
-
-            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setMeeting(data);
-                // Initialize Reschedule inputs
-                const startDate = new Date(data.start_time);
-                const endDate = new Date(data.end_time);
-                const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
-                setNewTitle(data.title || '');
-                setNewDescription(data.description || '');
-                setNewDate(startDate.toISOString().split('T')[0]);
-                setNewTime(startDate.toTimeString().slice(0, 5));
-                setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
-                setNewVisibility(data.visibility === 'public' ? 'public' : 'private');
-                setNewMaxParticipants(data.max_participants ? String(data.max_participants) : '20');
-            } else {
-                toast.error("Failed to load meeting details");
-                onOpenChange(false);
-            }
+            const data = await ApiClient.get(`/webex/meeting/${id}`);
+            setMeeting(data);
+            // Initialize Reschedule inputs
+            const startDate = new Date(data.start_time);
+            const endDate = new Date(data.end_time);
+            const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+            setNewTitle(data.title || '');
+            setNewDescription(data.description || '');
+            setNewDate(startDate.toISOString().split('T')[0]);
+            setNewTime(startDate.toTimeString().slice(0, 5));
+            setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
+            setNewVisibility(data.visibility === 'public' ? 'public' : 'private');
+            setNewMaxParticipants(data.max_participants ? String(data.max_participants) : '20');
         } catch (error) {
             console.error(error);
-            toast.error("Error loading meeting details");
+            toast.error("Failed to load meeting details");
+            onOpenChange(false);
         } finally {
             setLoading(false);
         }
@@ -183,22 +173,12 @@ export default function MeetingDetailsDialog({
         if (!confirm("Are you sure you want to cancel this meeting? This action cannot be undone.")) return;
 
         try {
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                toast.success("Meeting cancelled successfully");
-                onMeetingUpdated();
-                onOpenChange(false);
-            } else {
-                const error = await response.json();
-                toast.error(error.msg || "Failed to cancel meeting");
-            }
-        } catch (error) {
-            toast.error("Error cancelling meeting");
+            await ApiClient.delete(`/webex/meeting/${meeting.id}`);
+            toast.success("Meeting cancelled successfully");
+            onMeetingUpdated();
+            onOpenChange(false);
+        } catch (err: any) {
+            toast.error(err.message || "Error cancelling meeting");
         }
     };
 
@@ -235,35 +215,20 @@ export default function MeetingDetailsDialog({
 
             const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
 
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    title: trimmedTitle,
-                    description: newDescription.trim(),
-                    start_time: startDateTime.toISOString(),
-                    end_time: endDateTime.toISOString(),
-                    visibility: newVisibility,
-                    max_participants: newVisibility === 'public' ? parsedCapacity : null,
-                })
+            await ApiClient.put(`/webex/meeting/${meeting.id}`, {
+                title: trimmedTitle,
+                description: newDescription.trim(),
+                start_time: startDateTime.toISOString(),
+                end_time: endDateTime.toISOString(),
+                visibility: newVisibility,
+                max_participants: newVisibility === 'public' ? parsedCapacity : null,
             });
-
-            if (response.ok) {
-                toast.success("Meeting rescheduled successfully");
-                onMeetingUpdated();
-                // Refresh details
-                fetchMeetingDetails(meeting.id);
-                setIsRescheduling(false);
-            } else {
-                const error = await response.json();
-                toast.error(error.msg || "Failed to reschedule meeting");
-            }
-        } catch (error) {
-            toast.error("Error rescheduling meeting");
+            toast.success("Meeting rescheduled successfully");
+            onMeetingUpdated();
+            fetchMeetingDetails(meeting.id);
+            setIsRescheduling(false);
+        } catch (err: any) {
+            toast.error(err.message || "Error rescheduling meeting");
         }
     };
 
@@ -288,32 +253,17 @@ export default function MeetingDetailsDialog({
 
         try {
             setIsSavingSettings(true);
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://192.168.1.163:5001/api/webex/meeting/${meeting.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    title: trimmedTitle,
-                    description: newDescription.trim(),
-                    visibility: newVisibility,
-                    max_participants: parsedCapacity,
-                })
+            await ApiClient.put(`/webex/meeting/${meeting.id}`, {
+                title: trimmedTitle,
+                description: newDescription.trim(),
+                visibility: newVisibility,
+                max_participants: parsedCapacity,
             });
-
-            if (response.ok) {
-                toast.success('Meeting settings updated');
-                onMeetingUpdated();
-                await fetchMeetingDetails(meeting.id);
-                return;
-            }
-
-            const error = await response.json();
-            toast.error(error.msg || 'Failed to update meeting settings');
-        } catch (error) {
-            toast.error('Error updating meeting settings');
+            toast.success('Meeting settings updated');
+            onMeetingUpdated();
+            await fetchMeetingDetails(meeting.id);
+        } catch (err: any) {
+            toast.error(err.message || 'Error updating meeting settings');
         } finally {
             setIsSavingSettings(false);
         }
@@ -324,29 +274,15 @@ export default function MeetingDetailsDialog({
 
         if (meeting.visibility === 'public' && !meeting.is_creator && !meeting.is_participant) {
             try {
-                const token = localStorage.getItem('penpals_token');
-                const response = await fetch(`http://192.168.1.163:5001/api/meetings/${meeting.id}/join`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    const link = data?.meeting?.web_link;
-                    toast.success(data?.msg || 'Joined meeting');
-                    onMeetingUpdated();
-                    await fetchMeetingDetails(meeting.id);
-                    if (link) {
-                        window.open(link, '_blank');
-                    }
-                    return;
-                }
-
-                const error = await response.json();
-                toast.error(error.msg || 'Failed to join meeting');
+                const data = await ApiClient.post(`/meetings/${meeting.id}/join`);
+                const link = data?.meeting?.web_link;
+                toast.success(data?.msg || 'Joined meeting');
+                onMeetingUpdated();
+                await fetchMeetingDetails(meeting.id);
+                if (link) window.open(link, '_blank');
                 return;
-            } catch (error) {
-                toast.error('Error joining meeting');
+            } catch (err: any) {
+                toast.error(err.message || 'Error joining meeting');
                 return;
             }
         }
@@ -391,23 +327,12 @@ export default function MeetingDetailsDialog({
 
         try {
             setWithdrawingInvitationId(invitationId);
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                toast.error(error.msg || 'Failed to withdraw invitation');
-                return;
-            }
-
+            await ApiClient.post(`/webex/invitations/${invitationId}/cancel`);
             toast.success('Invitation withdrawn');
             await fetchMeetingDetails(meeting.id);
             onMeetingUpdated();
-        } catch (error) {
-            toast.error('Error withdrawing invitation');
+        } catch (err: any) {
+            toast.error(err.message || 'Error withdrawing invitation');
         } finally {
             setWithdrawingInvitationId(null);
         }
