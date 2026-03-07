@@ -10,6 +10,7 @@ export interface Post {
   id: string;
   authorId: string;
   authorName: string;
+  authorAvatar?: string;
   content: string;
   imageUrl?: string;
   timestamp: Date;

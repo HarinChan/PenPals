@@ -15,6 +15,7 @@ interface FeedPanelProps {
 
 export default function FeedPanel({
   currentUserName,
+  currentUserId,
   allPosts,
   myPosts,
   onCreatePost,

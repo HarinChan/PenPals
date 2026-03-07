@@ -15,8 +15,9 @@ export const fetchPosts = async (): Promise<Post[]> => {
     }));
 };
 
-export const createPost = async (content: string, imageUrl?: string, quotedPostId?: string): Promise<Post> => {
-    const data = await ApiClient.post<{ msg: string; post: any }>('/posts', { content, imageUrl, quotedPostId });
+export const createPost = async (content: string, imageUrl?: string, classroomId?: string): Promise<Post> => {
+    const data = await ApiClient.post<{ msg: string; post: any }>('/posts', { content, imageUrl, classroomId });
+
 
     return {
         ...data.post,

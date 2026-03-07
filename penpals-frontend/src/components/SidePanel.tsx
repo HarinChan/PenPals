@@ -671,6 +671,7 @@ export default function SidePanel({
               isLoading={loadingPosts}
             />
           </TabsContent>
+
         </Tabs>
       )}
 

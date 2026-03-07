@@ -529,9 +529,10 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (content: string, imageUrl?: string) => {
     try {
-      const newPost = await createPost(content, imageUrl, quotedPost?.id);
+      const newPost = await createPost(content, imageUrl, currentAccountId);
+
 
       // Update local state
       setPosts([newPost, ...posts]);
