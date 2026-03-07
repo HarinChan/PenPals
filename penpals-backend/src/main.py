@@ -486,6 +486,8 @@ def get_current_user():
             "latitude": classroom.lattitude,
             "longitude": classroom.longitude,
             "class_size": classroom.class_size,
+            "description": classroom.description,
+            "avatar": classroom.avatar,
             "interests": classroom.interests,
             "availability": classroom.availability, 
             "friends": friends,
@@ -528,6 +530,8 @@ def get_profile():
         "lattitude": profile.lattitude,
         "longitude": profile.longitude,
         "class_size": profile.class_size,
+        "description": profile.description,
+        "avatar": profile.avatar,
         "availability": profile.availability,
         "interests": profile.interests
     }), 200

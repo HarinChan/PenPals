@@ -111,6 +111,7 @@ class PenpalsHelper:
         response = {
             "id": classroom.id,
             "name": classroom.name,
+            "description": classroom.description,
             "location": classroom.location,
             "latitude": classroom.lattitude,  # Keep original typo for consistency
             "longitude": classroom.longitude,
