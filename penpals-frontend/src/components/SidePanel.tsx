@@ -361,6 +361,7 @@ export default function SidePanel({
     name: '',
     size: 20,
     description: '',
+    avatar: '',
   });
 
   // Collapsible widget states
@@ -414,9 +415,22 @@ export default function SidePanel({
     classroomName: currentAccount.classroomName,
     location: currentAccount.location,
     size: currentAccount.size,
-    description: currentAccount.description,
+    description: currentAccount.description || '',
+    avatar: currentAccount.avatar || '',
   });
 
+  // Helper to map DB string representation of days to frontend numbers
+const availabilityMap: { [key: string]: number } = {
+  'Mondays': 1,
+  'Tuesdays': 2,
+  'Wednesdays': 3,
+  'Thursdays': 4,
+  'Fridays': 5,
+  'Saturdays': 6,
+  'Sundays': 0
+};
+
+const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️', '🌍', '⛺', '🚀', '💡', '🎵', '🎭', '💻', '🎮', '🌟', '🦄', '🦖'];
   // Helper: Convert string to title case
   const toTitleCase = (str: string): string => {
     return str
@@ -615,7 +629,7 @@ export default function SidePanel({
     }));
   };
 
-  const saveAccountInfo = () => {
+  const saveAccountInfo = async () => {
     // Check for duplicate classroom names (excluding current classroom)
     const duplicateName = accounts.some(
       acc => acc.id !== currentAccount.id && acc.classroomName === accountForm.classroomName
@@ -626,11 +640,35 @@ export default function SidePanel({
       return;
     }
 
-    onAccountUpdate({
-      ...currentAccount,
-      ...accountForm,
-    });
-    setEditingAccount(false);
+    try {
+      // Find the primary backend classroom.id
+      const numericId = Number(currentAccount.id);
+
+      // Include description and avatar in the update if they cover Account info
+      let updateData: any = {
+        name: accountForm.classroomName,
+        class_size: accountForm.size,
+        description: accountForm.description,
+        avatar: accountForm.avatar
+      };
+
+      // Call the API service
+      await ClassroomService.updateClassroom(numericId, updateData);
+
+      // (We leave description unhandled by the API here if backend Classroom doesn't support it directly, 
+      // but we update local state or user metadata depending on backend impl.)
+      // Note: If description exists on backend it should be added here later.
+
+      onAccountUpdate({
+        ...currentAccount,
+        ...accountForm,
+      });
+      setEditingAccount(false);
+      toast.success('Classroom information saved');
+    } catch (error: any) {
+      console.error('Failed to save classroom settings:', error);
+      toast.error(error.message || 'Failed to update classroom');
+    }
   };
 
 
@@ -1097,6 +1135,7 @@ export default function SidePanel({
                             location: currentAccount.location,
                             size: currentAccount.size,
                             description: currentAccount.description,
+                            avatar: currentAccount.avatar || '',
                           });
                           setEditingAccount(true);
                         }
@@ -1136,6 +1175,20 @@ export default function SidePanel({
                             className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                             rows={3}
                           />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Avatar</Label>
+                          <div className="grid gap-2 pt-2" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
+                            {COMMON_EMOJIS.map(emoji => (
+                              <button
+                                key={emoji}
+                                onClick={() => setAccountForm({ ...accountForm, avatar: emoji })}
+                                className={`h-10 w-10 text-xl rounded-md flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 ${accountForm.avatar === emoji ? 'ring-2 ring-primary bg-primary/10' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ) : (

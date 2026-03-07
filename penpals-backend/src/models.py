@@ -35,6 +35,8 @@ class Profile(db.Model):
     lattitude = db.Column(db.String(100), nullable=True)
     longitude = db.Column(db.String(100), nullable=True)
     class_size = db.Column(db.Integer, nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    avatar = db.Column(db.String(255), nullable=True)
     availability = db.Column(db.JSON, nullable=True)  # Store as JSON array
     interests = db.Column(db.JSON, nullable=True)  # Store as JSON array
     
@@ -87,7 +89,7 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
     # Relationships
-    profile = db.relationship('Profile', backref='posts')
+    profile = db.relationship('Profile', backref=db.backref('posts', cascade='all, delete-orphan'))
     liked_by = db.relationship('Account', secondary=post_likes, lazy='subquery',
         backref=db.backref('liked_posts', lazy=True))
     
@@ -131,7 +133,7 @@ class Meeting(db.Model):
     creator_id = db.Column(db.Integer, db.ForeignKey('profiles.id'), nullable=False)
     
     # Relationships
-    creator = db.relationship('Profile', foreign_keys=[creator_id], backref='created_meetings')
+    creator = db.relationship('Profile', foreign_keys=[creator_id], backref=db.backref('created_meetings', cascade='all, delete-orphan'))
     participants = db.relationship('Profile', secondary=meeting_participants, lazy='subquery',
         backref=db.backref('meetings', lazy=True))
     
@@ -156,8 +158,8 @@ class FriendRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
     # Relationships
-    sender = db.relationship('Profile', foreign_keys=[sender_profile_id], backref='sent_requests')
-    receiver = db.relationship('Profile', foreign_keys=[receiver_profile_id], backref='received_requests')
+    sender = db.relationship('Profile', foreign_keys=[sender_profile_id], backref=db.backref('sent_requests', cascade='all, delete-orphan'))
+    receiver = db.relationship('Profile', foreign_keys=[receiver_profile_id], backref=db.backref('received_requests', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<FriendRequest {self.sender_profile_id} -> {self.receiver_profile_id}>'
@@ -199,7 +201,7 @@ class RecentCall(db.Model):
     call_type = db.Column(db.String(20)) # outgoing, incoming
     
     # Relationships
-    caller_profile = db.relationship('Profile', foreign_keys=[caller_profile_id], backref='call_history')
+    caller_profile = db.relationship('Profile', foreign_keys=[caller_profile_id], backref=db.backref('call_history', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<RecentCall {self.caller_profile_id} -> {self.target_classroom_name}>'
@@ -222,9 +224,9 @@ class MeetingInvitation(db.Model):
     meeting_id = db.Column(db.Integer, db.ForeignKey('meetings.id'), nullable=True)
     
     # Relationships
-    sender = db.relationship('Profile', foreign_keys=[sender_profile_id], backref='sent_invitations')
-    receiver = db.relationship('Profile', foreign_keys=[receiver_profile_id], backref='received_invitations')
-    meeting = db.relationship('Meeting', backref='invitation')
+    sender = db.relationship('Profile', foreign_keys=[sender_profile_id], backref=db.backref('sent_invitations', cascade='all, delete-orphan'))
+    receiver = db.relationship('Profile', foreign_keys=[receiver_profile_id], backref=db.backref('received_invitations', cascade='all, delete-orphan'))
+    meeting = db.relationship('Meeting', backref=db.backref('invitation', cascade='all, delete-orphan'))
     
     def __repr__(self):
         return f'<MeetingInvitation {self.id} from {self.sender_profile_id} to {self.receiver_profile_id}>'

@@ -8,6 +8,8 @@ export interface CreateClassroomData {
   latitude?: string;
   longitude?: string;
   class_size?: number;
+  description?: string;
+  avatar?: string;
   availability?: Array<{
     day: string;
     time: string;
@@ -25,6 +27,8 @@ export interface ClassroomDetails {
   latitude?: string;
   longitude?: string;
   class_size?: number;
+  description?: string;
+  avatar?: string;
   availability?: Array<{
     day: string;
     time: string;
@@ -73,6 +77,7 @@ export interface ClassroomMapData {
   interests: string[];
   availability: any;
   size?: number;
+  description?: string;
 }
 
 /**

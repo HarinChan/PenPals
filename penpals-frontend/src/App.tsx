@@ -114,7 +114,8 @@ function AppContent() {
                 interests: c.interests || [],
                 availability: availability,
                 size: c.class_size,
-                description: `Friends: ${c.friends_count || 0}`
+                description: c.description || `Friends: ${c.friends_count || 0}`,
+                avatar: c.avatar || ''
               };
             });
 
@@ -169,7 +170,8 @@ function AppContent() {
             classroomName: classroom.name,
             location: classroom.location || 'Unknown',
             size: classroom.class_size || 20,
-            description: `Classroom managed by ${userData.account.email}`,
+            description: classroom.description || `Classroom managed by ${userData.account.email}`,
+            avatar: classroom.avatar || '',
             interests: classroom.interests || [],
             schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
@@ -290,35 +292,47 @@ function AppContent() {
     setCurrentAccountId(newAccount.id);
   };
 
-  const handleAccountDelete = (accountId: string) => {
-    const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
-    const deletedAccount = accounts.find(acc => acc.id === accountId);
+  const handleAccountDelete = async (accountId: string) => {
+    try {
+      // Call backend to actually delete the classroom
+      const numericId = parseInt(accountId, 10);
+      if (!isNaN(numericId)) {
+        await ClassroomService.deleteClassroom(numericId);
+      }
 
-    // If we're deleting the last classroom, create a new empty one
-    if (filteredAccounts.length === 0) {
-      const newAccount: Account = {
-        id: `account-${Date.now()}`,
-        classroomName: 'New Classroom',
-        location: 'Unknown',
-        size: 10,
-        description: '',
-        interests: [],
-        schedule: {},
-        // Inherit coordinates from the deleted account, or use default if not available
-        x: deletedAccount?.x ?? -0.1278,
-        y: deletedAccount?.y ?? 51.5074,
-      };
-      setAccounts([newAccount]);
-      setCurrentAccountId(newAccount.id);
-      toast.success('Classroom deleted. New classroom created.');
-    } else {
-      // Sort remaining classrooms alphabetically and switch to the first one
-      const sortedAccounts = [...filteredAccounts].sort((a, b) =>
-        a.classroomName.localeCompare(b.classroomName)
-      );
-      setAccounts(filteredAccounts);
-      setCurrentAccountId(sortedAccounts[0].id);
-      toast.success('Classroom deleted.');
+      const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
+      const deletedAccount = accounts.find(acc => acc.id === accountId);
+
+      // If we're deleting the last classroom, create a new empty one
+      if (filteredAccounts.length === 0) {
+        const newAccount: Account = {
+          id: `account-${Date.now()}`,
+          classroomName: 'New Classroom',
+          location: 'Unknown',
+          size: 10,
+          description: '',
+          avatar: '',
+          interests: [],
+          schedule: {},
+          // Inherit coordinates from the deleted account, or use default if not available
+          x: deletedAccount?.x ?? -0.1278,
+          y: deletedAccount?.y ?? 51.5074,
+        };
+        setAccounts([newAccount]);
+        setCurrentAccountId(newAccount.id);
+        toast.success('Classroom deleted. Default local classroom created.');
+      } else {
+        // Sort remaining classrooms alphabetically and switch to the first one
+        const sortedAccounts = [...filteredAccounts].sort((a, b) =>
+          a.classroomName.localeCompare(b.classroomName)
+        );
+        setAccounts(filteredAccounts);
+        setCurrentAccountId(sortedAccounts[0].id);
+        toast.success('Classroom deleted.');
+      }
+    } catch (error: any) {
+      console.error('Failed to delete classroom:', error);
+      toast.error(error.message || 'Failed to delete classroom. Please try again.');
     }
   };
 
@@ -339,7 +353,8 @@ function AppContent() {
         classroomName: classroom.name,
         location: classroom.location || 'Unknown',
         size: classroom.class_size || 20,
-        description: `Classroom managed by ${userData.account.email}`,
+        description: classroom.description || `Classroom managed by ${userData.account.email}`,
+        avatar: classroom.avatar || '',
         interests: classroom.interests || [],
         schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
@@ -643,7 +658,7 @@ function AppContent() {
               className="w-8 h-8 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:focus:ring-offset-slate-800"
               title="Account Settings"
             >
-              {currentAccount.classroomName.charAt(0)}
+              {currentAccount.avatar || currentAccount.classroomName.charAt(0)}
             </button>
             <Button
               variant="ghost"
