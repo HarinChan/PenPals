@@ -258,22 +258,64 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
 
   // Memoized clustering logic - only recalculates when currentZoom or classrooms change
   const clusteredMarkers = useMemo(() => {
-    // No clustering at zoom 8 and above
+    // Process ALL classrooms (including You) to find exact overlaps
+    const exactMatches = new Map<string, typeof classrooms>();
+
+    classrooms.forEach(classroom => {
+      // track exact location overlaps regardless of zoom
+      const exactKey = `${classroom.lat},${classroom.lon}`;
+      if (!exactMatches.has(exactKey)) {
+        exactMatches.set(exactKey, []);
+      }
+      exactMatches.get(exactKey)!.push(classroom);
+    });
+
+    const markers: any[] = [];
+    
+    // Filter out user's own classroom for grid clustering ONLY to prevent double rendering
+    const otherClassrooms = classrooms.filter(c => String(c.id) !== String(myClassroom.id));
+
+    // If we're fully zoomed in (no clustering), we still need to handle exact overlaps
     if (currentZoom >= 8) {
-      return classrooms.map(c => ({
-        isCluster: false,
-        classroom: c,
-        classrooms: [c],
-        position: [c.lat, c.lon] as [number, number],
-        id: c.id,
-      }));
+      exactMatches.forEach((matchClassrooms, key) => {
+        const hasMe = matchClassrooms.some(c => String(c.id) === String(myClassroom.id));
+        
+        if (matchClassrooms.length > 1) {
+          markers.push({
+            isCluster: false,
+            isExactOverlap: true,
+            classroom: matchClassrooms[0], // Primary classroom representation
+            classrooms: matchClassrooms, // All classrooms at this spot
+            position: [matchClassrooms[0].lat, matchClassrooms[0].lon] as [number, number],
+            id: key,
+            count: matchClassrooms.length,
+            hasMe: hasMe
+          });
+        } else {
+          // It's a single marker. If it's me, skip adding it here (we have explicit <Marker> below).
+          if (!hasMe) {
+            markers.push({
+              isCluster: false,
+              isExactOverlap: false,
+              classroom: matchClassrooms[0],
+              classrooms: matchClassrooms,
+              position: [matchClassrooms[0].lat, matchClassrooms[0].lon] as [number, number],
+              id: key,
+              count: 1,
+              hasMe: false
+            });
+          }
+        }
+      });
+      return markers;
     }
 
     // Grid-based clustering for lower zoom levels
     const gridSize = currentZoom < 4 ? 20 : currentZoom < 6 ? 10 : 5; // degrees
-    const clusters = new Map<string, typeof classrooms>();
+    const clusters = new Map<string, typeof otherClassrooms>();
 
-    classrooms.forEach(classroom => {
+    otherClassrooms.forEach(classroom => {
+      // normal grid clustering
       const gridLat = Math.floor(classroom.lat / gridSize) * gridSize;
       const gridLon = Math.floor(classroom.lon / gridSize) * gridSize;
       const key = `${gridLat},${gridLon}`;
@@ -284,23 +326,45 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       clusters.get(key)!.push(classroom);
     });
 
-    const markers: any[] = [];
+    // Normal cluster calculation
     clusters.forEach((clusterClassrooms, key) => {
       if (clusterClassrooms.length === 1) {
         const c = clusterClassrooms[0];
-        markers.push({
-          isCluster: false,
-          classroom: c,
-          classrooms: [c],
-          position: [c.lat, c.lon] as [number, number],
-          id: c.id,
-        });
+        // Check if this single item in a grid cell is actually a stack of exact overlaps
+        const exactKey = `${c.lat},${c.lon}`;
+        const exactMatchClassrooms = exactMatches.get(exactKey) || [c];
+        
+        if (exactMatchClassrooms.length > 1) {
+          const hasMe = exactMatchClassrooms.some(x => String(x.id) === String(myClassroom.id));
+          markers.push({
+            isCluster: false,
+            isExactOverlap: true,
+            classroom: c,
+            classrooms: exactMatchClassrooms,
+            position: [c.lat, c.lon] as [number, number],
+            id: exactKey,
+            count: exactMatchClassrooms.length,
+            hasMe: hasMe
+          });
+        } else {
+          markers.push({
+            isCluster: false,
+            isExactOverlap: false,
+            classroom: c,
+            classrooms: [c],
+            position: [c.lat, c.lon] as [number, number],
+            id: exactKey,
+            count: 1,
+            hasMe: false
+          });
+        }
       } else {
         // Calculate average position for cluster
         const avgLat = clusterClassrooms.reduce((sum, c) => sum + c.lat, 0) / clusterClassrooms.length;
         const avgLon = clusterClassrooms.reduce((sum, c) => sum + c.lon, 0) / clusterClassrooms.length;
         markers.push({
           isCluster: true,
+          isExactOverlap: false,
           classrooms: clusterClassrooms,
           position: [avgLat, avgLon] as [number, number],
           id: key,
@@ -313,7 +377,9 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
   }, [currentZoom, classrooms, myClassroom]);
 
   // Helper to get best color for cluster - also memoized
-  const getBestClusterColor = (clusterClassrooms: Classroom[]) => {
+  const getBestClusterColor = (clusterClassrooms: Classroom[], hasMe?: boolean) => {
+    if (hasMe) return '#a855f7'; // Priority purple for user's own classroom
+
     let bestColor = '#64748b';
     let bestPriority = 0;
 
@@ -425,11 +491,14 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
         {/* <SmoothScrollZoom minZoom={minZoom} /> */}
 
         {/* My Marker */}
-        <Marker position={[myLat, myLon]} icon={myIcon}>
-          <Popup>
-            <strong>{myDisplayName}</strong> <br /> (You)
-          </Popup>
-        </Marker>
+        {/* We only render the standalone 'You' marker if it wasn't swallowed by an exact overlap */}
+        {!clusteredMarkers.find(m => m.isExactOverlap && m.hasMe) && (
+          <Marker position={[myLat, myLon]} icon={myIcon}>
+            <Popup>
+              <strong>{myDisplayName}</strong> <br /> (You)
+            </Popup>
+          </Marker>
+        )}
 
         {/* Classroom Markers with Clustering */}
         {clusteredMarkers.map((marker) => {
@@ -446,19 +515,64 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
               />
             );
           } else {
-            // Render individual classroom marker - NO POPUP, details shown in sidebar
+            // Render individual classroom marker
             const classroom = marker.classroom;
             const isSelected = selectedClassroom?.id === classroom.id;
-            const nodeColor = calculateRelevancy(classroom);
+            const nodeColor = marker.isExactOverlap 
+              ? getBestClusterColor(marker.classrooms, marker.hasMe) 
+              : calculateRelevancy(classroom);
+              
             return (
               <Marker
-                key={classroom.id}
+                key={marker.id}
                 position={marker.position}
-                icon={createMarkerIcon(nodeColor, isSelected)}
-                eventHandlers={{
+                icon={marker.isExactOverlap 
+                  ? createClusterIcon(nodeColor, marker.classrooms.length)
+                  : createMarkerIcon(nodeColor, isSelected)
+                }
+                eventHandlers={!marker.isExactOverlap ? {
                   click: () => onClassroomSelect(classroom),
-                }}
-              />
+                } : undefined}
+              >
+                {marker.isExactOverlap && (
+                  <Popup className="classroom-overlap-popup">
+                    <div className={`p-1 flex flex-col gap-2 min-w-[200px] ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+                      <h4 className="font-semibold text-sm border-b pb-1 mb-1 border-slate-200 dark:border-slate-700">
+                        {marker.classrooms.length} Classrooms Here
+                      </h4>
+                      <div className="max-h-[200px] overflow-y-auto pr-1 flex flex-col gap-2" style={{ scrollbarWidth: 'thin' }}>
+                        {marker.classrooms.map((c: Classroom) => (
+                          <button
+                            key={c.id}
+                            onClick={(e) => {
+                              // Use setTimeout to ensure the popup has processed the click before navigating
+                              e.preventDefault();
+                              setTimeout(() => onClassroomSelect(c), 10);
+                            }}
+                            className={`flex flex-col text-left p-2 rounded-md text-xs transition-colors border
+                              ${selectedClassroom?.id === c.id 
+                                ? (theme === 'dark' ? 'bg-blue-900/40 border-blue-700/50' : 'bg-blue-50 border-blue-200')
+                                : (theme === 'dark' ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-white hover:bg-slate-50 border-slate-200')
+                              }`}
+                          >
+                            <span className="font-medium truncate block w-full">
+                              {c.name} {String(c.id) === String(myClassroom.id) && <span className="text-purple-500">(You)</span>}
+                            </span>
+                            <span className="text-slate-500 dark:text-slate-400 text-[10px] mt-0.5 truncate block w-full">
+                              Size: {c.size} • Interests: {c.interests && c.interests.length > 0 ? c.interests.join(', ') : 'None specified'}
+                            </span>
+                            {c.description && (
+                              <span className="text-slate-600 dark:text-slate-300 text-[10px] mt-1 line-clamp-2">
+                                {c.description}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </Popup>
+                )}
+              </Marker>
             );
           }
         })}

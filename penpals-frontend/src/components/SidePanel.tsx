@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
 import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
-import { WebexService, ClassroomService } from '../services';
+import { WebexService, ClassroomService, MeetingsService } from '../services';
+import type { MeetingDto } from '../services/meetings';
 import { FriendsService } from '../services/friends';
 
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -133,21 +134,54 @@ export default function SidePanel({
   const [invitationsTab, setInvitationsTab] = useState<'received' | 'sent'>('received');
   const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
   const [sentInvitations, setSentInvitations] = useState<any[]>([]);
+  const [publicMeetingsOpen, setPublicMeetingsOpen] = useState(true);
+  const [trendingMeetings, setTrendingMeetings] = useState<MeetingDto[]>([]);
+
+  const groupedSentInvitations = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      meetingId: number | null;
+      title: string;
+      start_time: string;
+      end_time: string;
+      invitations: any[];
+    }>();
+
+    sentInvitations.forEach((invitation) => {
+      const groupKey = invitation.meeting_id ? `meeting-${invitation.meeting_id}` : `inv-${invitation.id}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.invitations.push(invitation);
+      } else {
+        groups.set(groupKey, {
+          key: groupKey,
+          meetingId: invitation.meeting_id ?? null,
+          title: invitation.title,
+          start_time: invitation.start_time,
+          end_time: invitation.end_time,
+          invitations: [invitation],
+        });
+      }
+    });
+
+    return Array.from(groups.values());
+  }, [sentInvitations]);
 
   const fetchMeetings = async () => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) return;
-
-      const response = await fetch('http://127.0.0.1:5001/api/meetings', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUpcomingMeetings(data.meetings);
-      }
+      const data = await MeetingsService.getUpcoming();
+      setUpcomingMeetings(data.meetings);
     } catch (err) {
       console.error("Failed to fetch meetings", err);
+    }
+  };
+
+  const fetchPublicMeetings = async () => {
+    try {
+      const trendingData = await MeetingsService.getTrendingMeetings();
+      setTrendingMeetings(trendingData.meetings || []);
+    } catch (err) {
+      console.error("Failed to fetch public meetings", err);
     }
   };
 
@@ -157,7 +191,7 @@ export default function SidePanel({
       if (!token) return;
 
       // Fetch received invitations
-      const receivedResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations', {
+      const receivedResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (receivedResponse.ok) {
@@ -166,7 +200,7 @@ export default function SidePanel({
       }
 
       // Fetch sent invitations
-      const sentResponse = await fetch('http://127.0.0.1:5001/api/webex/invitations/sent', {
+      const sentResponse = await fetch('http://192.168.1.163:5001/api/webex/invitations/sent', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (sentResponse.ok) {
@@ -178,16 +212,50 @@ export default function SidePanel({
     }
   };
 
-  useEffect(() => {
+  const refreshMeetingWidgets = useCallback(() => {
     fetchMeetings();
     fetchInvitations();
+    fetchPublicMeetings();
+  }, [currentAccount.id]);
+
+  useEffect(() => {
+    refreshMeetingWidgets();
     // Set up a polling interval to refresh meetings and invitations every minute
     const interval = setInterval(() => {
-      fetchMeetings();
-      fetchInvitations();
+      refreshMeetingWidgets();
     }, 60000);
     return () => clearInterval(interval);
+  }, [refreshMeetingWidgets]);
+
+  useEffect(() => {
+    const checkWebexStatus = async () => {
+      try {
+        const status = await WebexService.getStatus();
+        setWebexConnected(status.connected);
+      } catch (e) {
+        console.error("Failed to check WebEx status", e);
+      }
+    };
+    checkWebexStatus();
   }, [currentAccount.id]);
+
+  useEffect(() => {
+    if (invitationsOpen) {
+      fetchInvitations();
+    }
+  }, [invitationsOpen, invitationsTab, currentAccount.id]);
+
+  useEffect(() => {
+    if (upcomingMeetingsOpen) {
+      fetchMeetings();
+    }
+  }, [upcomingMeetingsOpen, currentAccount.id]);
+
+  useEffect(() => {
+    if (publicMeetingsOpen) {
+      fetchPublicMeetings();
+    }
+  }, [publicMeetingsOpen, currentAccount.id]);
 
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
@@ -196,7 +264,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/accept`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/accept`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -225,7 +293,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/decline`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/decline`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -248,7 +316,7 @@ export default function SidePanel({
       const token = localStorage.getItem('penpals_token');
       if (!token) return;
 
-      const response = await fetch(`http://127.0.0.1:5001/api/webex/invitations/${invitationId}/cancel`, {
+      const response = await fetch(`http://192.168.1.163:5001/api/webex/invitations/${invitationId}/cancel`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -266,12 +334,34 @@ export default function SidePanel({
     }
   };
 
+  const handleJoinPublicMeeting = async (meeting: MeetingDto) => {
+    setSelectedMeetingId(meeting.id);
+    setMeetingDetailsOpen(true);
+  };
+
+  const handleCancelPublicMeeting = async (meeting: MeetingDto) => {
+    if (!confirm('Cancel this public meeting?')) {
+      return;
+    }
+
+    try {
+      const response = await MeetingsService.cancelMeeting(meeting.id);
+      toast.success(response.msg || 'Meeting cancelled');
+      fetchMeetings();
+      fetchInvitations();
+      fetchPublicMeetings();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to cancel meeting');
+    }
+  };
+
   // Create Classroom Dialog State
   const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
   const [newClassroomData, setNewClassroomData] = useState({
     name: '',
     size: 20,
     description: '',
+    avatar: '',
   });
 
   // Collapsible widget states
@@ -325,9 +415,22 @@ export default function SidePanel({
     classroomName: currentAccount.classroomName,
     location: currentAccount.location,
     size: currentAccount.size,
-    description: currentAccount.description,
+    description: currentAccount.description || '',
+    avatar: currentAccount.avatar || '',
   });
 
+  // Helper to map DB string representation of days to frontend numbers
+const availabilityMap: { [key: string]: number } = {
+  'Mondays': 1,
+  'Tuesdays': 2,
+  'Wednesdays': 3,
+  'Thursdays': 4,
+  'Fridays': 5,
+  'Saturdays': 6,
+  'Sundays': 0
+};
+
+const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️', '🌍', '⛺', '🚀', '💡', '🎵', '🎭', '💻', '🎮', '🌟', '🦄', '🦖'];
   // Helper: Convert string to title case
   const toTitleCase = (str: string): string => {
     return str
@@ -526,7 +629,7 @@ export default function SidePanel({
     }));
   };
 
-  const saveAccountInfo = () => {
+  const saveAccountInfo = async () => {
     // Check for duplicate classroom names (excluding current classroom)
     const duplicateName = accounts.some(
       acc => acc.id !== currentAccount.id && acc.classroomName === accountForm.classroomName
@@ -537,11 +640,35 @@ export default function SidePanel({
       return;
     }
 
-    onAccountUpdate({
-      ...currentAccount,
-      ...accountForm,
-    });
-    setEditingAccount(false);
+    try {
+      // Find the primary backend classroom.id
+      const numericId = Number(currentAccount.id);
+
+      // Include description and avatar in the update if they cover Account info
+      let updateData: any = {
+        name: accountForm.classroomName,
+        class_size: accountForm.size,
+        description: accountForm.description,
+        avatar: accountForm.avatar
+      };
+
+      // Call the API service
+      await ClassroomService.updateClassroom(numericId, updateData);
+
+      // (We leave description unhandled by the API here if backend Classroom doesn't support it directly, 
+      // but we update local state or user metadata depending on backend impl.)
+      // Note: If description exists on backend it should be added here later.
+
+      onAccountUpdate({
+        ...currentAccount,
+        ...accountForm,
+      });
+      setEditingAccount(false);
+      toast.success('Classroom information saved');
+    } catch (error: any) {
+      console.error('Failed to save classroom settings:', error);
+      toast.error(error.message || 'Failed to update classroom');
+    }
   };
 
 
@@ -1008,6 +1135,7 @@ export default function SidePanel({
                             location: currentAccount.location,
                             size: currentAccount.size,
                             description: currentAccount.description,
+                            avatar: currentAccount.avatar || '',
                           });
                           setEditingAccount(true);
                         }
@@ -1047,6 +1175,20 @@ export default function SidePanel({
                             className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
                             rows={3}
                           />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-slate-700 dark:text-slate-300">Avatar</Label>
+                          <div className="grid gap-2 pt-2" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
+                            {COMMON_EMOJIS.map(emoji => (
+                              <button
+                                key={emoji}
+                                onClick={() => setAccountForm({ ...accountForm, avatar: emoji })}
+                                className={`h-10 w-10 text-xl rounded-md flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 ${accountForm.avatar === emoji ? 'ring-2 ring-primary bg-primary/10' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -1269,6 +1411,96 @@ export default function SidePanel({
               </Card>
             </Collapsible>
 
+            {/* Public Meetings Widget */}
+            <Collapsible open={publicMeetingsOpen} onOpenChange={setPublicMeetingsOpen}>
+              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="p-6 space-y-4">
+                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
+                    <ChevronDown className={`transition-transform ${publicMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
+                    <Users className="text-indigo-600 dark:text-indigo-400" size={18} />
+                    <h3 className="text-slate-900 dark:text-slate-100">Public Meetings</h3>
+                    {trendingMeetings.length > 0 && (
+                      <Badge className="ml-2 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                        {trendingMeetings.length}
+                      </Badge>
+                    )}
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <ScrollArea className="h-52">
+                      <div className="space-y-2 pr-4">
+                        {trendingMeetings.length === 0 ? (
+                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
+                            No public meetings available
+                          </div>
+                        ) : (
+                          trendingMeetings.map((meeting) => (
+                            (() => {
+                              const isMeetingHost = String(meeting.creator_id) === String(currentAccount.id);
+                              const canOpenDirectly = !!meeting.web_link && !!meeting.is_participant;
+                              const isJoinDisabled = !isMeetingHost && !canOpenDirectly && !!meeting.is_full;
+
+                              return (
+                            <div
+                              key={meeting.id}
+                              onClick={() => {
+                                setSelectedMeetingId(meeting.id);
+                                setMeetingDetailsOpen(true);
+                              }}
+                              className="p-3 rounded-lg border bg-indigo-50 dark:bg-slate-700 border-indigo-200 dark:border-slate-600 cursor-pointer hover:bg-indigo-100 dark:hover:bg-slate-650"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
+                                    <Clock size={12} />
+                                    {formatMeetingDateTime(meeting.start_time)}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    Host: {meeting.creator_name}
+                                  </div>
+                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                                    Participants: {meeting.participant_count}
+                                    {meeting.max_participants ? ` / ${meeting.max_participants}` : ''}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (isMeetingHost) {
+                                      handleCancelPublicMeeting(meeting);
+                                    } else {
+                                      setSelectedMeetingId(meeting.id);
+                                      setMeetingDetailsOpen(true);
+                                    }
+                                  }}
+                                  disabled={isJoinDisabled}
+                                  className={`h-7 text-xs ${isMeetingHost
+                                    ? 'bg-red-600 hover:bg-red-700'
+                                    : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {isMeetingHost
+                                    ? 'Cancel'
+                                    : canOpenDirectly
+                                      ? 'Open'
+                                      : meeting.is_full
+                                        ? 'Full'
+                                        : 'Join'}
+                                </Button>
+                              </div>
+                            </div>
+                              );
+                            })()
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </CollapsibleContent>
+                </div>
+              </Card>
+            </Collapsible>
+
             {/* Meeting Invitations Widget - Unified with Toggle */}
             <Collapsible open={invitationsOpen} onOpenChange={setInvitationsOpen}>
               <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
@@ -1277,9 +1509,9 @@ export default function SidePanel({
                     <ChevronDown className={`transition-transform ${invitationsOpen ? '' : '-rotate-90'}`} size={16} />
                     <Phone className="text-blue-600 dark:text-blue-400" size={18} />
                     <h3 className="text-slate-900 dark:text-slate-100">Meeting Invitations</h3>
-                    {(invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length) > 0 && (
+                    {(invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length) > 0 && (
                       <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {invitationsTab === 'received' ? receivedInvitations.length : sentInvitations.length}
+                        {invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length}
                       </Badge>
                     )}
                   </CollapsibleTrigger>
@@ -1356,37 +1588,42 @@ export default function SidePanel({
                         ) : (
                           // Sent Invitations
                           <>
-                            {sentInvitations.length === 0 ? (
+                            {groupedSentInvitations.length === 0 ? (
                               <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
                                 No pending outgoing invitations
                               </div>
                             ) : (
-                              sentInvitations.map((invitation) => (
+                              groupedSentInvitations.map((group) => (
                                 <div
-                                  key={invitation.id}
+                                  key={group.key}
                                   className={`p-3 rounded-lg border bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600`}
                                 >
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
-                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
+                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{group.title}</div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
                                         <Clock size={12} />
-                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
+                                        {formatMeetingTimeRange(group.start_time, group.end_time)}
                                       </div>
                                       <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                        To: {invitation.receiver_name}
+                                        Invited classrooms: {group.invitations.length}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex gap-2 mt-3">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="flex-1 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                      onClick={() => handleCancelInvitation(invitation.id)}
-                                    >
-                                      Cancel
-                                    </Button>
+                                  <div className="mt-3 space-y-1">
+                                    {group.invitations.map((invitation) => (
+                                      <div key={invitation.id} className="flex items-center justify-between gap-2 rounded border border-amber-200 dark:border-slate-600 px-2 py-1">
+                                        <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{invitation.receiver_name}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                          onClick={() => handleCancelInvitation(invitation.id)}
+                                        >
+                                          Withdraw
+                                        </Button>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               ))
@@ -1660,6 +1897,7 @@ export default function SidePanel({
         friendshipStatus={detailDialogClassroom ? getFriendshipStatus(detailDialogClassroom.id) : 'none'}
         onToggleFriend={toggleFriendRequest}
         accountLon={currentAccount.x}
+        onMeetingCreated={refreshMeetingWidgets}
       />
 
       {/* Delete Classroom Confirmation Dialog */}
@@ -1745,18 +1983,7 @@ export default function SidePanel({
         meetingId={selectedMeetingId}
         open={meetingDetailsOpen}
         onOpenChange={setMeetingDetailsOpen}
-        onMeetingUpdated={() => {
-          // Re-fetch meetings immediately
-          // Note: We need to expose fetchMeetings or duplicate the logic, 
-          // but since fetchMeetings is inside useEffect/callback it's hard to trigger directly.
-          // However, the interval will catch it, or we can just hope the dialog close triggers something.
-          // Ideally we move fetchMeetings out or use a context/ref.
-          // For now, let's just force a re-render or similar.
-          // Actually, we can just toggle upcomingMeetingsOpen to force a refresh if we had a refresher there, but we don't.
-          // Let's just rely on the interval or add a manual refresh button later if needed.
-          // Better: Add a dependency to the useEffect, but that's complex.
-          // We can add a refresh trigger state.
-        }}
+        onMeetingUpdated={refreshMeetingWidgets}
       />
     </div>
   );

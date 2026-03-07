@@ -28,7 +28,7 @@ SRC_ROOT = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
 load_dotenv(dotenv_path=SRC_ROOT / '.env')
 
-from sqlalchemy import desc
+from sqlalchemy import desc, inspect, text
 from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
 from webex_service import WebexService
 
@@ -38,6 +38,55 @@ from classroom import classroom_bp
 MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
 MEETING_MAX_ADVANCE_DAYS = 14
+TRENDING_LOOKAHEAD_DAYS = 14
+CLASSROOM_WIDGET_SIMILARITY_THRESHOLD = 0.12
+CLASSROOM_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD = 0.35
+MEETING_WIDGET_SIMILARITY_THRESHOLD = 0.12
+MEETING_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD = 0.35
+
+
+def _get_doc_similarity(doc: dict) -> float:
+    if not isinstance(doc, dict):
+        return 0.0
+    try:
+        similarity = float(doc.get("similarity", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+    return similarity
+
+
+def _is_meeting_intent_query(query: str) -> bool:
+    if not isinstance(query, str):
+        return False
+
+    lowered = query.lower()
+    meeting_keywords = [
+        "meeting", "meet", "schedule", "call", "webex", "invite", "invitation",
+        "join", "host", "time", "availability", "slot", "event"
+    ]
+    return any(keyword in lowered for keyword in meeting_keywords)
+
+
+def _is_classroom_intent_query(query: str) -> bool:
+    if not isinstance(query, str):
+        return False
+
+    lowered = query.lower()
+    classroom_keywords = [
+        "classroom", "class", "school", "teacher", "student", "students",
+        "friend", "friends", "post", "posts"
+    ]
+    return any(keyword in lowered for keyword in classroom_keywords)
+
+
+def _strip_model_thinking(reply: str) -> str:
+    if not isinstance(reply, str) or not reply:
+        return reply
+
+    cleaned = re.sub(r"<think>.*?</think>", "", reply, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def validate_meeting_schedule(start_time: datetime, end_time: datetime):
@@ -53,6 +102,169 @@ def validate_meeting_schedule(start_time: datetime, end_time: datetime):
         return f"Meetings can be scheduled up to {MEETING_MAX_ADVANCE_DAYS} days in advance"
 
     return None
+
+
+def _get_primary_profile(account: Account):
+    return account.classrooms.first() if account else None
+
+
+def _get_participant_count(meeting: Meeting) -> int:
+    participant_ids = {p.id for p in meeting.participants}
+    participant_ids.add(meeting.creator_id)
+    return len(participant_ids)
+
+
+def _meeting_has_profile(meeting: Meeting, profile: Profile) -> bool:
+    if not profile:
+        return False
+    return meeting.creator_id == profile.id or any(p.id == profile.id for p in meeting.participants)
+
+
+def _normalize_invitee_ids(classroom_ids, creator_profile_id: int):
+    if classroom_ids is None:
+        return [], None
+
+    if not isinstance(classroom_ids, list):
+        return None, "classroom_ids must be an array"
+
+    normalized_ids = []
+    for classroom_id in classroom_ids:
+        if isinstance(classroom_id, str) and classroom_id.startswith('dummy_'):
+            return None, "Cannot invite dummy classrooms. Please use real classrooms from your network."
+        try:
+            parsed_id = int(classroom_id)
+        except (ValueError, TypeError):
+            return None, "Invalid classroom_id format"
+
+        if parsed_id == creator_profile_id:
+            return None, "You cannot invite your own classroom"
+
+        if parsed_id not in normalized_ids:
+            normalized_ids.append(parsed_id)
+
+    return normalized_ids, None
+
+
+def _serialize_meeting(meeting: Meeting, profile: Profile = None, account: Account = None, include_invitees: bool = False):
+    participant_count = _get_participant_count(meeting)
+    is_creator_for_viewer = bool(
+        (account and meeting.creator and meeting.creator.account_id == account.id)
+        or (profile and meeting.creator_id == profile.id)
+    )
+    payload = {
+        "id": meeting.id,
+        "title": meeting.title,
+        "description": meeting.description,
+        "start_time": meeting.start_time.isoformat(),
+        "end_time": meeting.end_time.isoformat(),
+        "web_link": meeting.web_link,
+        "password": meeting.password,
+        "creator_name": meeting.creator.name,
+        "creator_id": meeting.creator_id,
+        "visibility": meeting.visibility,
+        "status": meeting.status,
+        "max_participants": meeting.max_participants,
+        "participant_count": participant_count,
+        "join_count": meeting.join_count,
+        "is_creator": is_creator_for_viewer,
+        "is_participant": bool(profile and _meeting_has_profile(meeting, profile)),
+        "is_full": bool(meeting.max_participants and participant_count >= meeting.max_participants),
+    }
+
+    if include_invitees:
+        invitations = MeetingInvitation.query.filter(
+            MeetingInvitation.meeting_id == meeting.id,
+            MeetingInvitation.status.in_(['pending', 'accepted'])
+        ).order_by(MeetingInvitation.created_at.desc()).all()
+
+        invited_by_receiver = {}
+        for invitation in invitations:
+            if invitation.receiver_profile_id in invited_by_receiver:
+                continue
+            invited_by_receiver[invitation.receiver_profile_id] = {
+                "invitation_id": invitation.id,
+                "receiver_id": invitation.receiver_profile_id,
+                "receiver_name": invitation.receiver.name if invitation.receiver else "Unknown Classroom",
+                "status": invitation.status,
+                "can_withdraw": invitation.status == 'pending',
+            }
+
+        payload["invited_classrooms"] = list(invited_by_receiver.values())
+
+    return payload
+
+
+def _refresh_webex_if_needed(account: Account):
+    if not account or not account.webex_access_token:
+        return "WebEx is not connected"
+
+    if account.webex_token_expires_at and account.webex_token_expires_at < datetime.utcnow():
+        try:
+            token_data = webex_service.refresh_access_token(account.webex_refresh_token)
+            account.webex_access_token = token_data.get('access_token')
+            account.webex_refresh_token = token_data.get('refresh_token', account.webex_refresh_token)
+            expires_in = token_data.get('expires_in')
+            if expires_in:
+                account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            db.session.commit()
+        except Exception:
+            return "Failed to refresh organizer's WebEx session"
+    return None
+
+
+def _ensure_meeting_created_with_webex(meeting: Meeting):
+    if meeting.webex_id and meeting.web_link:
+        return None
+
+    organizer_account = meeting.creator.account
+    refresh_error = _refresh_webex_if_needed(organizer_account)
+    if refresh_error:
+        return refresh_error
+
+    try:
+        webex_meeting = webex_service.create_meeting(
+            organizer_account.webex_access_token,
+            meeting.title,
+            meeting.start_time,
+            meeting.end_time
+        )
+        meeting.webex_id = webex_meeting.get('id')
+        meeting.web_link = webex_meeting.get('webLink')
+        meeting.password = webex_meeting.get('password')
+        meeting.status = 'active'
+        return None
+    except Exception as e:
+        return f"Failed to create WebEx meeting: {str(e)}"
+
+
+def ensure_meeting_schema_columns():
+    inspector = inspect(db.engine)
+    try:
+        meeting_columns = {col['name'] for col in inspector.get_columns('meetings')}
+    except Exception:
+        return
+
+    alterations = []
+    if 'visibility' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN visibility VARCHAR(20) NOT NULL DEFAULT 'private'")
+    if 'status' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'pending_setup'")
+    if 'max_participants' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN max_participants INTEGER")
+    if 'join_count' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN join_count INTEGER NOT NULL DEFAULT 0")
+    if 'created_at' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN created_at DATETIME")
+    if 'description' not in meeting_columns:
+        alterations.append("ALTER TABLE meetings ADD COLUMN description TEXT")
+
+    for query in alterations:
+        try:
+            db.session.execute(text(query))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Schema update skipped for query '{query}': {e}")
 
 def print_tables():
     with application.app_context():
@@ -91,6 +303,7 @@ jwt = JWTManager(application)
 # Initialize database tables
 with application.app_context():
     db.create_all()
+    ensure_meeting_schema_columns()
     print("Database initialized successfully!")
 
 
@@ -110,16 +323,86 @@ FASTER_WHISPER_BEAM_SIZE = int(os.getenv('FASTER_WHISPER_BEAM_SIZE', '1'))
 
 _FASTER_WHISPER_MODEL = None
 _FASTER_WHISPER_MODEL_LOCK = threading.Lock()
+_MEETING_TAG_RE = re.compile(r'<meeting\s+id="[^"]+"\s*/>')
 
 
-def _extract_context_classroom_ids(context_docs, limit: int = 3):
+def _build_meeting_index_document(meeting: Meeting) -> str:
+    description = (meeting.description or "").strip()
+    return (
+        f"Meeting: {meeting.title}\n"
+        f"Description: {description}\n"
+        f"Host: {meeting.creator.name if meeting.creator else 'Unknown'}\n"
+        f"Starts: {meeting.start_time.isoformat()}\n"
+        f"Ends: {meeting.end_time.isoformat()}"
+    )
+
+
+def _sync_meeting_in_chroma(meeting: Meeting):
+    if not meeting:
+        return
+
+    doc_id = f"meeting-{meeting.id}"
+    description = (meeting.description or "").strip()
+    should_index = meeting.visibility == 'public' and meeting.status != 'cancelled' and len(description) > 0
+
+    if not should_index:
+        try:
+            chroma_service.delete_documents([doc_id])
+        except Exception as e:
+            application.logger.warning("Failed removing meeting from ChromaDB: %s", e)
+        return
+
+    metadata = {
+        "source": "meeting",
+        "meeting_id": str(meeting.id),
+        "title": meeting.title,
+        "description": description,
+        "creator_name": meeting.creator.name if meeting.creator else "Unknown",
+        "creator_id": str(meeting.creator_id),
+        "start_time": meeting.start_time.isoformat(),
+        "end_time": meeting.end_time.isoformat(),
+        "visibility": meeting.visibility,
+        "status": meeting.status,
+    }
+
+    try:
+        chroma_service.delete_documents([doc_id])
+    except Exception:
+        pass
+
+    try:
+        chroma_service.add_documents(
+            [_build_meeting_index_document(meeting)],
+            metadatas=[metadata],
+            ids=[doc_id]
+        )
+    except Exception as e:
+        application.logger.warning("Failed indexing meeting in ChromaDB: %s", e)
+
+
+def _extract_context_classroom_ids(context_docs, limit: int = 3, user_query: str = ""):
     ids = []
     if not isinstance(context_docs, list):
         return ids
 
+    is_classroom_query = _is_classroom_intent_query(user_query)
+    required_similarity = (
+        CLASSROOM_WIDGET_SIMILARITY_THRESHOLD
+        if is_classroom_query
+        else CLASSROOM_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD
+    )
+
     for doc in context_docs:
+        if not isinstance(doc, dict):
+            continue
+
+        if _get_doc_similarity(doc) < required_similarity:
+            continue
+
         metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
         if isinstance(metadata, dict):
+            if metadata.get("source") != "post":
+                continue
             classroom_id = metadata.get("classroom_id")
             if classroom_id:
                 classroom_id = str(classroom_id)
@@ -130,13 +413,13 @@ def _extract_context_classroom_ids(context_docs, limit: int = 3):
     return ids
 
 
-def _inject_classroom_tags(reply: str, context_docs, limit: int = 3) -> str:
+def _inject_classroom_tags(reply: str, context_docs, limit: int = 3, user_query: str = "") -> str:
     if not isinstance(reply, str) or not reply:
         return reply
     if _CLASSROOM_TAG_RE.search(reply):
         return reply
 
-    classroom_ids = _extract_context_classroom_ids(context_docs, limit)
+    classroom_ids = _extract_context_classroom_ids(context_docs, limit, user_query)
     if not classroom_ids:
         return reply
 
@@ -251,6 +534,55 @@ def _transcribe_with_faster_whisper(audio_bytes: bytes, mime_type: str, hotwords
                 os.remove(temp_path)
             except OSError:
                 pass
+def _extract_context_meeting_ids(context_docs, limit: int = 3, user_query: str = ""):
+    meeting_ids = []
+    if not isinstance(context_docs, list):
+        return meeting_ids
+
+    is_meeting_query = _is_meeting_intent_query(user_query)
+    required_similarity = (
+        MEETING_WIDGET_SIMILARITY_THRESHOLD
+        if is_meeting_query
+        else MEETING_WIDGET_NON_INTENT_SIMILARITY_THRESHOLD
+    )
+
+    for doc in context_docs:
+        if not isinstance(doc, dict):
+            continue
+
+        if _get_doc_similarity(doc) < required_similarity:
+            continue
+
+        metadata = doc.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+
+        if metadata.get("source") != "meeting":
+            continue
+
+        meeting_id = metadata.get("meeting_id")
+        if meeting_id:
+            meeting_id = str(meeting_id)
+            if meeting_id not in meeting_ids:
+                meeting_ids.append(meeting_id)
+        if len(meeting_ids) >= limit:
+            break
+
+    return meeting_ids
+
+
+def _inject_meeting_tags(reply: str, context_docs, limit: int = 3, user_query: str = "") -> str:
+    if not isinstance(reply, str) or not reply:
+        return reply
+    if _MEETING_TAG_RE.search(reply):
+        return reply
+
+    meeting_ids = _extract_context_meeting_ids(context_docs, limit, user_query)
+    if not meeting_ids:
+        return reply
+
+    tags = "\n".join(f'<meeting id="{mid}"/>' for mid in meeting_ids)
+    return reply.rstrip() + "\n" + tags
 
 
 @application.route('/api/chat', methods=['POST'])
@@ -280,18 +612,43 @@ def chat():
             n_results = 5
 
         query_result = chroma_service.query_documents(message, n_results)
+        meeting_query_result = chroma_service.query_documents(
+            message,
+            n_results,
+            where={"source": "meeting", "visibility": "public"}
+        )
+
         context_docs = []
         if isinstance(query_result, dict) and query_result.get('status') == 'success':
             context_docs = query_result.get('results', [])
 
+        meeting_context_docs = []
+        if isinstance(meeting_query_result, dict) and meeting_query_result.get('status') == 'success':
+            meeting_context_docs = meeting_query_result.get('results', [])
+
+        merged_docs = []
+        seen_doc_ids = set()
+        for source_docs in [context_docs, meeting_context_docs]:
+            for doc in source_docs:
+                if not isinstance(doc, dict):
+                    continue
+                doc_id = str(doc.get('id', ''))
+                if doc_id and doc_id in seen_doc_ids:
+                    continue
+                if doc_id:
+                    seen_doc_ids.add(doc_id)
+                merged_docs.append(doc)
+
         messages = history + [{"role": "user", "content": message}]
-        reply = generate_reply(messages, context_docs)
-        reply = _inject_classroom_tags(reply, context_docs, 3)
+        reply = generate_reply(messages, merged_docs)
+        reply = _strip_model_thinking(reply)
+        reply = _inject_classroom_tags(reply, merged_docs, 3, message)
+        reply = _inject_meeting_tags(reply, merged_docs, 3, message)
 
         return jsonify({
             "status": "success",
             "reply": reply,
-            "context": context_docs
+            "context": merged_docs
         }), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -486,6 +843,8 @@ def get_current_user():
             "latitude": classroom.lattitude,
             "longitude": classroom.longitude,
             "class_size": classroom.class_size,
+            "description": classroom.description,
+            "avatar": classroom.avatar,
             "interests": classroom.interests,
             "availability": classroom.availability, 
             "friends": friends,
@@ -528,6 +887,8 @@ def get_profile():
         "lattitude": profile.lattitude,
         "longitude": profile.longitude,
         "class_size": profile.class_size,
+        "description": profile.description,
+        "avatar": profile.avatar,
         "availability": profile.availability,
         "interests": profile.interests
     }), 200
@@ -631,45 +992,44 @@ def webex_disconnect():
 @application.route('/api/webex/meeting', methods=['POST'])
 @jwt_required()
 def create_webex_meeting():
-    """Create a WebEx meeting and save to DB"""
-    current_user_id = get_jwt_identity() # Account ID
+    """Create a pending meeting plan and invitations (public/private)."""
+    current_user_id = get_jwt_identity()
     account = Account.query.get(current_user_id)
     
     if not account:
         return jsonify({"msg": "User not found"}), 404
         
-    # Assuming the account has one profile/classroom for now, or we pick the first one
-    # The frontend should ideally send the profile_id, but for now we default to the first one.
-    creator_profile = account.classrooms.first()
+    creator_profile = _get_primary_profile(account)
     if not creator_profile:
-         return jsonify({"msg": "No profile found for account"}), 400
+        return jsonify({"msg": "No profile found for account"}), 400
     
-    data = request.json
+    data = request.json or {}
     title = data.get('title', 'Classroom Meeting')
+    description = str(data.get('description') or '').strip()
     start_time_str = data.get('start_time')
     end_time_str = data.get('end_time')
-    classroom_id = data.get('classroom_id') # The participant classroom ID (the one we are calling)
-    
-    if not classroom_id:
-        return jsonify({"msg": "classroom_id is required"}), 400
-    
-    # Check if it's a dummy classroom ID (for development/testing)
-    if isinstance(classroom_id, str) and classroom_id.startswith('dummy_'):
-        return jsonify({"msg": "Cannot invite dummy classrooms. Please use real classrooms from your network."}), 400
-    
-    # Convert to int if it's a numeric string
-    try:
-        classroom_id = int(classroom_id)
-    except (ValueError, TypeError):
-        return jsonify({"msg": "Invalid classroom_id format"}), 400
-    
-    receiver_profile = Profile.query.get(classroom_id)
-    if not receiver_profile:
-        return jsonify({"msg": "Receiver classroom not found"}), 404
-    
-    # Prevent inviting yourself
-    if creator_profile.id == receiver_profile.id:
-        return jsonify({"msg": "You cannot invite your own classroom"}), 400
+    is_public = bool(data.get('is_public', False))
+    max_participants = data.get('max_participants')
+
+    legacy_classroom_id = data.get('classroom_id')
+    classroom_ids = data.get('classroom_ids') or []
+    if legacy_classroom_id is not None:
+        classroom_ids.append(legacy_classroom_id)
+
+    normalized_ids, normalize_error = _normalize_invitee_ids(classroom_ids, creator_profile.id)
+    if normalize_error:
+        return jsonify({"msg": normalize_error}), 400
+
+    if not is_public and len(normalized_ids) == 0:
+        return jsonify({"msg": "classroom_id or classroom_ids is required for private meetings"}), 400
+
+    if max_participants is not None:
+        try:
+            max_participants = int(max_participants)
+        except (ValueError, TypeError):
+            return jsonify({"msg": "max_participants must be a number"}), 400
+        if max_participants < 2:
+            return jsonify({"msg": "max_participants must be at least 2"}), 400
     
     if not start_time_str or not end_time_str:
          # Default to instant meeting (now + 1 hour)
@@ -692,28 +1052,59 @@ def create_webex_meeting():
     if schedule_error:
         return jsonify({"msg": schedule_error}), 400
 
-    # Create invitation instead of meeting
-    new_invitation = MeetingInvitation(
-        sender_profile_id=creator_profile.id,
-        receiver_profile_id=receiver_profile.id,
+    new_meeting = Meeting(
         title=title,
+        description=description,
         start_time=start_time,
         end_time=end_time,
-        status='pending'
+        creator_id=creator_profile.id,
+        visibility='public' if is_public else 'private',
+        status='pending_setup',
+        max_participants=max_participants,
+        join_count=0
     )
-    
-    db.session.add(new_invitation)
+    db.session.add(new_meeting)
+    db.session.flush()
+
+    invitations = []
+    for receiver_id in normalized_ids:
+        receiver_profile = Profile.query.get(receiver_id)
+        if not receiver_profile:
+            db.session.rollback()
+            return jsonify({"msg": f"Receiver classroom not found: {receiver_id}"}), 404
+
+        invitation = MeetingInvitation(
+            sender_profile_id=creator_profile.id,
+            receiver_profile_id=receiver_profile.id,
+            title=title,
+            start_time=start_time,
+            end_time=end_time,
+            status='pending',
+            meeting_id=new_meeting.id
+        )
+        db.session.add(invitation)
+        invitations.append(invitation)
+
     db.session.commit()
-    
+    _sync_meeting_in_chroma(new_meeting)
+
+    invitations_payload = [{
+        "id": inv.id,
+        "receiver_id": inv.receiver_profile_id,
+        "receiver_name": inv.receiver.name,
+        "title": inv.title,
+        "start_time": inv.start_time.isoformat(),
+        "end_time": inv.end_time.isoformat(),
+        "status": inv.status,
+        "meeting_id": inv.meeting_id
+    } for inv in invitations]
+
+    message = "Public meeting created successfully" if is_public else "Meeting invitation sent successfully"
     return jsonify({
-        "msg": "Meeting invitation sent successfully",
-        "invitation": {
-            "id": new_invitation.id,
-            "title": new_invitation.title,
-            "start_time": new_invitation.start_time.isoformat(),
-            "end_time": new_invitation.end_time.isoformat(),
-            "status": new_invitation.status
-        }
+        "msg": message,
+        "meeting": _serialize_meeting(new_meeting, creator_profile, account),
+        "invitation": invitations_payload[0] if len(invitations_payload) == 1 else None,
+        "invitations": invitations_payload
     }), 201
 
 @application.route('/api/webex/meeting/<int:meeting_id>', methods=['GET', 'DELETE', 'PUT'])
@@ -731,14 +1122,18 @@ def manage_meeting(meeting_id):
         return jsonify({"msg": "Meeting not found"}), 404
         
     # Check authorization (creator or participant)
-    profile = account.classrooms.first()
+    profile = _get_primary_profile(account)
     if not profile:
         return jsonify({"msg": "Profile not found"}), 404
         
-    is_creator = meeting.creator_id == profile.id
-    is_participant = profile in meeting.participants
-    
-    if not (is_creator or is_participant):
+    is_creator = bool(meeting.creator and meeting.creator.account_id == account.id)
+    is_participant = _meeting_has_profile(meeting, profile) and not is_creator
+
+    can_view_public = meeting.visibility == 'public' and meeting.status in ['pending_setup', 'active']
+    if request.method == 'GET':
+        if not (is_creator or is_participant or can_view_public):
+            return jsonify({"msg": "Unauthorized"}), 403
+    elif not (is_creator or is_participant):
         return jsonify({"msg": "Unauthorized"}), 403
 
     # Relaxed WebEx check: Only strict for modifying/deleting. GET is allowed for participants without WebEx.
@@ -760,74 +1155,204 @@ def manage_meeting(meeting_id):
 
 
     if request.method == 'GET':
-        return jsonify({
-            "id": meeting.id,
-            "title": meeting.title,
-            "start_time": meeting.start_time.isoformat(),
-            "end_time": meeting.end_time.isoformat(),
-            "web_link": meeting.web_link,
-            "password": meeting.password,
-            "creator_name": meeting.creator.name,
-            "is_creator": is_creator
-        }), 200
+        return jsonify(_serialize_meeting(meeting, profile, account, include_invitees=True)), 200
 
     if request.method == 'DELETE':
         if not is_creator:
             return jsonify({"msg": "Only default creator can delete meetings"}), 403
-            
-        if not account.webex_access_token:
-             return jsonify({"msg": "WebEx not connected. Cannot delete meeting."}), 403
-            
+
         try:
             # Delete from WebEx
             if meeting.webex_id:
+                if not account.webex_access_token:
+                    return jsonify({"msg": "WebEx not connected. Cannot delete active meeting."}), 403
                 webex_service.delete_meeting(account.webex_access_token, meeting.webex_id)
-            
-            # Delete from DB
-            db.session.delete(meeting)
+
+            # Soft-cancel meeting so invite/history references remain valid
+            meeting.status = 'cancelled'
+            pending_invitations = MeetingInvitation.query.filter_by(meeting_id=meeting.id, status='pending').all()
+            for invitation in pending_invitations:
+                invitation.status = 'cancelled'
+
             db.session.commit()
-            return jsonify({"msg": "Meeting deleted successfully"}), 200
+            _sync_meeting_in_chroma(meeting)
+            return jsonify({"msg": "Meeting cancelled successfully"}), 200
         except Exception as e:
-            return jsonify({"msg": f"Failed to delete meeting: {str(e)}"}), 500
+            return jsonify({"msg": f"Failed to cancel meeting: {str(e)}"}), 500
 
     if request.method == 'PUT':
         if not is_creator:
             return jsonify({"msg": "Only creator can update meetings"}), 403
-            
-        if not account.webex_access_token:
-             return jsonify({"msg": "WebEx not connected. Cannot update meeting."}), 403
-            
-        data = request.json
+
+        data = request.json or {}
+        title = data.get('title')
         start_time_str = data.get('start_time')
         end_time_str = data.get('end_time')
-        
+        visibility = data.get('visibility')
+        max_participants = data.get('max_participants')
+        description = data.get('description')
+        if title is not None:
+            title = str(title).strip()
+            if not title:
+                return jsonify({"msg": "title cannot be empty"}), 400
+        if description is not None:
+            description = str(description).strip()
+
+        if visibility is not None and visibility not in ['private', 'public']:
+            return jsonify({"msg": "visibility must be 'private' or 'public'"}), 400
+
+        parsed_max_participants = meeting.max_participants
+        if max_participants is not None:
+            if max_participants == '':
+                parsed_max_participants = None
+            else:
+                try:
+                    parsed_max_participants = int(max_participants)
+                except (ValueError, TypeError):
+                    return jsonify({"msg": "max_participants must be a number"}), 400
+                if parsed_max_participants < 2:
+                    return jsonify({"msg": "max_participants must be at least 2"}), 400
+
         try:
+            if title is not None:
+                meeting.title = title
             if start_time_str:
                 if start_time_str.endswith('Z'): start_time_str = start_time_str[:-1]
                 meeting.start_time = datetime.fromisoformat(start_time_str)
             if end_time_str:
                 if end_time_str.endswith('Z'): end_time_str = end_time_str[:-1]
                 meeting.end_time = datetime.fromisoformat(end_time_str)
+            if visibility is not None:
+                meeting.visibility = visibility
+            if max_participants is not None:
+                meeting.max_participants = parsed_max_participants
+            if description is not None:
+                meeting.description = description
 
             schedule_error = validate_meeting_schedule(meeting.start_time, meeting.end_time)
             if schedule_error:
                 return jsonify({"msg": schedule_error}), 400
-                
+
+            participant_count = _get_participant_count(meeting)
+            if meeting.max_participants and meeting.max_participants < participant_count:
+                return jsonify({"msg": f"max_participants cannot be lower than current participant count ({participant_count})"}), 400
+
             # Update WebEx
             if meeting.webex_id:
+                if not account.webex_access_token:
+                    return jsonify({"msg": "WebEx not connected. Cannot update active meeting."}), 403
                 webex_service.update_meeting(
                     account.webex_access_token, 
                     meeting.webex_id,
                     meeting.start_time,
-                    meeting.end_time
+                    meeting.end_time,
+                    meeting.title
                 )
+
+            pending_invitations = MeetingInvitation.query.filter_by(meeting_id=meeting.id, status='pending').all()
+            for invitation in pending_invitations:
+                invitation.title = meeting.title
+                invitation.start_time = meeting.start_time
+                invitation.end_time = meeting.end_time
             
             db.session.commit()
+            _sync_meeting_in_chroma(meeting)
             return jsonify({"msg": "Meeting updated successfully"}), 200
         except ValueError:
              return jsonify({"msg": "Invalid date format"}), 400
         except Exception as e:
             return jsonify({"msg": f"Failed to update meeting: {str(e)}"}), 500
+
+
+@application.route('/api/webex/meeting/<int:meeting_id>/invitees', methods=['POST'])
+@jwt_required()
+def invite_meeting_invitees(meeting_id):
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    meeting = Meeting.query.get(meeting_id)
+    if not meeting:
+        return jsonify({"msg": "Meeting not found"}), 404
+
+    if not meeting.creator or meeting.creator.account_id != account.id:
+        return jsonify({"msg": "Only creator can invite classrooms"}), 403
+
+    sender_profile = meeting.creator
+
+    if meeting.status == 'cancelled':
+        return jsonify({"msg": "Cannot invite to a cancelled meeting"}), 409
+
+    data = request.json or {}
+    classroom_ids = data.get('classroom_ids')
+    normalized_ids, normalize_error = _normalize_invitee_ids(classroom_ids, sender_profile.id)
+    if normalize_error:
+        return jsonify({"msg": normalize_error}), 400
+
+    if len(normalized_ids) == 0:
+        return jsonify({"msg": "classroom_ids is required"}), 400
+
+    created = []
+    skipped = []
+
+    for receiver_id in normalized_ids:
+        receiver_profile = Profile.query.get(receiver_id)
+        if not receiver_profile:
+            skipped.append({"receiver_id": receiver_id, "reason": "not_found"})
+            continue
+
+        if _meeting_has_profile(meeting, receiver_profile):
+            skipped.append({"receiver_id": receiver_id, "receiver_name": receiver_profile.name, "reason": "already_participant"})
+            continue
+
+        existing_pending = MeetingInvitation.query.filter_by(
+            meeting_id=meeting.id,
+            receiver_profile_id=receiver_profile.id,
+            status='pending'
+        ).first()
+        if existing_pending:
+            skipped.append({"receiver_id": receiver_id, "receiver_name": receiver_profile.name, "reason": "already_pending"})
+            continue
+
+        invitation = MeetingInvitation(
+            sender_profile_id=sender_profile.id,
+            receiver_profile_id=receiver_profile.id,
+            title=meeting.title,
+            start_time=meeting.start_time,
+            end_time=meeting.end_time,
+            status='pending',
+            meeting_id=meeting.id
+        )
+        db.session.add(invitation)
+        db.session.flush()
+
+        created.append({
+            "id": invitation.id,
+            "receiver_id": invitation.receiver_profile_id,
+            "receiver_name": receiver_profile.name,
+            "title": invitation.title,
+            "start_time": invitation.start_time.isoformat(),
+            "end_time": invitation.end_time.isoformat(),
+            "status": invitation.status,
+            "meeting_id": invitation.meeting_id
+        })
+
+    db.session.commit()
+
+    if len(created) == 0:
+        return jsonify({
+            "msg": "No new invitations were created",
+            "invitations": created,
+            "skipped": skipped
+        }), 200
+
+    return jsonify({
+        "msg": "Invitations sent successfully",
+        "invitations": created,
+        "skipped": skipped
+    }), 201
 
 @application.route('/api/meetings', methods=['GET'])
 @jwt_required()
@@ -839,7 +1364,7 @@ def get_upcoming_meetings():
     if not account:
         return jsonify({"msg": "User not found"}), 404
         
-    profile = account.classrooms.first()
+    profile = _get_primary_profile(account)
     if not profile:
         return jsonify({"meetings": []}), 200
         
@@ -848,28 +1373,122 @@ def get_upcoming_meetings():
     # Meetings created by me
     created_meetings = Meeting.query.filter(
         Meeting.creator_id == profile.id,
-        Meeting.start_time >= now
+        Meeting.start_time >= now,
+        Meeting.status.in_(['pending_setup', 'active'])
     ).all()
     
     # Meetings I am participating in
-    participating_meetings = [m for m in profile.meetings if m.start_time >= now]
+    participating_meetings = [
+        m for m in profile.meetings
+        if m.start_time >= now and m.status in ['pending_setup', 'active']
+    ]
     
     all_meetings = list(set(created_meetings + participating_meetings))
     all_meetings.sort(key=lambda x: x.start_time)
     
     result = []
     for m in all_meetings:
-        result.append({
-            "id": m.id,
-            "title": m.title,
-            "start_time": m.start_time.isoformat(),
-            "end_time": m.end_time.isoformat(),
-            "web_link": m.web_link,
-            "password": m.password,
-            "creator_name": m.creator.name
-        })
+        result.append(_serialize_meeting(m, profile, account))
         
     return jsonify({"meetings": result}), 200
+
+
+@application.route('/api/meetings/public', methods=['GET'])
+@jwt_required()
+def get_public_meetings():
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = _get_primary_profile(account)
+    now = datetime.utcnow()
+
+    meetings = Meeting.query.filter(
+        Meeting.visibility == 'public',
+        Meeting.start_time >= now,
+        Meeting.status.in_(['pending_setup', 'active'])
+    ).order_by(Meeting.start_time.asc()).all()
+
+    return jsonify({"meetings": [_serialize_meeting(meeting, profile, account) for meeting in meetings]}), 200
+
+
+@application.route('/api/meetings/public/trending', methods=['GET'])
+@jwt_required()
+def get_public_trending_meetings():
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = _get_primary_profile(account)
+    now = datetime.utcnow()
+    cutoff = now + timedelta(days=TRENDING_LOOKAHEAD_DAYS)
+
+    meetings = Meeting.query.filter(
+        Meeting.visibility == 'public',
+        Meeting.start_time >= now,
+        Meeting.start_time <= cutoff,
+        Meeting.status.in_(['pending_setup', 'active'])
+    ).all()
+
+    def score(meeting: Meeting):
+        participant_count = _get_participant_count(meeting)
+        days_until = max((meeting.start_time - now).total_seconds() / 86400, 0)
+        recency_factor = max(0.0, (TRENDING_LOOKAHEAD_DAYS - days_until) / TRENDING_LOOKAHEAD_DAYS)
+        return (participant_count * 2.0) + recency_factor
+
+    ranked = sorted(meetings, key=score, reverse=True)
+    payload = []
+    for meeting in ranked[:25]:
+        serialized = _serialize_meeting(meeting, profile, account)
+        serialized['trending_score'] = round(score(meeting), 4)
+        payload.append(serialized)
+
+    return jsonify({"meetings": payload}), 200
+
+
+@application.route('/api/meetings/<int:meeting_id>/join', methods=['POST'])
+@jwt_required()
+def join_public_meeting(meeting_id):
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = _get_primary_profile(account)
+    if not profile:
+        return jsonify({"msg": "No profile found for account"}), 400
+
+    meeting = Meeting.query.get(meeting_id)
+    if not meeting:
+        return jsonify({"msg": "Meeting not found"}), 404
+
+    if meeting.visibility != 'public':
+        return jsonify({"msg": "Only public meetings can be joined directly"}), 403
+
+    if meeting.status == 'cancelled':
+        return jsonify({"msg": "Meeting has been cancelled"}), 409
+
+    if _meeting_has_profile(meeting, profile):
+        return jsonify({"msg": "Already joined", "meeting": _serialize_meeting(meeting, profile, account)}), 200
+
+    participant_count = _get_participant_count(meeting)
+    if meeting.max_participants and participant_count >= meeting.max_participants:
+        return jsonify({"msg": "Meeting is full"}), 409
+
+    create_error = _ensure_meeting_created_with_webex(meeting)
+    if create_error:
+        return jsonify({"msg": create_error}), 403
+
+    meeting.participants.append(profile)
+    meeting.join_count = len(meeting.participants)
+    db.session.commit()
+
+    return jsonify({
+        "msg": "Joined public meeting successfully",
+        "meeting": _serialize_meeting(meeting, profile, account)
+    }), 200
 
 
 @application.route('/api/webex/invitations', methods=['GET'])
@@ -882,7 +1501,7 @@ def get_pending_invitations():
     if not account:
         return jsonify({"msg": "User not found"}), 404
     
-    receiver_profile = account.classrooms.first()
+    receiver_profile = _get_primary_profile(account)
     if not receiver_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
@@ -901,7 +1520,9 @@ def get_pending_invitations():
             "end_time": inv.end_time.isoformat(),
             "sender_name": inv.sender.name,
             "status": inv.status,
-            "created_at": inv.created_at.isoformat()
+            "created_at": inv.created_at.isoformat(),
+            "meeting_id": inv.meeting_id,
+            "visibility": inv.meeting.visibility if inv.meeting else 'private'
         })
     
     return jsonify({"invitations": result}), 200
@@ -917,7 +1538,7 @@ def get_sent_invitations():
     if not account:
         return jsonify({"msg": "User not found"}), 404
     
-    sender_profile = account.classrooms.first()
+    sender_profile = _get_primary_profile(account)
     if not sender_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
@@ -936,7 +1557,9 @@ def get_sent_invitations():
             "end_time": inv.end_time.isoformat(),
             "receiver_name": inv.receiver.name,
             "status": inv.status,
-            "created_at": inv.created_at.isoformat()
+            "created_at": inv.created_at.isoformat(),
+            "meeting_id": inv.meeting_id,
+            "visibility": inv.meeting.visibility if inv.meeting else 'private'
         })
     
     return jsonify({"sent_invitations": result}), 200
@@ -945,14 +1568,14 @@ def get_sent_invitations():
 @application.route('/api/webex/invitations/<int:invitation_id>/accept', methods=['POST'])
 @jwt_required()
 def accept_invitation(invitation_id):
-    """Accept a meeting invitation and create the WebEx meeting"""
+    """Accept a meeting invitation and join/create the planned meeting."""
     current_user_id = get_jwt_identity()
     account = Account.query.get(current_user_id)
     
     if not account:
         return jsonify({"msg": "User not found"}), 404
     
-    receiver_profile = account.classrooms.first()
+    receiver_profile = _get_primary_profile(account)
     if not receiver_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
@@ -967,67 +1590,42 @@ def accept_invitation(invitation_id):
     if invitation.status != 'pending':
         return jsonify({"msg": f"Invitation is already {invitation.status}"}), 400
     
-    # Check if the sender has WebEx connected
-    sender_account = invitation.sender.account
-    if not sender_account.webex_access_token:
-        return jsonify({"msg": "The meeting organizer's WebEx account is not connected"}), 403
-    
-    # Refresh WebEx token if expired
-    if sender_account.webex_token_expires_at and sender_account.webex_token_expires_at < datetime.utcnow():
-        try:
-            token_data = webex_service.refresh_access_token(sender_account.webex_refresh_token)
-            sender_account.webex_access_token = token_data.get('access_token')
-            sender_account.webex_refresh_token = token_data.get('refresh_token', sender_account.webex_refresh_token)
-            expires_in = token_data.get('expires_in')
-            if expires_in:
-                sender_account.webex_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-            db.session.commit()
-        except Exception as e:
-            return jsonify({"msg": "Failed to refresh organizer's WebEx session. Please try again later."}), 403
-    
-    # Create meeting via WebEx using the sender's token
-    try:
-        webex_meeting = webex_service.create_meeting(
-            sender_account.webex_access_token,
-            invitation.title,
-            invitation.start_time,
-            invitation.end_time
+    meeting = invitation.meeting
+    if not meeting:
+        meeting = Meeting(
+            title=invitation.title,
+            start_time=invitation.start_time,
+            end_time=invitation.end_time,
+            creator_id=invitation.sender_profile_id,
+            visibility='private',
+            status='pending_setup'
         )
-    except Exception as e:
-        return jsonify({"msg": f"Failed to create WebEx meeting: {str(e)}"}), 500
-    
-    # Create meeting in database with sender as creator
-    new_meeting = Meeting(
-        webex_id=webex_meeting.get('id'),
-        title=webex_meeting.get('title', invitation.title),
-        start_time=invitation.start_time,
-        end_time=invitation.end_time,
-        web_link=webex_meeting.get('webLink'),
-        password=webex_meeting.get('password'),
-        creator_id=invitation.sender_profile_id
-    )
-    
-    # Add the accepting classroom as a participant
-    new_meeting.participants.append(receiver_profile)
-    
-    db.session.add(new_meeting)
-    
+        db.session.add(meeting)
+        db.session.flush()
+        invitation.meeting_id = meeting.id
+
+    participant_count = _get_participant_count(meeting)
+    if meeting.max_participants and participant_count >= meeting.max_participants and not _meeting_has_profile(meeting, receiver_profile):
+        return jsonify({"msg": "Meeting is full"}), 409
+
+    create_error = _ensure_meeting_created_with_webex(meeting)
+    if create_error:
+        return jsonify({"msg": create_error}), 403
+
+    if not any(p.id == receiver_profile.id for p in meeting.participants):
+        meeting.participants.append(receiver_profile)
+
+    meeting.join_count = len(meeting.participants)
+
     # Update invitation status
     invitation.status = 'accepted'
-    invitation.meeting_id = new_meeting.id
+    invitation.meeting_id = meeting.id
     
     db.session.commit()
     
     return jsonify({
-        "msg": "Invitation accepted. Meeting created successfully!",
-        "meeting": {
-            "id": new_meeting.id,
-            "title": new_meeting.title,
-            "web_link": new_meeting.web_link,
-            "start_time": new_meeting.start_time.isoformat(),
-            "end_time": new_meeting.end_time.isoformat(),
-            "password": new_meeting.password
-        }
+        "msg": "Invitation accepted. Meeting joined successfully!",
+        "meeting": _serialize_meeting(meeting, receiver_profile, account)
     }), 201
 
 
@@ -1041,7 +1639,7 @@ def decline_invitation(invitation_id):
     if not account:
         return jsonify({"msg": "User not found"}), 404
     
-    receiver_profile = account.classrooms.first()
+    receiver_profile = _get_primary_profile(account)
     if not receiver_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
@@ -1075,7 +1673,7 @@ def cancel_invitation(invitation_id):
     if not account:
         return jsonify({"msg": "User not found"}), 404
     
-    sender_profile = account.classrooms.first()
+    sender_profile = _get_primary_profile(account)
     if not sender_profile:
         return jsonify({"msg": "No profile found for account"}), 400
     
@@ -1144,7 +1742,8 @@ def query_documents():
     {
         "query": "search text",
         "n_results": 5,  // optional, defaults to 5
-        "where": {"key": "value"}  // optional metadata filter
+        "where": {"key": "value"},  // optional metadata filter
+        "min_similarity": 0.75  // optional
     }
     """
     try:
@@ -1156,11 +1755,25 @@ def query_documents():
         query_text = data.get('query')
         n_results = data.get('n_results', 5)
         where = data.get('where', None)
+        min_similarity = data.get('min_similarity', None)
         
         if not isinstance(query_text, str) or len(query_text.strip()) == 0:
             return jsonify({"status": "error", "message": "'query' must be a non-empty string"}), 400
+
+        if not isinstance(n_results, int) or n_results <= 0:
+            return jsonify({"status": "error", "message": "'n_results' must be a positive integer"}), 400
+
+        if where is not None and not isinstance(where, dict):
+            return jsonify({"status": "error", "message": "'where' must be an object when provided"}), 400
+
+        if min_similarity is not None:
+            if not isinstance(min_similarity, (int, float)):
+                return jsonify({"status": "error", "message": "'min_similarity' must be a number between 0 and 1"}), 400
+            if min_similarity < 0 or min_similarity > 1:
+                return jsonify({"status": "error", "message": "'min_similarity' must be between 0 and 1"}), 400
         
-        result = chroma_service.query_documents(query_text, n_results, where)
+        threshold = float(min_similarity) if min_similarity is not None else None
+        result = chroma_service.query_documents(query_text, n_results, where, threshold)
         
         if result['status'] == 'success':
             return jsonify(result), 200
