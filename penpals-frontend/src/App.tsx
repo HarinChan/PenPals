@@ -290,35 +290,46 @@ function AppContent() {
     setCurrentAccountId(newAccount.id);
   };
 
-  const handleAccountDelete = (accountId: string) => {
-    const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
-    const deletedAccount = accounts.find(acc => acc.id === accountId);
+  const handleAccountDelete = async (accountId: string) => {
+    try {
+      // Call backend to actually delete the classroom
+      const numericId = parseInt(accountId, 10);
+      if (!isNaN(numericId)) {
+        await ClassroomService.deleteClassroom(numericId);
+      }
 
-    // If we're deleting the last classroom, create a new empty one
-    if (filteredAccounts.length === 0) {
-      const newAccount: Account = {
-        id: `account-${Date.now()}`,
-        classroomName: 'New Classroom',
-        location: 'Unknown',
-        size: 10,
-        description: '',
-        interests: [],
-        schedule: {},
-        // Inherit coordinates from the deleted account, or use default if not available
-        x: deletedAccount?.x ?? -0.1278,
-        y: deletedAccount?.y ?? 51.5074,
-      };
-      setAccounts([newAccount]);
-      setCurrentAccountId(newAccount.id);
-      toast.success('Classroom deleted. New classroom created.');
-    } else {
-      // Sort remaining classrooms alphabetically and switch to the first one
-      const sortedAccounts = [...filteredAccounts].sort((a, b) =>
-        a.classroomName.localeCompare(b.classroomName)
-      );
-      setAccounts(filteredAccounts);
-      setCurrentAccountId(sortedAccounts[0].id);
-      toast.success('Classroom deleted.');
+      const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
+      const deletedAccount = accounts.find(acc => acc.id === accountId);
+
+      // If we're deleting the last classroom, create a new empty one
+      if (filteredAccounts.length === 0) {
+        const newAccount: Account = {
+          id: `account-${Date.now()}`,
+          classroomName: 'New Classroom',
+          location: 'Unknown',
+          size: 10,
+          description: '',
+          interests: [],
+          schedule: {},
+          // Inherit coordinates from the deleted account, or use default if not available
+          x: deletedAccount?.x ?? -0.1278,
+          y: deletedAccount?.y ?? 51.5074,
+        };
+        setAccounts([newAccount]);
+        setCurrentAccountId(newAccount.id);
+        toast.success('Classroom deleted. Default local classroom created.');
+      } else {
+        // Sort remaining classrooms alphabetically and switch to the first one
+        const sortedAccounts = [...filteredAccounts].sort((a, b) =>
+          a.classroomName.localeCompare(b.classroomName)
+        );
+        setAccounts(filteredAccounts);
+        setCurrentAccountId(sortedAccounts[0].id);
+        toast.success('Classroom deleted.');
+      }
+    } catch (error: any) {
+      console.error('Failed to delete classroom:', error);
+      toast.error(error.message || 'Failed to delete classroom. Please try again.');
     }
   };
 
