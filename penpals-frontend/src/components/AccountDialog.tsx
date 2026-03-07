@@ -56,39 +56,7 @@ export default function AccountDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4 flex-1 overflow-y-auto">
-          {/* Avatar Management */}
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16 text-2xl border-2 border-primary/20 bg-slate-100 dark:bg-slate-700">
-                  <AvatarFallback className="bg-transparent">{currentAccount.avatar || currentAccount.classroomName.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-slate-900 dark:text-slate-100 font-medium">Classroom Avatar</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Choose an emoji to represent your classroom</p>
-                </div>
-              </div>
-              <div className="grid gap-2 pt-2" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
-                {COMMON_EMOJIS.map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={async () => {
-                      try {
-                        await ClassroomService.updateClassroom(Number(currentAccount.id), { avatar: emoji });
-                        onAccountUpdate({ ...currentAccount, avatar: emoji });
-                        toast.success('Avatar updated successfully');
-                      } catch (error) {
-                        toast.error('Failed to update avatar');
-                      }
-                    }}
-                    className={`h-10 w-10 text-xl rounded-md flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 ${currentAccount.avatar === emoji ? 'ring-2 ring-primary bg-primary/10' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Card>
+
 
           {/* Account Location Management */}
           <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
