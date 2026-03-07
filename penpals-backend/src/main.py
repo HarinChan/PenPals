@@ -1891,6 +1891,7 @@ def get_posts():
             "id": str(post.id),
             "authorId": str(post.profile_id),
             "authorName": post.profile.name,
+            "authorAvatar": post.profile.avatar or "",
             "content": post.content,
             "imageUrl": post.image_url,
             "timestamp": post.created_at.isoformat(),
@@ -1923,15 +1924,25 @@ def create_post():
     if not account:
         return jsonify({"msg": "User not found"}), 404
         
-    # Use the first profile for posting (simplification)
-    profile = account.classrooms.first()
+    # Use the classroom specified by the frontend, fall back to first if not provided
+    data = request.json
+    classroom_id = data.get('classroomId')
+    
+    if classroom_id:
+        profile = account.classrooms.filter_by(id=classroom_id).first()
+        if not profile:
+            # classroomId provided but doesn't belong to this account — reject
+            return jsonify({"msg": "Classroom not found for this account"}), 404
+    else:
+        profile = account.classrooms.first()
+    
     if not profile:
         return jsonify({"msg": "Profile not found. Create a profile first."}), 400
         
-    data = request.json
     content = data.get('content')
     image_url = data.get('imageUrl')
     quoted_post_id = data.get('quotedPostId')
+
     
     if not content:
         return jsonify({"msg": "Content is required"}), 400
@@ -1968,6 +1979,7 @@ def create_post():
         "id": str(post.id),
         "authorId": str(profile.id),
         "authorName": profile.name,
+        "authorAvatar": profile.avatar or "",
         "content": post.content,
         "imageUrl": post.image_url,
         "timestamp": post.created_at.isoformat(),
@@ -2036,6 +2048,37 @@ def unlike_post(post_id):
     db.session.commit()
     
     return jsonify({"msg": "Post unliked", "likes": post.likes}), 200
+
+
+@application.route('/api/posts/<int:post_id>', methods=['DELETE'])
+@jwt_required()
+def delete_post(post_id):
+    """Delete a post — only the author's classroom can delete it"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"msg": "Post not found"}), 404
+
+    # Verify the post belongs to a classroom owned by this account
+    if post.profile.account_id != account.id:
+        return jsonify({"msg": "You can only delete your own posts"}), 403
+
+    # Remove from ChromaDB index (best-effort)
+    try:
+        chroma_service.delete_documents([f"post-{post.id}"])
+    except Exception as e:
+        application.logger.warning("Failed to remove post from ChromaDB: %s", e)
+
+    db.session.delete(post)
+    db.session.commit()
+
+    return jsonify({"msg": "Post deleted"}), 200
+
+
 
 
 @application.route('/api/classrooms', methods=['GET'])
