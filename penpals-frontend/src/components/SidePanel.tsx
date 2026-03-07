@@ -1,18 +1,13 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { Checkbox } from './ui/checkbox';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { ScrollArea } from './ui/scroll-area';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Search, Calendar, BookOpen, Plus, User, MapPin, Users, Edit2, ChevronDown, ChevronRight, ChevronLeft, Phone, Heart, Clock, Trash2, AlertTriangle, Video, Link as LinkIcon } from 'lucide-react';
-import { Account, RecentCall, Friend, FriendRequest, Notification, Classroom } from '../types';
+import { ChevronRight, ChevronLeft, User, BookOpen, Calendar, Search, Phone, Heart } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Account, Classroom } from '../types';
 import { WebexService, ClassroomService, MeetingsService } from '../services';
 import type { MeetingDto } from '../services/meetings';
 import { FriendsService } from '../services/friends';
@@ -21,61 +16,18 @@ import ClassroomDetailDialog from './ClassroomDetailDialog';
 import FeedPanel from './FeedPanel';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
-import NotificationWidget from './NotificationWidget';
 import MeetingDetailsDialog from './MeetingDetailsDialog';
-import LocationAutocomplete from './LocationAutocomplete';
-import type { SelectedLocation } from '../services/location';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
 
-const AVAILABLE_SUBJECTS = [
-  'Maths',
-  'English',
-  'Biology',
-  'Chemistry',
-  'Physics',
-  'History',
-  'Geography',
-  'Computer Science',
-  'Art',
-  'Music',
-  'Spanish',
-  'French',
-  'Mandarin',
-  'Japanese',
-  'Korean',
-  'Rock Climbing',
-  'Knitting',
-  'Dance',
-];
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-const formatMeetingDateTime = (dateInput: string): string => {
-  const date = new Date(dateInput);
-  const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
-  const day = date.toLocaleDateString(undefined, { day: 'numeric' });
-  const month = date.toLocaleDateString(undefined, { month: 'short' });
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return `${weekday} ${day} ${month} ${time}`;
-};
-
-const formatMeetingTimeRange = (startInput: string, endInput: string): string => {
-  const start = new Date(startInput);
-  const end = new Date(endInput);
-  const weekday = start.toLocaleDateString(undefined, { weekday: 'short' });
-  const day = start.toLocaleDateString(undefined, { day: 'numeric' });
-  const month = start.toLocaleDateString(undefined, { month: 'short' });
-  const startTime = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const endTime = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return `${weekday} ${day} ${month} ${startTime} - ${endTime}`;
-};
+import ClassroomSwitcher from './sidepanel/ClassroomSwitcher';
+import AccountInfo from './sidepanel/AccountInfo';
+import InterestsWidget from './sidepanel/InterestsWidget';
+import ScheduleWidget from './sidepanel/ScheduleWidget';
+import UpcomingMeetingsWidget from './sidepanel/UpcomingMeetingsWidget';
+import PublicMeetingsWidget from './sidepanel/PublicMeetingsWidget';
+import InvitationsWidget from './sidepanel/InvitationsWidget';
+import RecentCallsWidget from './sidepanel/RecentCallsWidget';
+import FriendsWidget from './sidepanel/FriendsWidget';
+import ClassroomsList from './sidepanel/ClassroomsList';
 
 
 
@@ -116,56 +68,31 @@ export default function SidePanel({
   likedPosts,
   loadingPosts = false,
 }: SidePanelProps) {
-  const [customInterest, setCustomInterest] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showScheduleEditor, setShowScheduleEditor] = useState(false);
-  const [editingAccount, setEditingAccount] = useState(false);
   const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
   const [meetingDetailsOpen, setMeetingDetailsOpen] = useState(false);
-  const [isSavingInterests, setIsSavingInterests] = useState(false);
 
-  const [upcomingMeetingsOpen, setUpcomingMeetingsOpen] = useState(true);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
-  const [invitationsOpen, setInvitationsOpen] = useState(true);
-  const [invitationsTab, setInvitationsTab] = useState<'received' | 'sent'>('received');
   const [receivedInvitations, setReceivedInvitations] = useState<any[]>([]);
   const [sentInvitations, setSentInvitations] = useState<any[]>([]);
-  const [publicMeetingsOpen, setPublicMeetingsOpen] = useState(true);
   const [trendingMeetings, setTrendingMeetings] = useState<MeetingDto[]>([]);
 
-  const groupedSentInvitations = useMemo(() => {
-    const groups = new Map<string, {
-      key: string;
-      meetingId: number | null;
-      title: string;
-      start_time: string;
-      end_time: string;
-      invitations: any[];
-    }>();
+  // Create Classroom Dialog State
+  const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
+  const [newClassroomData, setNewClassroomData] = useState({
+    name: '',
+    size: 20,
+    description: '',
+    avatar: '',
+  });
 
-    sentInvitations.forEach((invitation) => {
-      const groupKey = invitation.meeting_id ? `meeting-${invitation.meeting_id}` : `inv-${invitation.id}`;
-      const existing = groups.get(groupKey);
-      if (existing) {
-        existing.invitations.push(invitation);
-      } else {
-        groups.set(groupKey, {
-          key: groupKey,
-          meetingId: invitation.meeting_id ?? null,
-          title: invitation.title,
-          start_time: invitation.start_time,
-          end_time: invitation.end_time,
-          invitations: [invitation],
-        });
-      }
-    });
-
-    return Array.from(groups.values());
-  }, [sentInvitations]);
+  // Resize logic
+  const [width, setWidth] = useState(384);
+  const [isResizing, setIsResizing] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
   const fetchMeetings = async () => {
     try {
@@ -220,7 +147,6 @@ export default function SidePanel({
 
   useEffect(() => {
     refreshMeetingWidgets();
-    // Set up a polling interval to refresh meetings and invitations every minute
     const interval = setInterval(() => {
       refreshMeetingWidgets();
     }, 60000);
@@ -228,36 +154,36 @@ export default function SidePanel({
   }, [refreshMeetingWidgets]);
 
   useEffect(() => {
-    const checkWebexStatus = async () => {
-      try {
-        const status = await WebexService.getStatus();
-        setWebexConnected(status.connected);
-      } catch (e) {
-        console.error("Failed to check WebEx status", e);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= 256 && newWidth <= 800) {
+        setWidth(newWidth);
       }
     };
-    checkWebexStatus();
-  }, [currentAccount.id]);
 
-  useEffect(() => {
-    if (invitationsOpen) {
-      fetchInvitations();
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
     }
-  }, [invitationsOpen, invitationsTab, currentAccount.id]);
 
-  useEffect(() => {
-    if (upcomingMeetingsOpen) {
-      fetchMeetings();
-    }
-  }, [upcomingMeetingsOpen, currentAccount.id]);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+    };
+  }, [isResizing]);
 
-  useEffect(() => {
-    if (publicMeetingsOpen) {
-      fetchPublicMeetings();
-    }
-  }, [publicMeetingsOpen, currentAccount.id]);
-
-  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
 
   const handleAcceptInvitation = async (invitationId: number) => {
     try {
@@ -334,11 +260,6 @@ export default function SidePanel({
     }
   };
 
-  const handleJoinPublicMeeting = async (meeting: MeetingDto) => {
-    setSelectedMeetingId(meeting.id);
-    setMeetingDetailsOpen(true);
-  };
-
   const handleCancelPublicMeeting = async (meeting: MeetingDto) => {
     if (!confirm('Cancel this public meeting?')) {
       return;
@@ -355,284 +276,15 @@ export default function SidePanel({
     }
   };
 
-  // Create Classroom Dialog State
-  const [createClassroomDialogOpen, setCreateClassroomDialogOpen] = useState(false);
-  const [newClassroomData, setNewClassroomData] = useState({
-    name: '',
-    size: 20,
-    description: '',
-    avatar: '',
-  });
-
-  // Collapsible widget states
-  const [accountInfoOpen, setAccountInfoOpen] = useState(true);
-  const [interestsOpen, setInterestsOpen] = useState(true);
-  const [scheduleOpen, setScheduleOpen] = useState(true);
-  const [classroomsOpen, setClassroomsOpen] = useState(true);
-  const [recentCallsOpen, setRecentCallsOpen] = useState(true);
-  const [friendsOpen, setFriendsOpen] = useState(true);
-  const [notificationsOpen, setNotificationsOpen] = useState(true);
-
-  // Resize logic
-  const [width, setWidth] = useState(384);
-  const [isResizing, setIsResizing] = useState(false);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-
-      const newWidth = window.innerWidth - e.clientX;
-
-      if (newWidth >= 256 && newWidth <= 800) {
-        setWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.body.style.cursor = 'default';
-    };
-
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'default';
-    };
-  }, [isResizing]);
-
-  const startResizing = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
-
-  const [accountForm, setAccountForm] = useState({
-    classroomName: currentAccount.classroomName,
-    location: currentAccount.location,
-    size: currentAccount.size,
-    description: currentAccount.description || '',
-    avatar: currentAccount.avatar || '',
-  });
-
-  // Helper to map DB string representation of days to frontend numbers
-const availabilityMap: { [key: string]: number } = {
-  'Mondays': 1,
-  'Tuesdays': 2,
-  'Wednesdays': 3,
-  'Thursdays': 4,
-  'Fridays': 5,
-  'Saturdays': 6,
-  'Sundays': 0
-};
-
-const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️', '🌍', '⛺', '🚀', '💡', '🎵', '🎭', '💻', '🎮', '🌟', '🦄', '🦖'];
-  // Helper: Convert string to title case
-  const toTitleCase = (str: string): string => {
-    return str
-      .toLowerCase()
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  // Deduplicate and clean interests (remove empty strings and case-insensitive duplicates)
-  const cleanedInterests = useMemo(() => {
-    const normalized = new Map<string, string>();
-    (currentAccount.interests || []).forEach((interest) => {
-      const trimmed = interest.trim();
-      if (trimmed) {
-        const lowercase = trimmed.toLowerCase();
-        normalized.set(lowercase, trimmed);
-      }
-    });
-    return Array.from(normalized.values());
-  }, [currentAccount.interests]);
-
-  // Combine predefined subjects with custom interests from database
-  const allInterests = useMemo(() => {
-    const combined = new Set([...AVAILABLE_SUBJECTS, ...cleanedInterests]);
-    return Array.from(combined);
-  }, [cleanedInterests]);
-
-  const sortedInterests = useMemo(() => {
-    return [...allInterests].sort((a, b) => {
-      const aChecked = currentAccount.interests.includes(a);
-      const bChecked = currentAccount.interests.includes(b);
-      if (aChecked !== bChecked) return aChecked ? -1 : 1;
-      return a.localeCompare(b);
-    });
-  }, [allInterests, currentAccount.interests]);
-
-  const toggleInterest = async (interest: string) => {
-    const newInterests = currentAccount.interests.includes(interest)
-      ? currentAccount.interests.filter(i => i !== interest)
-      : [...currentAccount.interests, interest];
-
-    // Update UI immediately for responsiveness
-    onAccountUpdate({ ...currentAccount, interests: newInterests });
-
-    // Persist to database with title case
-    setIsSavingInterests(true);
-    try {
-      const { ClassroomService } = await import('../services/classroom');
-      const titleCaseInterests = newInterests.map(toTitleCase);
-      await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: titleCaseInterests });
-      toast.success('Interest updated');
-    } catch (error) {
-      console.error('Failed to save interest:', error);
-      toast.error('Failed to save interest');
-      // Revert optimistic update if save fails
-      onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
-    } finally {
-      setIsSavingInterests(false);
-    }
-  };
-
-  const addCustomInterest = async () => {
-    const trimmedInput = customInterest.trim();
-    if (!trimmedInput) return;
-
-    const titleCaseInput = toTitleCase(trimmedInput);
-    
-    // Check if it exists in the list (case-insensitive)
-    const existingInterest = allInterests.find(
-      (interest) => interest.toLowerCase() === titleCaseInput.toLowerCase()
-    );
-
-    if (existingInterest) {
-      // If it exists, toggle it
-      await toggleInterest(existingInterest);
-    } else {
-      // If it doesn't exist, add it as a new custom interest
-      const newInterests = [...currentAccount.interests, titleCaseInput];
-
-      // Update UI immediately for responsiveness
-      onAccountUpdate({ ...currentAccount, interests: newInterests });
-      setCustomInterest('');
-
-      // Persist to database
-      setIsSavingInterests(true);
-      try {
-        const { ClassroomService } = await import('../services/classroom');
-        await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: newInterests });
-        toast.success('Interest added');
-      } catch (error) {
-        console.error('Failed to save custom interest:', error);
-        toast.error('Failed to save interest');
-        // Revert optimistic update if save fails
-        onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
-      } finally {
-        setIsSavingInterests(false);
-      }
-    }
-
-    setCustomInterest('');
-  };
-
-  // Helper: Format schedule array to string (e.g., [9, 10, 11] -> "9, 10, 11")
-  const formatScheduleToString = (hours: number[] | undefined): string => {
-    if (!hours || hours.length === 0) return '';
-    return hours.sort((a, b) => a - b).join(', ');
-  };
-
-  // Helper: Format schedule for display (e.g. [9, 10, 14] -> "9:00 - 11:00, 14:00 - 15:00")
-  const formatScheduleRanges = (hours: number[] | undefined): string => {
-    if (!hours || hours.length === 0) return 'Not available';
-
-    const sorted = [...hours].sort((a, b) => a - b);
-    const ranges: string[] = [];
-    let start = sorted[0];
-    let prev = sorted[0];
-
-    for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i] !== prev + 1) {
-        // End of a range
-        ranges.push(`${start}:00 - ${prev + 1}:00`);
-        start = sorted[i];
-      }
-      prev = sorted[i];
-    }
-    // Push the last range
-    ranges.push(`${start}:00 - ${prev + 1}:00`);
-
-    return ranges.join(', ');
-  };
-
-  // Helper: Parse string input to schedule array
-  const parseScheduleInput = (input: string): number[] => {
-    const parts = input.split(/[,;\s]+/); // Split by comma, semicolon, or space
-    const hours = new Set<number>();
-
-    parts.forEach(part => {
-      if (!part) return;
-
-      // Handle ranges like "9-12"
-      if (part.includes('-')) {
-        const [startStr, endStr] = part.split('-');
-        const start = parseInt(startStr, 10);
-        const end = parseInt(endStr, 10);
-
-        if (!isNaN(start) && !isNaN(end) && start <= end) {
-          for (let i = start; i <= end - 1; i++) {
-            if (i >= 0 && i <= 23) hours.add(i);
-          }
-        }
-      } else {
-        // Handle single numbers
-        const num = parseInt(part, 10);
-        if (!isNaN(num) && num >= 0 && num <= 23) {
-          hours.add(num);
-        }
-      }
-    });
-
-    return Array.from(hours).sort((a, b) => a - b);
-  };
-
-  // Local state to handle input values before parsing
-  const [scheduleInputs, setScheduleInputs] = useState<{ [day: string]: string }>({});
-
-  // Initialize inputs when opening editor or account changes
-  useEffect(() => {
-    if (showScheduleEditor) {
-      const inputs: { [day: string]: string } = {};
-      DAYS.forEach(day => {
-        inputs[day] = formatScheduleToString(currentAccount.schedule[day]);
-      });
-      setScheduleInputs(inputs);
-    }
-  }, [showScheduleEditor, currentAccount.id]); // Re-sync if account changes or editor opens
-
-  const handleScheduleInputChange = (day: string, value: string) => {
-    setScheduleInputs(prev => ({ ...prev, [day]: value }));
-  };
-
-  const handleScheduleInputBlur = (day: string) => {
-    const value = scheduleInputs[day] || '';
-    const newSchedule = parseScheduleInput(value);
-
-    // Update the real data
-    onAccountUpdate({
-      ...currentAccount,
-      schedule: { ...currentAccount.schedule, [day]: newSchedule },
-    });
-
-    // Re-format the input to look clean (optional, but good for validation feedback)
-    setScheduleInputs(prev => ({
-      ...prev,
-      [day]: formatScheduleToString(newSchedule)
-    }));
-  };
-
-  const saveAccountInfo = async () => {
-    // Check for duplicate classroom names (excluding current classroom)
+  const saveAccountInfo = async (formData: {
+    classroomName: string;
+    location: string;
+    size: number;
+    description: string;
+    avatar: string;
+  }) => {
     const duplicateName = accounts.some(
-      acc => acc.id !== currentAccount.id && acc.classroomName === accountForm.classroomName
+      acc => acc.id !== currentAccount.id && acc.classroomName === formData.classroomName
     );
 
     if (duplicateName) {
@@ -641,29 +293,18 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
     }
 
     try {
-      // Find the primary backend classroom.id
       const numericId = Number(currentAccount.id);
-
-      // Include description and avatar in the update if they cover Account info
-      let updateData: any = {
-        name: accountForm.classroomName,
-        class_size: accountForm.size,
-        description: accountForm.description,
-        avatar: accountForm.avatar
-      };
-
-      // Call the API service
-      await ClassroomService.updateClassroom(numericId, updateData);
-
-      // (We leave description unhandled by the API here if backend Classroom doesn't support it directly, 
-      // but we update local state or user metadata depending on backend impl.)
-      // Note: If description exists on backend it should be added here later.
+      await ClassroomService.updateClassroom(numericId, {
+        name: formData.classroomName,
+        class_size: formData.size,
+        description: formData.description,
+        avatar: formData.avatar
+      });
 
       onAccountUpdate({
         ...currentAccount,
-        ...accountForm,
+        ...formData,
       });
-      setEditingAccount(false);
       toast.success('Classroom information saved');
     } catch (error: any) {
       console.error('Failed to save classroom settings:', error);
@@ -671,25 +312,21 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
     }
   };
 
-
-
   const createNewAccount = () => {
     if (accounts.length >= 12) {
       return;
     }
 
-    const defaultDescription = `Classroom managed by: `;
-
     setNewClassroomData({
       name: '',
       size: 20,
-      description: defaultDescription,
+      description: 'Classroom managed by: ',
+      avatar: '',
     });
     setCreateClassroomDialogOpen(true);
   };
 
   const submitCreateClassroom = async () => {
-    toast.info('Attempting to create classroom...'); // DEBUG
     try {
       // Validate
       if (!newClassroomData.name.trim()) {
@@ -758,57 +395,6 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
     }
   };
 
-  // Calculate relevancy for each classroom
-  const calculateRelevancy = (classroom: Classroom) => {
-    let scheduleMatches = false;
-    for (const day in currentAccount.schedule) {
-      const myHours = currentAccount.schedule[day] || [];
-      const classroomHours = classroom.availability[day] || [];
-      const hasOverlap = myHours.some(hour => classroomHours.includes(hour));
-      if (hasOverlap) {
-        scheduleMatches = true;
-        break;
-      }
-    }
-
-    const matchingInterests = classroom.interests.filter(interest =>
-      currentAccount.interests.includes(interest)
-    );
-    const interestMatchRatio = currentAccount.interests.length > 0
-      ? matchingInterests.length / currentAccount.interests.length
-      : 0;
-
-    if (scheduleMatches && interestMatchRatio === 1) {
-      return { level: 'high', color: 'bg-green-500', matchingInterests };
-    } else if (scheduleMatches && interestMatchRatio > 0) {
-      return { level: 'medium', color: 'bg-yellow-500', matchingInterests };
-    } else if (!scheduleMatches && interestMatchRatio > 0) {
-      return { level: 'low', color: 'bg-red-500', matchingInterests };
-    }
-    return { level: 'none', color: 'bg-slate-500', matchingInterests };
-  };
-
-  const filteredClassrooms = useMemo(() => {
-    return classrooms
-      .map(classroom => ({
-        ...classroom,
-        relevancy: calculateRelevancy(classroom),
-      }))
-      .filter(classroom => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-          classroom.name.toLowerCase().includes(query) ||
-          classroom.location.toLowerCase().includes(query) ||
-          classroom.interests.some(i => i.toLowerCase().includes(query))
-        );
-      })
-      .sort((a, b) => {
-        const order = { high: 0, medium: 1, low: 2, none: 3 };
-        return order[a.relevancy.level as keyof typeof order] - order[b.relevancy.level as keyof typeof order];
-      });
-  }, [searchQuery, currentAccount.interests, currentAccount.schedule]);
-
   const openClassroomDetails = (classroom: Classroom) => {
     setDetailDialogClassroom(classroom);
     setShowDetailDialog(true);
@@ -870,7 +456,7 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
     if (friend) return 'accepted';
 
     // Check if we received a request from them
-    const received = (currentAccount.receivedFriendRequests || []).find(r => r.senderId === classroomId.toString());
+    const received = (currentAccount.receivedFriendRequests || []).find(r => r.fromClassroomId === classroomId.toString());
     if (received) return 'received';
 
     // We don't track sent requests cleanly in frontend state yet without reload, 
@@ -903,7 +489,7 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
 
       // Optimistic Update
       // Remove from requests
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
 
       // Add to friends
       // We need classroom details for this. 
@@ -925,7 +511,7 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
   const rejectFriendRequest = async (senderId: string, requestId?: string) => {
     try {
       await FriendsService.rejectRequest(requestId, senderId);
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.senderId !== senderId && r.id !== requestId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
       onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
       toast.success("Friend request rejected");
     } catch (error) {
@@ -1057,813 +643,75 @@ const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️',
           </div>
 
           <TabsContent value="controls" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
-            {/* Classrooms Switcher */}
-            <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="text-purple-600 dark:text-purple-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Classrooms</h3>
-                    <Badge variant="secondary" className="text-xs">
-                      {accounts.length}/12
-                    </Badge>
-                  </div>
-                  <Button
-                    onClick={createNewAccount}
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-                    disabled={accounts.length >= 12}
-                    title={accounts.length >= 12 ? "Maximum classrooms reached" : "Add new classroom"}
-                  >
-                    <Plus size={16} />
-                  </Button>
-                </div>
+            <ClassroomSwitcher
+              accounts={accounts}
+              currentAccount={currentAccount}
+              onAccountChange={onAccountChange}
+              onCreateNew={createNewAccount}
+              onDelete={handleDeleteClassroom}
+            />
 
-                {accounts.length >= 12 && (
-                  <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
-                    <AlertTriangle className="text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" size={16} />
-                    <p className="text-xs text-amber-800 dark:text-amber-300">
-                      You've reached the maximum limit of 12 classrooms. Delete a classroom to create a new one.
-                    </p>
-                  </div>
-                )}
+            <AccountInfo
+              currentAccount={currentAccount}
+              accounts={accounts}
+              onSave={saveAccountInfo}
+            />
 
-                <div className="flex items-center gap-2">
-                  <Select value={currentAccount.id} onValueChange={onAccountChange}>
-                    <SelectTrigger className="flex-1 bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600">
-                      {accounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id} className="text-slate-900 dark:text-slate-100">
-                          {account.classroomName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    onClick={() => handleDeleteClassroom(currentAccount.id)}
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 shrink-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/20"
-                    disabled={accounts.length <= 1}
-                    title={accounts.length <= 1 ? "Cannot delete last classroom" : "Delete classroom"}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            <InterestsWidget
+              currentAccount={currentAccount}
+              onAccountUpdate={onAccountUpdate}
+            />
 
-            {/* Account Information - Collapsible */}
-            <Collapsible open={accountInfoOpen} onOpenChange={setAccountInfoOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
-                      <ChevronDown className={`transition-transform ${accountInfoOpen ? '' : '-rotate-90'}`} size={16} />
-                      <h3 className="text-slate-900 dark:text-slate-100">Classroom Information</h3>
-                    </CollapsibleTrigger>
-                    <button
-                      onClick={() => {
-                        if (editingAccount) {
-                          saveAccountInfo();
-                        } else {
-                          setAccountForm({
-                            classroomName: currentAccount.classroomName,
-                            location: currentAccount.location,
-                            size: currentAccount.size,
-                            description: currentAccount.description,
-                            avatar: currentAccount.avatar || '',
-                          });
-                          setEditingAccount(true);
-                        }
-                      }}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
-                    >
-                      {editingAccount ? 'Save' : <Edit2 size={16} />}
-                    </button>
-                  </div>
+            <ScheduleWidget
+              currentAccount={currentAccount}
+              onAccountUpdate={onAccountUpdate}
+            />
 
-                  <CollapsibleContent>
+            <UpcomingMeetingsWidget
+              upcomingMeetings={upcomingMeetings}
+              onMeetingClick={(meetingId) => {
+                setSelectedMeetingId(meetingId);
+                setMeetingDetailsOpen(true);
+              }}
+            />
 
-                    {editingAccount ? (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <Label className="text-slate-700 dark:text-slate-300">Classroom Name</Label>
-                          <Input
-                            value={accountForm.classroomName}
-                            onChange={(e) => setAccountForm({ ...accountForm, classroomName: e.target.value })}
-                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-slate-700 dark:text-slate-300">Class Size</Label>
-                          <Input
-                            type="number"
-                            value={accountForm.size}
-                            onChange={(e) => setAccountForm({ ...accountForm, size: parseInt(e.target.value) || 0 })}
-                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-slate-700 dark:text-slate-300">Description</Label>
-                          <Textarea
-                            value={accountForm.description}
-                            onChange={(e) => setAccountForm({ ...accountForm, description: e.target.value })}
-                            className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                            rows={3}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-slate-700 dark:text-slate-300">Avatar</Label>
-                          <div className="grid gap-2 pt-2" style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}>
-                            {COMMON_EMOJIS.map(emoji => (
-                              <button
-                                key={emoji}
-                                onClick={() => setAccountForm({ ...accountForm, avatar: emoji })}
-                                className={`h-10 w-10 text-xl rounded-md flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-700 ${accountForm.avatar === emoji ? 'ring-2 ring-primary bg-primary/10' : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                          <MapPin size={16} />
-                          <span>{currentAccount.location}</span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">(Account location)</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                          <Users size={16} />
-                          <span>{currentAccount.size} students</span>
-                        </div>
-                        {currentAccount.description && (
-                          <p className="text-slate-700 dark:text-slate-300 text-sm">{currentAccount.description}</p>
-                        )}
+            <PublicMeetingsWidget
+              trendingMeetings={trendingMeetings}
+              currentAccountId={currentAccount.id}
+              onMeetingClick={(meetingId: number) => {
+                setSelectedMeetingId(meetingId);
+                setMeetingDetailsOpen(true);
+              }}
+              onCancelMeeting={handleCancelPublicMeeting}
+            />
 
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
+            <InvitationsWidget
+              receivedInvitations={receivedInvitations}
+              sentInvitations={sentInvitations}
+              onAcceptInvitation={handleAcceptInvitation}
+              onDeclineInvitation={handleDeclineInvitation}
+              onCancelInvitation={handleCancelInvitation}
+            />
 
-            {/* Interests Widget - Collapsible */}
-            <Collapsible open={interestsOpen} onOpenChange={setInterestsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${interestsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <BookOpen className="text-blue-600 dark:text-blue-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Your Interests & subjects</h3>
-                  </CollapsibleTrigger>
+            <RecentCallsWidget
+              currentAccount={currentAccount}
+              classrooms={classrooms}
+              onCallClick={handleClassroomClick}
+            />
 
-                  <CollapsibleContent>
-                    {/* Search/Add Input */}
-                    <div className="flex gap-2 mb-4">
-                      <Input
-                        type="text"
-                        value={customInterest}
-                        onChange={(e) => setCustomInterest(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && !isSavingInterests && addCustomInterest()}
-                        placeholder="Add or search interests..."
-                        disabled={isSavingInterests}
-                        className="flex-1 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 disabled:opacity-50"
-                      />
-                      <button
-                        onClick={addCustomInterest}
-                        disabled={isSavingInterests || !customInterest.trim()}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-md transition-colors"
-                      >
-                        <Plus size={16} className="text-white" />
-                      </button>
-                    </div>
+            <FriendsWidget
+              currentAccount={currentAccount}
+              classrooms={classrooms}
+              onFriendClick={handleClassroomClick}
+              onRemoveFriend={removeFriend}
+            />
 
-                    {/* Interest Count */}
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                      {cleanedInterests.length} interests selected
-                    </p>
-
-                    {/* Checkbox List */}
-                    <ScrollArea className="h-64 border border-slate-200 dark:border-slate-700 rounded-md p-3">
-                      <div className="space-y-3 pr-4">
-                        {sortedInterests.length === 0 ? (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">
-                            No interests found
-                          </p>
-                        ) : (
-                          sortedInterests.map((subject) => (
-                            <div key={subject} className="flex items-center gap-3">
-                              <Checkbox
-                                id={subject}
-                                checked={currentAccount.interests.includes(subject)}
-                                onCheckedChange={() => !isSavingInterests && toggleInterest(subject)}
-                                disabled={isSavingInterests}
-                              />
-                              <Label
-                                htmlFor={subject}
-                                className="text-slate-900 dark:text-slate-100 cursor-pointer text-sm"
-                              >
-                                {toTitleCase(subject)}
-                              </Label>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Schedule Widget - Collapsible */}
-            <Collapsible open={scheduleOpen} onOpenChange={setScheduleOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-slate-700 dark:text-slate-300">
-                      <ChevronDown className={`transition-transform ${scheduleOpen ? '' : '-rotate-90'}`} size={16} />
-                      <Calendar className="text-green-600 dark:text-green-400" size={18} />
-                      <h3 className="text-slate-900 dark:text-slate-100">Your Availability</h3>
-                    </CollapsibleTrigger>
-                    <button
-                      onClick={() => setShowScheduleEditor(!showScheduleEditor)}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
-                    >
-                      {showScheduleEditor ? 'Save' : 'Edit'}
-                    </button>
-                  </div>
-
-                  <CollapsibleContent>
-
-                    {showScheduleEditor ? (
-                      <ScrollArea className="h-80">
-                        <div className="space-y-4 pr-4">
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Enter available hours (0-23) separated by commas or ranges. Example: "9, 10, 14-16"
-                          </p>
-                          {DAYS.map((day) => (
-                            <div key={day} className="space-y-1">
-                              <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">{day}</Label>
-                              <Input
-                                value={scheduleInputs[day] ?? ''}
-                                onChange={(e) => handleScheduleInputChange(day, e.target.value)}
-                                onBlur={() => handleScheduleInputBlur(day)}
-                                placeholder="e.g. 9-12, 14, 15"
-                                className="h-8 text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    ) : (
-                      <div className="space-y-2">
-                        {(() => {
-                          const hasAvailability = Object.values(currentAccount.schedule).some(hours => hours && hours.length > 0);
-
-                          if (!hasAvailability) {
-                            return (
-                              <div className="text-center text-slate-500 dark:text-slate-400 py-4 text-sm">
-                                No availability yet
-                              </div>
-                            );
-                          }
-
-                          return DAYS.map((day) => {
-                            const hours = currentAccount.schedule[day] || [];
-                            if (hours.length === 0) return null;
-                            return (
-                              <div key={day} className="flex gap-2 text-sm">
-                                <span className="text-slate-600 dark:text-slate-400 w-12">{day}:</span>
-                                <span className="text-slate-900 dark:text-slate-100">
-                                  {formatScheduleRanges(hours)}
-                                </span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Upcoming Meetings Widget - Collapsible */}
-            <Collapsible open={upcomingMeetingsOpen} onOpenChange={setUpcomingMeetingsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${upcomingMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Video className="text-purple-600 dark:text-purple-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Upcoming Meetings</h3>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <ScrollArea className="h-48">
-                      <div className="space-y-2 pr-4">
-                        {upcomingMeetings.length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No upcoming meetings
-                          </div>
-                        ) : (
-                          upcomingMeetings.map((meeting) => (
-                            <div
-                              key={meeting.id}
-                              onClick={() => {
-                                setSelectedMeetingId(meeting.id);
-                                setMeetingDetailsOpen(true);
-                              }}
-                              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                    <Clock size={12} />
-                                    {formatMeetingDateTime(meeting.start_time)}
-                                  </div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    Host: {meeting.creator_name}
-                                  </div>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => meeting.web_link && window.open(meeting.web_link, '_blank')}
-                                  disabled={!meeting.web_link}
-                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Join
-                                </Button>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Public Meetings Widget */}
-            <Collapsible open={publicMeetingsOpen} onOpenChange={setPublicMeetingsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
-                    <ChevronDown className={`transition-transform ${publicMeetingsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Users className="text-indigo-600 dark:text-indigo-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Public Meetings</h3>
-                    {trendingMeetings.length > 0 && (
-                      <Badge className="ml-2 bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                        {trendingMeetings.length}
-                      </Badge>
-                    )}
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <ScrollArea className="h-52">
-                      <div className="space-y-2 pr-4">
-                        {trendingMeetings.length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No public meetings available
-                          </div>
-                        ) : (
-                          trendingMeetings.map((meeting) => (
-                            (() => {
-                              const isMeetingHost = String(meeting.creator_id) === String(currentAccount.id);
-                              const canOpenDirectly = !!meeting.web_link && !!meeting.is_participant;
-                              const isJoinDisabled = !isMeetingHost && !canOpenDirectly && !!meeting.is_full;
-
-                              return (
-                            <div
-                              key={meeting.id}
-                              onClick={() => {
-                                setSelectedMeetingId(meeting.id);
-                                setMeetingDetailsOpen(true);
-                              }}
-                              className="p-3 rounded-lg border bg-indigo-50 dark:bg-slate-700 border-indigo-200 dark:border-slate-600 cursor-pointer hover:bg-indigo-100 dark:hover:bg-slate-650"
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{meeting.title}</div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                    <Clock size={12} />
-                                    {formatMeetingDateTime(meeting.start_time)}
-                                  </div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    Host: {meeting.creator_name}
-                                  </div>
-                                  <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                    Participants: {meeting.participant_count}
-                                    {meeting.max_participants ? ` / ${meeting.max_participants}` : ''}
-                                  </div>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    if (isMeetingHost) {
-                                      handleCancelPublicMeeting(meeting);
-                                    } else {
-                                      setSelectedMeetingId(meeting.id);
-                                      setMeetingDetailsOpen(true);
-                                    }
-                                  }}
-                                  disabled={isJoinDisabled}
-                                  className={`h-7 text-xs ${isMeetingHost
-                                    ? 'bg-red-600 hover:bg-red-700'
-                                    : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                                >
-                                  {isMeetingHost
-                                    ? 'Cancel'
-                                    : canOpenDirectly
-                                      ? 'Open'
-                                      : meeting.is_full
-                                        ? 'Full'
-                                        : 'Join'}
-                                </Button>
-                              </div>
-                            </div>
-                              );
-                            })()
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Meeting Invitations Widget - Unified with Toggle */}
-            <Collapsible open={invitationsOpen} onOpenChange={setInvitationsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300 mb-4">
-                    <ChevronDown className={`transition-transform ${invitationsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Phone className="text-blue-600 dark:text-blue-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Meeting Invitations</h3>
-                    {(invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length) > 0 && (
-                      <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {invitationsTab === 'received' ? receivedInvitations.length : groupedSentInvitations.length}
-                      </Badge>
-                    )}
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    {/* Tab Toggle */}
-                    <div className="flex gap-2 mb-4">
-                      <Button
-                        size="sm"
-                        variant={invitationsTab === 'received' ? 'default' : 'outline'}
-                        onClick={() => setInvitationsTab('received')}
-                        className="flex-1 h-8 text-xs"
-                      >
-                        Received
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={invitationsTab === 'sent' ? 'default' : 'outline'}
-                        onClick={() => setInvitationsTab('sent')}
-                        className="flex-1 h-8 text-xs"
-                      >
-                        Sent
-                      </Button>
-                    </div>
-
-                    <ScrollArea className="h-48">
-                      <div className="space-y-2 pr-4">
-                        {invitationsTab === 'received' ? (
-                          // Received Invitations
-                          <>
-                            {receivedInvitations.length === 0 ? (
-                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                                No incoming invitations
-                              </div>
-                            ) : (
-                              receivedInvitations.map((invitation) => (
-                                <div
-                                  key={invitation.id}
-                                  className={`p-3 rounded-lg border bg-green-50 dark:bg-slate-700 border-green-200 dark:border-slate-600`}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{invitation.title}</div>
-                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                        <Clock size={12} />
-                                        {formatMeetingTimeRange(invitation.start_time, invitation.end_time)}
-                                      </div>
-                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                        From: {invitation.sender_name}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-2 mt-3">
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleAcceptInvitation(invitation.id)}
-                                      className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
-                                    >
-                                      Accept
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="flex-1 h-7 text-xs"
-                                      onClick={() => handleDeclineInvitation(invitation.id)}
-                                    >
-                                      Decline
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </>
-                        ) : (
-                          // Sent Invitations
-                          <>
-                            {groupedSentInvitations.length === 0 ? (
-                              <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                                No pending outgoing invitations
-                              </div>
-                            ) : (
-                              groupedSentInvitations.map((group) => (
-                                <div
-                                  key={group.key}
-                                  className={`p-3 rounded-lg border bg-amber-50 dark:bg-slate-700 border-amber-200 dark:border-slate-600`}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <div className="text-slate-900 dark:text-slate-100 font-medium text-sm">{group.title}</div>
-                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                        <Clock size={12} />
-                                        {formatMeetingTimeRange(group.start_time, group.end_time)}
-                                      </div>
-                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                        Invited classrooms: {group.invitations.length}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="mt-3 space-y-1">
-                                    {group.invitations.map((invitation) => (
-                                      <div key={invitation.id} className="flex items-center justify-between gap-2 rounded border border-amber-200 dark:border-slate-600 px-2 py-1">
-                                        <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{invitation.receiver_name}</span>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-6 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                          onClick={() => handleCancelInvitation(invitation.id)}
-                                        >
-                                          Withdraw
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Recent Calls Widget - Collapsible */}
-            <Collapsible open={recentCallsOpen} onOpenChange={setRecentCallsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${recentCallsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Phone className="text-orange-600 dark:text-orange-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Recent Calls</h3>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <ScrollArea className="h-64">
-                      <div className="space-y-2 pr-4">
-                        {(currentAccount.recentCalls || []).length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No recent calls
-                          </div>
-                        ) : (
-                          (currentAccount.recentCalls || []).map((call) => {
-                            // Find the full classroom data
-                            const callClassroom = classrooms.find(c => c.id === call.classroomId);
-
-                            return (
-                              <div
-                                key={call.id}
-                                className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
-                                onClick={() => {
-                                  if (callClassroom) {
-                                    handleClassroomClick(callClassroom);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="text-slate-900 dark:text-slate-100">{call.classroomName}</div>
-                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-2">
-                                      <Clock size={12} />
-                                      {new Date(call.timestamp).toLocaleDateString()} at {new Date(call.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                      {call.duration} min · {call.type}
-                                    </div>
-                                  </div>
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-xs ${call.type === 'incoming'
-                                      ? 'border-green-600 text-green-600 dark:border-green-400 dark:text-green-400'
-                                      : call.type === 'outgoing'
-                                        ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                                        : 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
-                                      }`}
-                                  >
-                                    {call.type}
-                                  </Badge>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Friend List Widget - Collapsible */}
-            <Collapsible open={friendsOpen} onOpenChange={setFriendsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${friendsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Heart className="text-pink-600 dark:text-pink-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Friends</h3>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-                    <ScrollArea className="h-64">
-                      <div className="space-y-2 pr-4">
-                        {(currentAccount.friends || []).length === 0 ? (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8 text-sm">
-                            No friends added yet
-                          </div>
-                        ) : (
-                          (currentAccount.friends || []).map((friend) => {
-                            // Find the full classroom data
-                            const friendClassroom = classrooms.find(c => c.id === friend.classroomId);
-
-                            return (
-                              <div
-                                key={friend.id}
-                                className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors group cursor-pointer"
-                                onClick={() => {
-                                  if (friendClassroom) {
-                                    handleClassroomClick(friendClassroom);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="text-slate-900 dark:text-slate-100">{friend.classroomName}</div>
-                                    <div className="text-slate-600 dark:text-slate-400 text-xs mt-1 flex items-center gap-1">
-                                      <MapPin size={12} />
-                                      {friend.location}
-                                    </div>
-                                    {friend.lastConnected && (
-                                      <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                                        Last connected: {new Date(friend.lastConnected).toLocaleDateString()}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation(); // Prevent opening the dialog when removing
-                                      removeFriend(friend.id);
-                                    }}
-                                    className="text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Remove friend"
-                                  >
-                                    <Heart size={16} fill="currentColor" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
-
-            {/* Classrooms List Widget - Collapsible */}
-            <Collapsible open={classroomsOpen} onOpenChange={setClassroomsOpen}>
-              <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="p-6 space-y-4">
-                  <CollapsibleTrigger className="flex items-center gap-2 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full text-slate-700 dark:text-slate-300">
-                    <ChevronDown className={`transition-transform ${classroomsOpen ? '' : '-rotate-90'}`} size={16} />
-                    <Search className="text-purple-600 dark:text-purple-400" size={18} />
-                    <h3 className="text-slate-900 dark:text-slate-100">Find Classrooms</h3>
-                  </CollapsibleTrigger>
-
-                  <CollapsibleContent>
-
-                    <Input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by name, location, or interest..."
-                      className="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
-                    />
-
-                    <ScrollArea className="h-96">
-                      <div className="space-y-3 pr-4">
-                        {filteredClassrooms.map((classroom) => (
-                          <button
-                            key={classroom.id}
-                            onClick={() => handleClassroomClick(classroom)}
-                            className={`w-full p-4 rounded-lg border transition-all ${selectedClassroom?.id === classroom.id
-                              ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-400'
-                              : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 hover:border-slate-300 dark:hover:border-slate-500'
-                              }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              {/* Relevancy Indicator */}
-                              <div
-                                className={`w-3 h-3 rounded-full mt-1 ${classroom.relevancy.color}`}
-                                title={`Relevancy: ${classroom.relevancy.level}`}
-                              ></div>
-
-                              <div className="flex-1 text-left space-y-1">
-                                {/* Name */}
-                                <div className="text-slate-900 dark:text-slate-100">{classroom.name}</div>
-
-                                {/* Location */}
-                                <div className="text-slate-600 dark:text-slate-400 text-xs">{classroom.location}</div>
-
-                                {/* Matching Interests */}
-                                {classroom.relevancy.matchingInterests.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-2">
-                                    {classroom.relevancy.matchingInterests.map((interest) => (
-                                      <Badge
-                                        key={interest}
-                                        variant="outline"
-                                        className="text-xs border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
-                                      >
-                                        {interest}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-
-                        {filteredClassrooms.length === 0 && (
-                          <div className="text-center text-slate-500 dark:text-slate-400 py-8">
-                            No classrooms found matching your criteria
-                          </div>
-                        )}
-                      </div>
-                    </ScrollArea>
-
-                    {/* Legend */}
-                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
-                      <div className="text-slate-600 dark:text-slate-400 text-xs">Relevancy Legend:</div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                          <span className="text-slate-700 dark:text-slate-300">Perfect</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                          <span className="text-slate-700 dark:text-slate-300">Good</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                          <span className="text-slate-700 dark:text-slate-300">Partial</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Card>
-            </Collapsible>
+            <ClassroomsList
+              classrooms={classrooms}
+              currentAccount={currentAccount}
+              selectedClassroom={selectedClassroom}
+              onClassroomClick={handleClassroomClick}
+            />
           </TabsContent>
 
 
