@@ -6,7 +6,64 @@ const runtimeImportMeta = import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 };
 
-const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
+const DEFAULT_API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
+const API_BASE_URL_STORAGE_KEY = 'penpals_api_base_url';
+const API_BASE_URL_HISTORY_STORAGE_KEY = 'penpals_api_base_url_history';
+const API_BASE_URL_HISTORY_LIMIT = 8;
+
+const normalizeApiBaseUrl = (value: string): string => value.trim().replace(/\/+$/, '');
+
+export const isValidApiBaseUrl = (value: string): boolean => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(trimmedValue);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const readStoredApiBaseUrl = (): string | null => {
+  try {
+    const storedValue = localStorage.getItem(API_BASE_URL_STORAGE_KEY);
+    if (!storedValue) {
+      return null;
+    }
+
+    return isValidApiBaseUrl(storedValue) ? normalizeApiBaseUrl(storedValue) : null;
+  } catch {
+    return null;
+  }
+};
+
+const readStoredApiBaseUrlHistory = (): string[] => {
+  try {
+    const rawHistory = localStorage.getItem(API_BASE_URL_HISTORY_STORAGE_KEY);
+    if (!rawHistory) {
+      return [];
+    }
+
+    const parsedHistory = JSON.parse(rawHistory);
+    if (!Array.isArray(parsedHistory)) {
+      return [];
+    }
+
+    return parsedHistory
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => normalizeApiBaseUrl(entry))
+      .filter((entry) => isValidApiBaseUrl(entry));
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredApiBaseUrlHistory = (history: string[]): void => {
+  localStorage.setItem(API_BASE_URL_HISTORY_STORAGE_KEY, JSON.stringify(history));
+};
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -31,6 +88,53 @@ export class ApiError extends Error {
  */
 export class ApiClient {
   private static token: string | null = null;
+  private static selectedBaseUrl: string | null | undefined = undefined;
+
+  static getDefaultBaseUrl(): string {
+    return normalizeApiBaseUrl(DEFAULT_API_BASE_URL);
+  }
+
+  static getSelectedBaseUrl(): string | null {
+    return readStoredApiBaseUrl();
+  }
+
+  static getBaseUrlHistory(): string[] {
+    return readStoredApiBaseUrlHistory();
+  }
+
+  static saveBaseUrlToHistory(baseUrl: string): void {
+    if (!isValidApiBaseUrl(baseUrl)) {
+      return;
+    }
+
+    const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+    const history = readStoredApiBaseUrlHistory();
+    const dedupedHistory = [normalizedBaseUrl, ...history.filter((entry) => entry !== normalizedBaseUrl)];
+    writeStoredApiBaseUrlHistory(dedupedHistory.slice(0, API_BASE_URL_HISTORY_LIMIT));
+  }
+
+  static setBaseUrl(baseUrl: string): void {
+    if (!isValidApiBaseUrl(baseUrl)) {
+      throw new ApiError('Invalid API base URL', 0);
+    }
+
+    const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
+    this.selectedBaseUrl = normalizedBaseUrl;
+    localStorage.setItem(API_BASE_URL_STORAGE_KEY, normalizedBaseUrl);
+  }
+
+  static clearBaseUrl(): void {
+    this.selectedBaseUrl = null;
+    localStorage.removeItem(API_BASE_URL_STORAGE_KEY);
+  }
+
+  static getBaseUrl(): string {
+    if (this.selectedBaseUrl === undefined) {
+      this.selectedBaseUrl = readStoredApiBaseUrl();
+    }
+
+    return this.selectedBaseUrl || this.getDefaultBaseUrl();
+  }
 
   private static buildFallbackUrl(url: string): string | null {
     try {
@@ -86,7 +190,8 @@ export class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const baseUrl = this.getBaseUrl();
+    const url = `${baseUrl}${endpoint}`;
     const token = this.getToken();
 
     const headers = new Headers(options.headers || {});

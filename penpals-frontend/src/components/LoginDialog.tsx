@@ -5,9 +5,14 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { useTheme } from './ThemeProvider';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from './ui/utils';
 import LocationAutocomplete from './LocationAutocomplete';
 import type { SelectedLocation } from '../services/location';
+import { isValidApiBaseUrl } from '../services/api';
 
 const CLIENT_HASH_SALT = (import.meta as any).env?.VITE_CLIENT_HASH_SALT || 'penpals-client-salt';
 
@@ -24,6 +29,10 @@ interface LoginDialogProps {
   onOpenChange: (open: boolean) => void;
   onLogin: (email: string, password: string) => void;
   onSignup: (email: string, password: string, classroomName: string, location?: SelectedLocation) => void;
+  selectedNetworkUrl: string | null;
+  defaultNetworkUrl: string;
+  previousNetworks: string[];
+  onNetworkChange: (baseUrl: string) => void;
   loginError?: string;
   signupError?: string;
   isLoading?: boolean;
@@ -34,6 +43,10 @@ export default function LoginDialog({
   onOpenChange, 
   onLogin, 
   onSignup, 
+  selectedNetworkUrl,
+  defaultNetworkUrl,
+  previousNetworks,
+  onNetworkChange,
   loginError, 
   signupError, 
   isLoading: externalLoading 
@@ -46,10 +59,34 @@ export default function LoginDialog({
   const [signupClassroomName, setSignupClassroomName] = useState('');
   const [signupLocation, setSignupLocation] = useState<SelectedLocation | null>(null);
   const [passwordMatchError, setPasswordMatchError] = useState('');
+  const [networkPopoverOpen, setNetworkPopoverOpen] = useState(false);
+  const [networkInput, setNetworkInput] = useState('');
+  const [networkValidationError, setNetworkValidationError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   const isLoading = externalLoading || internalLoading;
+  const hasNetworkSelection = Boolean(selectedNetworkUrl);
+  const hasValidNetworkSelection = selectedNetworkUrl ? isValidApiBaseUrl(selectedNetworkUrl) : false;
+  const isAuthBlocked = !hasNetworkSelection || !hasValidNetworkSelection;
+  const previousNetworkOptions = previousNetworks.filter((url) => url !== defaultNetworkUrl);
+
+  const applyNetworkSelection = (candidate: string) => {
+    const trimmedCandidate = candidate.trim();
+    const withProtocol = /^https?:\/\//i.test(trimmedCandidate)
+      ? trimmedCandidate
+      : `http://${trimmedCandidate}`;
+
+    if (!isValidApiBaseUrl(withProtocol)) {
+      setNetworkValidationError('Please enter a valid http(s) URL, e.g. http://127.0.0.1:5001/api');
+      return;
+    }
+
+    setNetworkValidationError('');
+    onNetworkChange(withProtocol);
+    setNetworkInput(withProtocol);
+    setNetworkPopoverOpen(false);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +152,109 @@ export default function LoginDialog({
             // For now, errors will persist until next attempt
           }
         }}>
+          <div className="space-y-2 pb-3">
+            <Label htmlFor="network-selector" className="text-slate-900 dark:text-slate-100">Network</Label>
+            <Popover
+              open={networkPopoverOpen}
+              onOpenChange={(nextOpen: boolean) => {
+                setNetworkPopoverOpen(nextOpen);
+                if (nextOpen) {
+                  setNetworkInput('');
+                  setNetworkValidationError('');
+                }
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  id="network-selector"
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={networkPopoverOpen}
+                  className="w-full justify-between bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                >
+                  <span
+                    className={cn(
+                      'truncate',
+                      !selectedNetworkUrl && 'text-slate-500 dark:text-slate-400',
+                    )}
+                  >
+                    {selectedNetworkUrl || 'Select a network'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Type custom network URL..."
+                    value={networkInput}
+                    onValueChange={(value: string) => {
+                      setNetworkInput(value);
+                      setNetworkValidationError('');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && networkInput.trim()) {
+                        event.preventDefault();
+                        applyNetworkSelection(networkInput);
+                      }
+                    }}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No preset match. Use custom URL below.</CommandEmpty>
+                    <CommandGroup heading="Preset">
+                      <CommandItem onSelect={() => applyNetworkSelection(defaultNetworkUrl)}>
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            selectedNetworkUrl === defaultNetworkUrl ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
+                        Default network ({defaultNetworkUrl})
+                      </CommandItem>
+                    </CommandGroup>
+                    {previousNetworkOptions.length > 0 && (
+                      <CommandGroup heading="Previous networks">
+                        {previousNetworkOptions.map((networkUrl) => (
+                          <CommandItem key={networkUrl} onSelect={() => applyNetworkSelection(networkUrl)}>
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                selectedNetworkUrl === networkUrl ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                            <span className="truncate">{networkUrl}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                    {networkInput.trim() && (
+                      <CommandGroup heading="Custom">
+                        <CommandItem onSelect={() => applyNetworkSelection(networkInput)}>
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              selectedNetworkUrl === networkInput.trim() ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          <span className="truncate">Use {networkInput.trim()}</span>
+                        </CommandItem>
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {!selectedNetworkUrl && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Choose Default network or type a custom API URL to enable authentication.
+              </p>
+            )}
+            {networkValidationError && (
+              <p className="text-xs text-red-600 dark:text-red-400">{networkValidationError}</p>
+            )}
+          </div>
+
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -160,7 +300,7 @@ export default function LoginDialog({
               <Button 
                 type="submit" 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isLoading}
+                disabled={isLoading || isAuthBlocked}
               >
                 {isLoading ? 'Logging in...' : 'Login'}
               </Button>
@@ -256,7 +396,7 @@ export default function LoginDialog({
               <Button 
                 type="submit" 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isLoading}
+                disabled={isLoading || isAuthBlocked}
               >
                 {isLoading ? 'Creating Account...' : 'Sign Up'}
               </Button>
