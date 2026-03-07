@@ -3,7 +3,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Languages, Loader2 } from 'lucide-react';
+import { Languages, Loader2, Trash2 } from 'lucide-react';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
@@ -14,6 +14,7 @@ interface PostFeedProps {
   posts: Post[];
   isLoading?: boolean;
   currentUserId?: string;
+  onDeletePost?: (postId: string) => void;
 }
 
 // MyMemory free translation API — no key needed, auto-detects source language
@@ -43,7 +44,7 @@ interface TranslationState {
   isTranslating: boolean;
 }
 
-export default function PostFeed({ posts, isLoading, currentUserId }: PostFeedProps) {
+export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost }: PostFeedProps) {
   const [translations, setTranslations] = useState<Record<string, TranslationState>>({}); 
 
   // Classroom dialog state
@@ -191,7 +192,8 @@ export default function PostFeed({ posts, isLoading, currentUserId }: PostFeedPr
                     </span>
                   </div>
 
-                  {/* Translate button using Popover for correct click-outside handling */}
+                  {/* Actions: translate + delete (own posts only) */}
+                  <div className="flex items-center gap-1">
                   <Popover
                     open={state.translatedText ? false : undefined}
                   >
@@ -239,6 +241,19 @@ export default function PostFeed({ posts, isLoading, currentUserId }: PostFeedPr
                       </PopoverContent>
                     )}
                   </Popover>
+
+                  {/* Delete button — own posts only */}
+                  {post.authorId === currentUserId && onDeletePost && (
+                    <button
+                      type="button"
+                      onClick={() => onDeletePost(post.id)}
+                      className="p-1.5 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      title="Delete post"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                  </div>
 
                 </div>
 

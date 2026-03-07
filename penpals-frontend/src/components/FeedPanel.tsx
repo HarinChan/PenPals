@@ -11,6 +11,7 @@ interface FeedPanelProps {
   allPosts: Post[];
   myPosts: Post[];
   onCreatePost: (content: string, imageUrl?: string) => void;
+  onDeletePost: (postId: string) => void;
   isLoading?: boolean;
 }
 
@@ -21,6 +22,7 @@ export default function FeedPanel({
   allPosts,
   myPosts,
   onCreatePost,
+  onDeletePost,
   isLoading,
 }: FeedPanelProps) {
   return (
@@ -46,11 +48,11 @@ export default function FeedPanel({
           </TabsList>
 
           <TabsContent value="all" className="p-4">
-            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} />
+            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
           </TabsContent>
 
           <TabsContent value="my" className="p-4">
-            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} />
+            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
           </TabsContent>
 
           <TabsContent value="search" className="p-4">

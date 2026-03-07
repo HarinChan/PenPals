@@ -46,6 +46,7 @@ interface SidePanelProps {
   allPosts: Post[];
   myPosts: Post[];
   onCreatePost: (content: string, imageUrl?: string) => void;
+  onDeletePost: (postId: string) => void;
   loadingPosts?: boolean;
 }
 
@@ -63,6 +64,7 @@ export default function SidePanel({
   allPosts,
   myPosts,
   onCreatePost,
+  onDeletePost,
   loadingPosts = false,
 }: SidePanelProps) {
   const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
@@ -669,6 +671,7 @@ export default function SidePanel({
               allPosts={allPosts}
               myPosts={myPosts}
               onCreatePost={onCreatePost}
+              onDeletePost={onDeletePost}
               isLoading={loadingPosts}
             />
           </TabsContent>

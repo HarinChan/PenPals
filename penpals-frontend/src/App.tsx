@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
 import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
-import { fetchPosts, createPost } from './services/posts';
+import { fetchPosts, createPost, deletePost } from './services/posts';
 import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
 
@@ -560,6 +560,18 @@ function AppContent() {
     }
   };
 
+  const handleDeletePost = async (postId: string) => {
+    const snapshot = posts;
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    try {
+      await deletePost(postId);
+      toast.success('Post deleted');
+    } catch (error: any) {
+      setPosts(snapshot); // revert
+      toast.error(error.message || 'Failed to delete post');
+    }
+  };
+
 
   const myPosts = posts.filter(post => post.authorId === currentAccountId);
 
@@ -681,6 +693,7 @@ function AppContent() {
             allPosts={posts}
             myPosts={myPosts}
             onCreatePost={handleCreatePost}
+            onDeletePost={handleDeletePost}
             loadingPosts={loadingPosts}
           />
         </div>
@@ -710,6 +723,7 @@ function AppContent() {
                   allPosts={posts}
                   myPosts={myPosts}
                   onCreatePost={handleCreatePost}
+                  onDeletePost={handleDeletePost}
                   loadingPosts={loadingPosts}
                 />
               </div>
