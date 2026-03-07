@@ -114,7 +114,7 @@ function AppContent() {
                 interests: c.interests || [],
                 availability: availability,
                 size: c.class_size,
-                description: `Friends: ${c.friends_count || 0}`
+                description: c.description || `Friends: ${c.friends_count || 0}`
               };
             });
 
@@ -169,7 +169,7 @@ function AppContent() {
             classroomName: classroom.name,
             location: classroom.location || 'Unknown',
             size: classroom.class_size || 20,
-            description: `Classroom managed by ${userData.account.email}`,
+            description: classroom.description || `Classroom managed by ${userData.account.email}`,
             interests: classroom.interests || [],
             schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
@@ -339,7 +339,7 @@ function AppContent() {
         classroomName: classroom.name,
         location: classroom.location || 'Unknown',
         size: classroom.class_size || 20,
-        description: `Classroom managed by ${userData.account.email}`,
+        description: classroom.description || `Classroom managed by ${userData.account.email}`,
         interests: classroom.interests || [],
         schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)

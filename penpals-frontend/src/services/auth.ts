@@ -40,6 +40,7 @@ export interface Classroom {
   latitude?: string;
   longitude?: string;
   class_size?: number;
+  description?: string;
   availability?: { [day: string]: number[] };
   interests: string[];
   friends_count?: number;

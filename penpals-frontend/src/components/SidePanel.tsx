@@ -526,7 +526,7 @@ export default function SidePanel({
     }));
   };
 
-  const saveAccountInfo = () => {
+  const saveAccountInfo = async () => {
     // Check for duplicate classroom names (excluding current classroom)
     const duplicateName = accounts.some(
       acc => acc.id !== currentAccount.id && acc.classroomName === accountForm.classroomName
@@ -537,11 +537,31 @@ export default function SidePanel({
       return;
     }
 
-    onAccountUpdate({
-      ...currentAccount,
-      ...accountForm,
-    });
-    setEditingAccount(false);
+    try {
+      // Find the primary backend classroom.id
+      const numericId = Number(currentAccount.id);
+
+      // Call the API service
+      await ClassroomService.updateClassroom(numericId, {
+        name: accountForm.classroomName,
+        class_size: accountForm.size,
+        description: accountForm.description,
+      });
+
+      // (We leave description unhandled by the API here if backend Classroom doesn't support it directly, 
+      // but we update local state or user metadata depending on backend impl.)
+      // Note: If description exists on backend it should be added here later.
+
+      onAccountUpdate({
+        ...currentAccount,
+        ...accountForm,
+      });
+      setEditingAccount(false);
+      toast.success('Classroom information saved');
+    } catch (error: any) {
+      console.error('Failed to save classroom settings:', error);
+      toast.error(error.message || 'Failed to update classroom');
+    }
   };
 
 
