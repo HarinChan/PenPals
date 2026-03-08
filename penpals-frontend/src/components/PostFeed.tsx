@@ -7,13 +7,16 @@ import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import { ClassroomService } from '../services/classroom';
-import type { Classroom } from '../types';
+import { FriendsService } from '../services/friends';
+import type { Classroom, Account } from '../types';
 
 interface PostFeedProps {
   posts: Post[];
   isLoading?: boolean;
   currentUserId?: string;
   onDeletePost?: (postId: string) => void;
+  currentAccount: Account;
+  onAccountUpdate: (account: Account) => void;
 }
 
 // MyMemory free translation API — no key needed, auto-detects source language
@@ -62,38 +65,106 @@ interface TranslationState {
   isTranslating: boolean;
 }
 
-export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost }: PostFeedProps) {
+export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost, currentAccount, onAccountUpdate }: PostFeedProps) {
   const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
   const [dialogClassroom, setDialogClassroom] = useState<Classroom | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fetchingAvatarId, setFetchingAvatarId] = useState<string | null>(null);
 
+  // ── friendship helpers (same logic as SidePanel) ──────────────────
+  const getFriendshipStatus = (classroomId: string): 'none' | 'pending' | 'accepted' | 'received' => {
+    const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
+    if (friend) return 'accepted';
+    const received = (currentAccount.receivedFriendRequests || []).find(r => r.fromClassroomId === classroomId.toString());
+    if (received) return 'received';
+    return 'none';
+  };
+
+  const toggleFriendRequest = async (classroom: Classroom) => {
+    const status = getFriendshipStatus(classroom.id);
+    if (status === 'accepted') {
+      if (confirm(`Remove ${classroom.name} from friends?`)) {
+        try {
+          await FriendsService.removeFriend(classroom.id);
+          const updatedFriends = (currentAccount.friends || []).filter(f => f.classroomId !== classroom.id && f.id !== classroom.id);
+          onAccountUpdate({ ...currentAccount, friends: updatedFriends });
+          toast.success('Removed friend');
+        } catch {
+          toast.error('Failed to remove friend');
+        }
+      }
+    } else if (status === 'received') {
+      try {
+        await FriendsService.acceptRequest(undefined, classroom.id);
+        const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== classroom.id);
+        onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+        toast.success('Friend request accepted!');
+      } catch {
+        toast.error('Failed to accept request');
+      }
+    } else {
+      try {
+        await FriendsService.sendRequest(classroom.id);
+        toast.success(`Friend request sent to ${classroom.name}`);
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to send request');
+      }
+    }
+  };
+
   const handleAvatarClick = async (authorId: string) => {
     setFetchingAvatarId(authorId);
     try {
       const { classroom: cl } = await ClassroomService.getClassroom(Number(authorId));
+      
+      // Transform availability from [{day, time}] to {[day]: [hours]}
+      const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
+        if (!backendAvailability) return {};
+
+        // Case 1: Already in the correct format { "Mon": [9, 10], ... }
+        if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
+          const cleanSchedule: { [day: string]: number[] } = {};
+          Object.entries(backendAvailability).forEach(([day, hours]) => {
+            if (Array.isArray(hours)) {
+              cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
+            }
+          });
+          return cleanSchedule;
+        }
+
+        // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...]
+        const schedule: { [day: string]: number[] } = {};
+        if (Array.isArray(backendAvailability)) {
+          backendAvailability.forEach(slot => {
+            if (slot.day && slot.time) {
+              const hour = parseInt(slot.time.split(':')[0], 10);
+              if (!isNaN(hour)) {
+                if (!schedule[slot.day]) {
+                  schedule[slot.day] = [];
+                }
+                if (!schedule[slot.day].includes(hour)) {
+                  schedule[slot.day].push(hour);
+                }
+              }
+            }
+          });
+        }
+        return schedule;
+      };
+
+      const availability = transformAvailability(cl.availability);
+      
       const mapped: Classroom = {
         id: String(cl.id),
         name: cl.name,
-        location: cl.location || '',
+        location: cl.location || 'Unknown Location',
         lat: cl.latitude ? parseFloat(cl.latitude) : 0,
         lon: cl.longitude ? parseFloat(cl.longitude) : 0,
         interests: cl.interests || [],
-        availability: (() => {
-          const avail: { [day: string]: number[] } = {};
-          if (Array.isArray(cl.availability)) {
-            for (const slot of cl.availability as { day: string; time: string }[]) {
-              const hour = parseInt(slot.time?.split(':')[0] ?? '0', 10);
-              if (!avail[slot.day]) avail[slot.day] = [];
-              if (!avail[slot.day].includes(hour)) avail[slot.day].push(hour);
-            }
-          } else if (cl.availability && typeof cl.availability === 'object') {
-            Object.assign(avail, cl.availability);
-          }
-          return avail;
-        })(),
+        availability: availability,
         size: cl.class_size,
-        description: cl.description,
+        description: cl.description || `Friends: ${cl.friends_count || 0}`,
+        avatar: cl.avatar || ''
       };
       setDialogClassroom(mapped);
       setDialogOpen(true);
@@ -320,8 +391,10 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
         classroom={dialogClassroom}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        mySchedule={{}}
-        friendshipStatus="none"
+        mySchedule={currentAccount.schedule}
+        friendshipStatus={dialogClassroom ? getFriendshipStatus(dialogClassroom.id) : 'none'}
+        onToggleFriend={toggleFriendRequest}
+        accountLon={currentAccount.x}
       />
     </>
   );

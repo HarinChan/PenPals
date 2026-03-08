@@ -674,6 +674,8 @@ export default function SidePanel({
               onCreatePost={onCreatePost}
               onDeletePost={onDeletePost}
               isLoading={loadingPosts}
+              currentAccount={currentAccount}
+              onAccountUpdate={onAccountUpdate}
             />
           </TabsContent>
 
