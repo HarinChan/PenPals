@@ -1,13 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '../ui/card';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { ChevronDown, Calendar } from 'lucide-react';
 import { Account } from '../../types';
 import { DAYS } from './constants';
-import { formatScheduleToString, formatScheduleRanges, parseScheduleInput } from './helpers';
+import { formatScheduleRanges } from './helpers';
 import { ClassroomService } from '../../services';
 import { toast } from 'sonner';
 
@@ -16,57 +14,45 @@ interface ScheduleWidgetProps {
   onAccountUpdate: (account: Account) => void;
 }
 
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7am to 6pm
+
 export default function ScheduleWidget({
   currentAccount,
   onAccountUpdate,
 }: ScheduleWidgetProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
-  const [scheduleInputs, setScheduleInputs] = useState<{ [day: string]: string }>({});
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (showEditor) {
-      const inputs: { [day: string]: string } = {};
-      DAYS.forEach(day => {
-        inputs[day] = formatScheduleToString(currentAccount.schedule[day]);
-      });
-      setScheduleInputs(inputs);
-    }
-  }, [showEditor, currentAccount.id]);
-
-  const handleScheduleInputChange = (day: string, value: string) => {
-    setScheduleInputs(prev => ({ ...prev, [day]: value }));
-  };
-
-  const handleScheduleInputBlur = async (day: string) => {
-    const value = scheduleInputs[day] || '';
-    const newSchedule = parseScheduleInput(value);
-    const previousSchedule = currentAccount.schedule;
-
-    // Optimistic update
+  const toggleHour = (day: string, hour: number) => {
+    const currentHours = currentAccount.schedule[day] || [];
+    const newHours = currentHours.includes(hour)
+      ? currentHours.filter(h => h !== hour)
+      : [...currentHours, hour].sort((a, b) => a - b);
+    
     onAccountUpdate({
       ...currentAccount,
-      schedule: { ...currentAccount.schedule, [day]: newSchedule },
+      schedule: { ...currentAccount.schedule, [day]: newHours },
     });
+  };
 
-    setScheduleInputs(prev => ({
-      ...prev,
-      [day]: formatScheduleToString(newSchedule)
-    }));
+  const saveSchedule = async () => {
+    setIsSaving(true);
+    const previousSchedule = currentAccount.schedule;
 
-    // Persist to backend — convert schedule dict to the API's availability format
     try {
-      const fullSchedule = { ...currentAccount.schedule, [day]: newSchedule };
-      const availability = Object.entries(fullSchedule).flatMap(([d, hours]) =>
+      const availability = Object.entries(currentAccount.schedule).flatMap(([d, hours]) =>
         (hours || []).map(hour => ({ day: d, time: `${hour}:00` }))
       );
       await ClassroomService.updateClassroom(Number(currentAccount.id), { availability });
       toast.success('Schedule saved');
+      setShowEditor(false);
     } catch (error) {
       console.error('Failed to save schedule:', error);
       toast.error('Failed to save schedule');
-      // Rollback optimistic update
       onAccountUpdate({ ...currentAccount, schedule: previousSchedule });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -80,31 +66,60 @@ export default function ScheduleWidget({
               <Calendar className="text-green-600 dark:text-green-400" size={18} />
               <h3 className="text-slate-900 dark:text-slate-100">Your Availability</h3>
             </CollapsibleTrigger>
-            <button
-              onClick={() => setShowEditor(!showEditor)}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
-            >
-              {showEditor ? 'Save' : 'Edit'}
-            </button>
+            {showEditor ? (
+              <button
+                onClick={saveSchedule}
+                disabled={isSaving}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500 disabled:opacity-50"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowEditor(true)}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-500"
+              >
+                Edit
+              </button>
+            )}
           </div>
 
           <CollapsibleContent>
             {showEditor ? (
               <ScrollArea className="h-80">
-                <div className="space-y-4 pr-4">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Enter available hours (0-23) separated by commas or ranges. Example: "9, 10, 14-16"
+                <div className="space-y-3 pr-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Click on time slots to mark your availability (7am - 6pm)
                   </p>
                   {DAYS.map((day) => (
-                    <div key={day} className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">{day}</Label>
-                      <Input
-                        value={scheduleInputs[day] ?? ''}
-                        onChange={(e) => handleScheduleInputChange(day, e.target.value)}
-                        onBlur={() => handleScheduleInputBlur(day)}
-                        placeholder="e.g. 9-12, 14, 15"
-                        className="h-8 text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
-                      />
+                    <div key={day} className="flex items-center gap-2">
+                      <div className="text-xs font-medium text-slate-700 dark:text-slate-300 w-10 flex-shrink-0">
+                        {day}
+                      </div>
+                      <div className="flex gap-1 flex-wrap">
+                        {HOURS.map((hour) => {
+                          const isSelected = (currentAccount.schedule[day] || []).includes(hour);
+                          return (
+                            <button
+                              key={hour}
+                              onClick={() => toggleHour(day, hour)}
+                              className={`w-8 h-8 text-xs rounded transition-all font-medium ${
+                                !isSelected 
+                                  ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600' 
+                                  : '' 
+                              }`}
+                              style={
+                                isSelected 
+                                  ? { backgroundColor: '#4ade80', color: '#064e3b' }
+                                  : {}
+                              }
+                              title={`${hour}:00`}
+                            >
+                              {hour}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
