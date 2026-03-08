@@ -23,7 +23,6 @@ interface MapViewProps {
   selectedClassroom?: Classroom;
   myClassroom: Account;
   classrooms?: Classroom[]; // New prop
-  theme: string;
 }
 
 // Component to handle map view updates when selectedClassroom changes

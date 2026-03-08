@@ -147,7 +147,6 @@ const renderMapView = (overrides: Partial<React.ComponentProps<typeof MapView>> 
       onClassroomSelect={onClassroomSelect}
       myClassroom={myClassroom}
       classrooms={[makeClassroom()]}
-      theme={testState.currentTheme}
       {...overrides}
     />,
   );
@@ -241,13 +240,6 @@ describe('MapView', () => {
     await user.click(zoomOutButton);
 
     expect(testState.mockMap.flyToBounds).toHaveBeenCalled();
-  });
-
-  it('uses dark theme tile layer when theme is dark', () => {
-    testState.currentTheme = 'dark';
-    renderMapView({ classrooms: [makeClassroom()] });
-
-    expect(screen.getByTestId('tile-layer').getAttribute('data-url')).toContain('dark_all');
   });
 
   it('updates minZoom based on window height resize', () => {
