@@ -190,7 +190,7 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
                     onClick={() => handleAvatarClick(post.authorId)}
                     disabled={fetchingAvatarId === post.authorId || isOwn}
                     style={avatarStyle(post.authorId)}
-                    className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0
                       text-white shadow-sm focus:outline-none transition-all duration-150
                       ${isOwn
                         ? 'cursor-default'
