@@ -1734,6 +1734,10 @@
     padding-left: calc(var(--spacing) * 6);
   }
 
+  .pl-10 {
+    padding-left: calc(var(--spacing) * 10);
+  }
+
   .text-center {
     text-align: center;
   }
