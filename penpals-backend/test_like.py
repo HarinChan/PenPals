@@ -1,6 +1,8 @@
 import requests
+import os
 
-API_BASE = "http://127.0.0.1:5001/api"
+API_PORT = os.environ.get('PENPALS_API_PORT', '5001')
+API_BASE = f"http://127.0.0.1:{API_PORT}/api"
 EMAIL = "me@penpals.com"
 PASSWORD = "Metest123!"
 
@@ -54,4 +56,5 @@ def test_like_persistence():
     print(f"fetched updated likes: {updated_post['likes']}")
 
 if __name__ == "__main__":
+    print(f"Testing API at: {API_BASE}")
     test_like_persistence()
