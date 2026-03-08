@@ -193,9 +193,11 @@ function AppContent() {
 
           if (convertedAccounts.length > 0) {
             setAccounts(convertedAccounts);
-            setCurrentAccountId(convertedAccounts[0].id);
+            // Restore last-selected classroom from localStorage, fall back to first
+            const saved = localStorage.getItem('penpals_currentAccountId');
+            const restored = saved && convertedAccounts.find(a => a.id === saved);
+            setCurrentAccountId(restored ? saved! : convertedAccounts[0].id);
           } else {
-            // No classrooms yet, keep default state
             setAccounts([EMPTY_ACCOUNT]);
             setCurrentAccountId(EMPTY_ACCOUNT.id);
           }
@@ -247,6 +249,7 @@ function AppContent() {
 
   const handleAccountChange = (accountId: string) => {
     setCurrentAccountId(accountId);
+    localStorage.setItem('penpals_currentAccountId', accountId);
   };
 
   const handleAccountUpdate = (updatedAccount: Account) => {
@@ -385,9 +388,11 @@ function AppContent() {
 
       if (convertedAccounts.length > 0) {
         setAccounts(convertedAccounts);
-        setCurrentAccountId(convertedAccounts[0].id);
+        // Restore last-selected classroom, fall back to first
+        const saved = localStorage.getItem('penpals_currentAccountId');
+        const restored = saved && convertedAccounts.find(a => a.id === saved);
+        setCurrentAccountId(restored ? saved! : convertedAccounts[0].id);
       } else {
-        // No classrooms yet, keep default state
         setAccounts([EMPTY_ACCOUNT]);
         setCurrentAccountId(EMPTY_ACCOUNT.id);
       }
