@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoginDialog from '../LoginDialog';
 import { ThemeProvider } from '../ThemeProvider';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { SelectedLocation } from '../../services/location';
 
 type LoginDialogOverrides = Partial<React.ComponentProps<typeof LoginDialog>>;
