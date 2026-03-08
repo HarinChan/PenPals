@@ -205,40 +205,24 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
         if (msg.id !== messageId) return msg;
         
         const reactions = msg.reactions || [];
-        const existingReaction = reactions.find(r => r.emoji === emoji);
         
         if (response.action === 'removed') {
           // Remove reaction
           return {
             ...msg,
-            reactions: reactions
-              .map(r => r.emoji === emoji 
-                ? { ...r, count: r.count - 1, hasReacted: false }
-                : r
-              )
-              .filter(r => r.count > 0)
+            reactions: []
           };
         } else {
-          // Add reaction
-          if (existingReaction) {
-            return {
-              ...msg,
-              reactions: reactions.map(r => r.emoji === emoji 
-                ? { ...r, count: r.count + 1, hasReacted: true }
-                : r
-              )
-            };
-          } else {
-            return {
-              ...msg,
-              reactions: [...reactions, {
-                emoji,
-                count: 1,
-                profiles: [{ id: parseInt(currentAccount.id), name: currentAccount.classroomName }],
-                hasReacted: true
-              }]
-            };
-          }
+          // Add reaction (replace any existing)
+          return {
+            ...msg,
+            reactions: [{
+              emoji,
+              count: 1,
+              profiles: [{ id: parseInt(currentAccount.id), name: currentAccount.classroomName }],
+              hasReacted: true
+            }]
+          };
         }
       }));
     } catch (error: any) {
@@ -476,7 +460,7 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                              className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
@@ -502,14 +486,14 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
                         </DropdownMenu>
                       )}
                       
-                      {/* Reaction button - only for counterpart's messages */}
-                      {!isMe && !msg.deleted && (
+                      {/* Reaction button - only for counterpart's messages and max 1 reaction */}
+                      {!isMe && !msg.deleted && (!msg.reactions || msg.reactions.length === 0) && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                              className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
                             >
                               <Smile className="w-4 h-4" />
                             </Button>
@@ -544,11 +528,10 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
                               reaction.hasReacted
                                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                                 : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                            } ${!isMe ? 'hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer' : ''}`}
+                            } ${!isMe ? 'hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer' : 'cursor-default'}`}
                             disabled={isMe}
                           >
                             <span>{reaction.emoji}</span>
-                            <span>{reaction.count}</span>
                           </button>
                         ))}
                       </div>
