@@ -3,8 +3,9 @@ import urllib.parse
 import urllib.error
 import json
 import ssl
+import os
 
-BASE_URL = "http://localhost:5001/api"
+BASE_URL = os.environ.get('PENPALS_API_URL', 'http://localhost:5001/api')
 
 # Bypass SSL verification if needed (for localhost sometimes)
 ctx = ssl.create_default_context()
@@ -104,4 +105,5 @@ def run_verification():
         print(response)
 
 if __name__ == "__main__":
+    print(f"Using API URL: {BASE_URL}")
     run_verification()
