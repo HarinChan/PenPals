@@ -85,6 +85,21 @@ const fmtTs = (iso: string) => {
   } catch { return 'Unknown date'; }
 };
 
+const resolveClassroomId = (resultId: string, metadata: Record<string, any>): string => {
+  const directId = metadata.classroom_id ?? metadata.authorId ?? metadata.profile_id;
+  if (directId !== undefined && directId !== null && String(directId).trim().length > 0) {
+    return String(directId);
+  }
+
+  // Fallback for document ids stored as "post-<id>" when metadata is incomplete.
+  const postIdMatch = /^post-(\d+)$/.exec(resultId);
+  if (postIdMatch) {
+    return postIdMatch[1];
+  }
+
+  return resultId;
+};
+
 interface PostSearchProps {
   currentAccount: Account;
   onAccountUpdate: (account: Account) => void;
@@ -157,7 +172,7 @@ export default function PostSearch({ currentAccount, onAccountUpdate }: PostSear
       if (response.status === 'success' && response.results) {
         setResults(response.results.map(r => ({
           id: r.id,
-          authorId: String(r.metadata.authorId || r.metadata.profile_id || r.id),
+          authorId: resolveClassroomId(r.id, r.metadata || {}),
           content: r.document,
           authorName: r.metadata.authorName || r.metadata.author || 'Unknown',
           timestamp: r.metadata.timestamp || new Date().toISOString(),
