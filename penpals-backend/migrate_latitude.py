@@ -19,7 +19,7 @@ def migrate_database(db_path):
         cursor = conn.cursor()
         
         # Check if the old column exists
-        cursor.execute("PRAGMA table_info(profile)")
+        cursor.execute("PRAGMA table_info(profiles)")
         columns = [col[1] for col in cursor.fetchall()]
         
         if 'lattitude' not in columns:
@@ -37,7 +37,7 @@ def migrate_database(db_path):
         # SQLite doesn't support RENAME COLUMN directly in older versions
         # So we need to create a new table and copy data
         cursor.execute("""
-            CREATE TABLE profile_new (
+            CREATE TABLE profiles_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_id INTEGER NOT NULL,
                 name VARCHAR(100) NOT NULL,
@@ -55,15 +55,15 @@ def migrate_database(db_path):
         
         # Copy data from old table to new table
         cursor.execute("""
-            INSERT INTO profile_new 
+            INSERT INTO profiles_new 
             SELECT id, account_id, name, location, lattitude, longitude, 
                    class_size, description, avatar, availability, interests
-            FROM profile
+            FROM profiles
         """)
         
         # Drop old table and rename new table
-        cursor.execute("DROP TABLE profile")
-        cursor.execute("ALTER TABLE profile_new RENAME TO profile")
+        cursor.execute("DROP TABLE profiles")
+        cursor.execute("ALTER TABLE profiles_new RENAME TO profiles")
         
         conn.commit()
         print("Migration completed successfully!")
