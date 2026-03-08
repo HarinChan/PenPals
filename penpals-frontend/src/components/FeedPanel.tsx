@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { Card } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import PostCreator, { Post } from './PostCreator';
@@ -8,43 +7,31 @@ import PostSearch from './PostSearch';
 interface FeedPanelProps {
   currentUserName: string;
   currentUserId: string;
+  currentUserAvatar?: string;
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => void;
-  onLikePost: (postId: string) => void;
-  likedPosts?: Set<string>;
+  onCreatePost: (content: string, imageUrl?: string) => void;
+  onDeletePost: (postId: string) => void;
   isLoading?: boolean;
 }
 
 export default function FeedPanel({
   currentUserName,
   currentUserId,
+  currentUserAvatar,
   allPosts,
   myPosts,
   onCreatePost,
-  onLikePost,
-  likedPosts,
+  onDeletePost,
   isLoading,
 }: FeedPanelProps) {
-  const postCreatorRef = useRef<HTMLDivElement>(null);
-
-  const handleQuotePost = (post: Post) => {
-    // Scroll to post creator
-    postCreatorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    // The quote will be added via the post link functionality in PostCreator
-    // For now we just scroll to it - user can manually add the link
-  };
-
   return (
     <div className="space-y-4">
-      <div ref={postCreatorRef}>
-        <PostCreator
-          onCreatePost={onCreatePost}
-          authorName={currentUserName}
-          allPosts={allPosts}
-        />
-      </div>
+      <PostCreator
+        onCreatePost={onCreatePost}
+        authorName={currentUserName}
+        authorAvatar={currentUserAvatar}
+      />
 
       <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
         <Tabs defaultValue="all" className="w-full">
@@ -61,23 +48,11 @@ export default function FeedPanel({
           </TabsList>
 
           <TabsContent value="all" className="p-4">
-            <PostFeed
-              posts={allPosts}
-              onLikePost={onLikePost}
-              likedPosts={likedPosts}
-              onQuotePost={handleQuotePost}
-              isLoading={isLoading}
-            />
+            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
           </TabsContent>
 
           <TabsContent value="my" className="p-4">
-            <PostFeed
-              posts={myPosts}
-              onLikePost={onLikePost}
-              likedPosts={likedPosts}
-              onQuotePost={handleQuotePost}
-              isLoading={isLoading}
-            />
+            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
           </TabsContent>
 
           <TabsContent value="search" className="p-4">

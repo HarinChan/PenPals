@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
 import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
-import { fetchPosts, createPost, likePost, unlikePost, PostResponse } from './services/posts';
+import { fetchPosts, createPost, deletePost } from './services/posts';
 import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
 
@@ -91,7 +91,6 @@ function AppContent() {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(true);
 
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || EMPTY_ACCOUNT;
 
@@ -222,14 +221,6 @@ function AppContent() {
         const fetchedPosts = await fetchPosts();
         setPosts(fetchedPosts);
 
-        // Initialize likedPosts set based on backend data
-        const initialLikedPosts = new Set<string>();
-        fetchedPosts.forEach(p => {
-          if (p.isLiked) {
-            initialLikedPosts.add(p.id);
-          }
-        });
-        setLikedPosts(initialLikedPosts);
       } catch (error) {
         console.error("Failed to fetch posts:", error);
         toast.error("Failed to load posts");
@@ -538,9 +529,10 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (content: string, imageUrl?: string) => {
     try {
-      const newPost = await createPost(content, imageUrl, quotedPost?.id);
+      const newPost = await createPost(content, imageUrl, currentAccountId);
+
 
       // Update local state
       setPosts([newPost, ...posts]);
@@ -568,76 +560,18 @@ function AppContent() {
     }
   };
 
-  const handleLikePost = async (postId: string) => {
-    // Determine current state
-    const isLiked = likedPosts.has(postId);
-
-    if (isLiked) {
-      // UNLIKE FLOW
-
-      // Optimistic update
-      setPosts(prevPosts => prevPosts.map(post =>
-        post.id === postId ? { ...post, likes: Math.max(0, post.likes - 1) } : post
-      ));
-
-      setLikedPosts(prev => {
-        const next = new Set(prev);
-        next.delete(postId);
-        return next;
-      });
-
-      try {
-        const newLikes = await unlikePost(postId);
-        // Update with server truth
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: newLikes } : post
-        ));
-      } catch (error: any) {
-        // Revert on error
-        console.error("Failed to unlike post:", error);
-
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: post.likes + 1 } : post
-        ));
-
-        setLikedPosts(prev => new Set([...prev, postId]));
-
-        toast.error(`Failed to unlike post: ${error.message || 'Unknown error'}`);
-      }
-
-    } else {
-      // LIKE FLOW
-
-      // Update UI immediately (optimistic)
-      setPosts(prevPosts => prevPosts.map(post =>
-        post.id === postId ? { ...post, likes: post.likes + 1 } : post
-      ));
-      setLikedPosts(prev => new Set([...prev, postId]));
-
-      try {
-        const newLikes = await likePost(postId);
-        // Update with server truth
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: newLikes } : post
-        ));
-      } catch (error: any) {
-        // Revert on error
-        console.error("Failed to like post:", error);
-
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: post.likes - 1 } : post
-        ));
-
-        setLikedPosts(prev => {
-          const next = new Set(prev);
-          next.delete(postId);
-          return next;
-        });
-
-        toast.error(`Failed to like post: ${error.message || 'Unknown error'}`);
-      }
+  const handleDeletePost = async (postId: string) => {
+    const snapshot = posts;
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    try {
+      await deletePost(postId);
+      toast.success('Post deleted');
+    } catch (error: any) {
+      setPosts(snapshot); // revert
+      toast.error(error.message || 'Failed to delete post');
     }
   };
+
 
   const myPosts = posts.filter(post => post.authorId === currentAccountId);
 
@@ -759,8 +693,7 @@ function AppContent() {
             allPosts={posts}
             myPosts={myPosts}
             onCreatePost={handleCreatePost}
-            onLikePost={handleLikePost}
-            likedPosts={likedPosts}
+            onDeletePost={handleDeletePost}
             loadingPosts={loadingPosts}
           />
         </div>
@@ -790,8 +723,7 @@ function AppContent() {
                   allPosts={posts}
                   myPosts={myPosts}
                   onCreatePost={handleCreatePost}
-                  onLikePost={handleLikePost}
-                  likedPosts={likedPosts}
+                  onDeletePost={handleDeletePost}
                   loadingPosts={loadingPosts}
                 />
               </div>

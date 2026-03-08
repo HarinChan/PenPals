@@ -46,8 +46,7 @@ interface SidePanelProps {
   allPosts: Post[];
   myPosts: Post[];
   onCreatePost: (content: string, imageUrl?: string) => void;
-  onLikePost: (postId: string) => void;
-  likedPosts?: Set<string>;
+  onDeletePost: (postId: string) => void;
   loadingPosts?: boolean;
 }
 
@@ -65,8 +64,7 @@ export default function SidePanel({
   allPosts,
   myPosts,
   onCreatePost,
-  onLikePost,
-  likedPosts,
+  onDeletePost,
   loadingPosts = false,
 }: SidePanelProps) {
   const [detailDialogClassroom, setDetailDialogClassroom] = useState<Classroom | null>(null);
@@ -669,14 +667,16 @@ export default function SidePanel({
             <FeedPanel
               currentUserName={currentAccount.classroomName}
               currentUserId={currentAccount.id}
+              currentUserAvatar={currentAccount.avatar}
               allPosts={allPosts}
               myPosts={myPosts}
               onCreatePost={onCreatePost}
-              onLikePost={onLikePost}
-              likedPosts={likedPosts}
+              onDeletePost={onDeletePost}
               isLoading={loadingPosts}
             />
           </TabsContent>
+
+
         </Tabs>
       )}
 
