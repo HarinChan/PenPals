@@ -58,4 +58,9 @@
       port: 3000,
       open: true,
     },
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+      globals: true,
+    },
   });

@@ -28,6 +28,7 @@ penpals-frontend/src-tauri/gen/
 penpals-frontend/src-tauri/target/
 penpals-frontend/src-tauri/Cargo.toml
 penpals-frontend/src-tauri/Cargo.lock
+penpals-frontend/coverage/
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
