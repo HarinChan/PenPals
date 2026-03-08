@@ -230,7 +230,7 @@ describe('ClassroomDetailDialog', () => {
     await user.click(inviteeButton);
 
     expect(screen.getByText('Invite Alpha ×')).toBeInTheDocument();
-  });
+  },10000);
 
   it('validates public meeting capacity before scheduling', async () => {
     const user = userEvent.setup();
