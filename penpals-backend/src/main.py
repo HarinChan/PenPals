@@ -840,7 +840,7 @@ def get_current_user():
             "id": classroom.id,
             "name": classroom.name,
             "location": classroom.location,
-            "latitude": classroom.lattitude,
+            "latitude": classroom.latitude,
             "longitude": classroom.longitude,
             "class_size": classroom.class_size,
             "description": classroom.description,
@@ -884,7 +884,7 @@ def get_profile():
         "account_id": profile.account_id,
         "name": profile.name,
         "location": profile.location,
-        "lattitude": profile.lattitude,
+        "latitude": profile.latitude,
         "longitude": profile.longitude,
         "class_size": profile.class_size,
         "description": profile.description,
@@ -908,7 +908,7 @@ def create_profile():
         account_id=data.get("account_id"),
         name=data.get("name"),
         location=data.get("location"),
-        lattitude=data.get("lattitude"),
+        latitude=data.get("latitude"),
         longitude=data.get("longitude"),
         class_size=data.get("class_size"),
         availability=data.get("availability"),
@@ -2085,7 +2085,7 @@ def delete_post(post_id):
 def get_classrooms():
     """Get all classrooms (profiles with locations)"""
     # Filter only profiles that have geospatial data to be safe, or just return all
-    profiles = Profile.query.filter(Profile.lattitude.isnot(None), Profile.longitude.isnot(None)).all()
+    profiles = Profile.query.filter(Profile.latitude.isnot(None), Profile.longitude.isnot(None)).all()
     
     result = []
     for p in profiles:
@@ -2093,7 +2093,7 @@ def get_classrooms():
         interests = p.interests if p.interests else []
         
         try:
-            lat = float(p.lattitude)
+            lat = float(p.latitude)
             lon = float(p.longitude)
         except (ValueError, TypeError):
              continue # Skip invalid coordinates

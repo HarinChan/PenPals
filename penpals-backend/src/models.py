@@ -32,7 +32,7 @@ class Profile(db.Model):
     
     name = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(100), nullable=True) # Name of the place eg London
-    lattitude = db.Column(db.String(100), nullable=True)
+    latitude = db.Column(db.String(100), nullable=True)
     longitude = db.Column(db.String(100), nullable=True)
     class_size = db.Column(db.Integer, nullable=True)
     description = db.Column(db.Text, nullable=True)

@@ -69,7 +69,7 @@ def create_classroom():
             name=name,
             description=data.get('description'), # Added description
             location=data.get('location', '').strip() or None,
-            lattitude=latitude,  # keeping original typo for consistency
+            latitude=latitude,
             longitude=longitude,
             class_size=class_size,
             availability=availability,
@@ -194,11 +194,11 @@ def update_classroom(classroom_id):
             classroom.location = location.strip() if location else None
         
         if 'latitude' in data or 'longitude' in data:
-            new_lat = data.get('latitude', classroom.lattitude)
+            new_lat = data.get('latitude', classroom.latitude)
             new_lng = data.get('longitude', classroom.longitude)
             if not PenpalsHelper.validate_coordinates(new_lat, new_lng):
                 return jsonify({"msg": "Invalid coordinates"}), 400
-            classroom.lattitude = new_lat
+            classroom.latitude = new_lat
             classroom.longitude = new_lng
         
         if 'class_size' in data:

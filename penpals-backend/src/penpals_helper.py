@@ -113,7 +113,7 @@ class PenpalsHelper:
             "name": classroom.name,
             "description": classroom.description,
             "location": classroom.location,
-            "latitude": classroom.lattitude,  # Keep original typo for consistency
+            "latitude": classroom.latitude,
             "longitude": classroom.longitude,
             "class_size": classroom.class_size,
             "availability": classroom.availability,

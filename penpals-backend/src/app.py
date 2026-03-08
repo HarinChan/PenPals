@@ -10,12 +10,9 @@ from penpals_helper import PenpalsHelper
 
 def find_available_port():
     """Find an available port for the application"""
-    #port = PenpalsHelper.find_open_port(5000, 6000)
-    port = 5001
-    if port == -1:
-        print("Warning: No available ports found in range 5000-6000, using default 5001")
-        return 5001
-    return port
+    # Use fixed default port 5001 for consistency with frontend
+    # Users can override with PORT environment variable if needed
+    return 5001
 
 def main():
     """Main application entry point"""
