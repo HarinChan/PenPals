@@ -4,9 +4,20 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { MessagingService, Conversation, Message } from '../services/messaging';
-import { MessageCircle, Send, ArrowLeft, Loader2 } from 'lucide-react';
+import { MessageCircle, Send, ArrowLeft, Loader2, MoreVertical, Pencil, Trash2, Smile } from 'lucide-react';
 import { toast } from 'sonner';
 import { Account } from '../types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from './ui/popover';
 
 interface MessagingPanelProps {
   currentAccount: Account;
@@ -20,6 +31,8 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load conversations
@@ -143,6 +156,95 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleEditMessage = async (messageId: number) => {
+    if (!editContent.trim()) return;
+
+    try {
+      console.log('Editing message:', messageId, 'with content:', editContent);
+      const response = await MessagingService.editMessage(messageId, editContent.trim());
+      console.log('Edit response:', response);
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, content: editContent.trim(), editedAt: new Date().toISOString() }
+          : msg
+      ));
+      setEditingMessageId(null);
+      setEditContent('');
+      toast.success('Message updated');
+    } catch (error: any) {
+      console.error('Failed to edit message:', error);
+      toast.error(error.message || 'Failed to edit message');
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: number) => {
+    try {
+      console.log('Deleting message:', messageId);
+      const response = await MessagingService.deleteMessage(messageId);
+      console.log('Delete response:', response);
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, content: '[Message deleted]', deleted: true }
+          : msg
+      ));
+      toast.success('Message deleted');
+    } catch (error: any) {
+      console.error('Failed to delete message:', error);
+      toast.error(error.message || 'Failed to delete message');
+    }
+  };
+
+  const handleReaction = async (messageId: number, emoji: string) => {
+    try {
+      const response = await MessagingService.addReaction(messageId, emoji);
+      
+      // Update message reactions locally
+      setMessages(prev => prev.map(msg => {
+        if (msg.id !== messageId) return msg;
+        
+        const reactions = msg.reactions || [];
+        const existingReaction = reactions.find(r => r.emoji === emoji);
+        
+        if (response.action === 'removed') {
+          // Remove reaction
+          return {
+            ...msg,
+            reactions: reactions
+              .map(r => r.emoji === emoji 
+                ? { ...r, count: r.count - 1, hasReacted: false }
+                : r
+              )
+              .filter(r => r.count > 0)
+          };
+        } else {
+          // Add reaction
+          if (existingReaction) {
+            return {
+              ...msg,
+              reactions: reactions.map(r => r.emoji === emoji 
+                ? { ...r, count: r.count + 1, hasReacted: true }
+                : r
+              )
+            };
+          } else {
+            return {
+              ...msg,
+              reactions: [...reactions, {
+                emoji,
+                count: 1,
+                profiles: [{ id: parseInt(currentAccount.id), name: currentAccount.classroomName }],
+                hasReacted: true
+              }]
+            };
+          }
+        }
+      }));
+    } catch (error: any) {
+      console.error('Failed to add reaction:', error);
+      toast.error('Failed to add reaction');
+    }
   };
 
   // Conversation list view
@@ -304,6 +406,8 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
           <div className="p-4 space-y-4">
             {messages.map(msg => {
               const isMe = msg.senderId === currentUserId;
+              const isEditing = editingMessageId === msg.id;
+              
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[70%] ${isMe ? 'order-2' : 'order-1'}`}>
@@ -312,17 +416,147 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
                         {msg.senderName}
                       </p>
                     )}
-                    <div
-                      className={`rounded-2xl px-4 py-2 ${
-                        isMe
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                    <div className="relative group">
+                      <div
+                        className={`rounded-2xl px-4 py-2 ${
+                          msg.deleted
+                            ? 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic'
+                            : isMe
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                        }`}
+                      >
+                        {isEditing ? (
+                          <div className="space-y-2 min-w-[200px]">
+                            <Input
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              className="text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleEditMessage(msg.id);
+                                } else if (e.key === 'Escape') {
+                                  setEditingMessageId(null);
+                                  setEditContent('');
+                                }
+                              }}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleEditMessage(msg.id)}
+                                className="text-xs h-7"
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingMessageId(null);
+                                  setEditContent('');
+                                }}
+                                className="text-xs h-7"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                        )}
+                      </div>
+                      
+                      {/* Message actions - only for own messages and not deleted */}
+                      {isMe && !msg.deleted && !isEditing && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingMessageId(msg.id);
+                                setEditContent(msg.content);
+                              }}
+                            >
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteMessage(msg.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      
+                      {/* Reaction button - only for counterpart's messages */}
+                      {!isMe && !msg.deleted && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                            >
+                              <Smile className="w-4 h-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-2" align="end">
+                            <div className="flex gap-1">
+                              {['👍', '❤️', '😂', '😮', '😢', '🎉'].map(emoji => (
+                                <Button
+                                  key={emoji}
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleReaction(msg.id, emoji)}
+                                  className="text-lg p-1 h-8 w-8"
+                                >
+                                  {emoji}
+                                </Button>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
                     </div>
+                    
+                    {/* Reactions display */}
+                    {msg.reactions && msg.reactions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1 px-3">
+                        {msg.reactions.map(reaction => (
+                          <button
+                            key={reaction.emoji}
+                            onClick={() => !isMe && handleReaction(msg.id, reaction.emoji)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
+                              reaction.hasReacted
+                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                            } ${!isMe ? 'hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer' : ''}`}
+                            disabled={isMe}
+                          >
+                            <span>{reaction.emoji}</span>
+                            <span>{reaction.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 px-3">
                       {formatTime(msg.createdAt)}
+                      {msg.editedAt && !msg.deleted && ' (edited)'}
                     </p>
                   </div>
                 </div>

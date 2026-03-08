@@ -299,3 +299,25 @@ class MessageRead(db.Model):
     
     def __repr__(self):
         return f'<MessageRead message={self.message_id} profile={self.profile_id}>'
+
+
+class MessageReaction(db.Model):
+    """Reactions to messages (emoji reactions)"""
+    __tablename__ = 'message_reactions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('messages.id'), nullable=False)
+    profile_id = db.Column(db.Integer, db.ForeignKey('profiles.id'), nullable=False)
+    emoji = db.Column(db.String(10), nullable=False)  # Store emoji character
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    
+    __table_args__ = (
+        db.UniqueConstraint('message_id', 'profile_id', 'emoji', name='unique_message_reaction'),
+    )
+    
+    # Relationships
+    message = db.relationship('Message', backref=db.backref('reactions', cascade='all, delete-orphan'))
+    profile = db.relationship('Profile', backref=db.backref('message_reactions', cascade='all, delete-orphan'))
+    
+    def __repr__(self):
+        return f'<MessageReaction message={self.message_id} profile={self.profile_id} emoji={self.emoji}>'

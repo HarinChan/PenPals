@@ -8,7 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import or_, and_, desc
 from datetime import datetime, timezone
 
-from models import db, Account, Profile, Conversation, Message, MessageRead, Relation
+from models import db, Account, Profile, Conversation, Message, MessageRead, MessageReaction, Relation
 
 messaging_bp = Blueprint('messaging', __name__)
 
@@ -120,6 +120,24 @@ def get_messages(conversation_id):
             profile_id=profile.id
         ).first() is not None
         
+        # Get reactions grouped by emoji
+        reactions_data = {}
+        for reaction in msg.reactions:
+            if reaction.emoji not in reactions_data:
+                reactions_data[reaction.emoji] = {
+                    "emoji": reaction.emoji,
+                    "count": 0,
+                    "profiles": [],
+                    "hasReacted": False
+                }
+            reactions_data[reaction.emoji]["count"] += 1
+            reactions_data[reaction.emoji]["profiles"].append({
+                "id": reaction.profile_id,
+                "name": reaction.profile.name
+            })
+            if reaction.profile_id == profile.id:
+                reactions_data[reaction.emoji]["hasReacted"] = True
+        
         messages.append({
             "id": msg.id,
             "conversationId": msg.conversation_id,
@@ -131,7 +149,9 @@ def get_messages(conversation_id):
             "attachmentUrl": msg.attachment_url,
             "createdAt": msg.created_at.isoformat(),
             "editedAt": msg.edited_at.isoformat() if msg.edited_at else None,
-            "isRead": is_read
+            "isRead": is_read,
+            "deleted": msg.deleted,
+            "reactions": list(reactions_data.values())
         })
     
     # Reverse to show oldest first in UI
@@ -376,3 +396,187 @@ def start_conversation():
             "createdAt": conversation.created_at.isoformat()
         }
     }), 201
+
+
+
+@messaging_bp.route('/api/messages/<int:message_id>', methods=['PUT'])
+@jwt_required()
+def edit_message(message_id):
+    """Edit a message (only by sender)"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    message = Message.query.get(message_id)
+    if not message:
+        return jsonify({"msg": "Message not found"}), 404
+
+    # Security: Only sender can edit their own message
+    if message.sender_profile_id != profile.id:
+        return jsonify({"msg": "Unauthorized - can only edit your own messages"}), 403
+
+    # Can't edit deleted messages
+    if message.deleted:
+        return jsonify({"msg": "Cannot edit deleted message"}), 400
+
+    data = request.json
+    new_content = data.get('content', '').strip()
+    
+    if not new_content:
+        return jsonify({"msg": "Message content required"}), 400
+
+    # Update message
+    message.content = new_content
+    message.edited_at = datetime.now(timezone.utc)
+    
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Message updated",
+        "message": {
+            "id": message.id,
+            "content": message.content,
+            "editedAt": message.edited_at.isoformat()
+        }
+    }), 200
+
+
+@messaging_bp.route('/api/messages/<int:message_id>', methods=['DELETE'])
+@jwt_required()
+def delete_message(message_id):
+    """Delete a message (only by sender)"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    message = Message.query.get(message_id)
+    if not message:
+        return jsonify({"msg": "Message not found"}), 404
+
+    # Security: Only sender can delete their own message
+    if message.sender_profile_id != profile.id:
+        return jsonify({"msg": "Unauthorized - can only delete your own messages"}), 403
+
+    # Soft delete
+    message.deleted = True
+    message.content = "[Message deleted]"
+    
+    db.session.commit()
+    
+    return jsonify({"msg": "Message deleted"}), 200
+
+
+@messaging_bp.route('/api/messages/<int:message_id>/reactions', methods=['POST'])
+@jwt_required()
+def add_reaction(message_id):
+    """Add a reaction to a message"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    message = Message.query.get(message_id)
+    if not message:
+        return jsonify({"msg": "Message not found"}), 404
+
+    # Verify user is in the conversation
+    if profile not in message.conversation.participants:
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    data = request.json
+    emoji = data.get('emoji', '').strip()
+    
+    if not emoji:
+        return jsonify({"msg": "Emoji required"}), 400
+
+    # Check if reaction already exists
+    existing = MessageReaction.query.filter_by(
+        message_id=message_id,
+        profile_id=profile.id,
+        emoji=emoji
+    ).first()
+    
+    if existing:
+        # Remove reaction (toggle)
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify({"msg": "Reaction removed", "action": "removed"}), 200
+
+    # Add new reaction
+    reaction = MessageReaction(
+        message_id=message_id,
+        profile_id=profile.id,
+        emoji=emoji
+    )
+    
+    db.session.add(reaction)
+    db.session.commit()
+    
+    return jsonify({
+        "msg": "Reaction added",
+        "action": "added",
+        "reaction": {
+            "id": reaction.id,
+            "messageId": reaction.message_id,
+            "profileId": reaction.profile_id,
+            "emoji": reaction.emoji,
+            "createdAt": reaction.created_at.isoformat()
+        }
+    }), 201
+
+
+@messaging_bp.route('/api/messages/<int:message_id>/reactions', methods=['GET'])
+@jwt_required()
+def get_reactions(message_id):
+    """Get all reactions for a message"""
+    current_user_id = get_jwt_identity()
+    account = Account.query.get(current_user_id)
+    if not account:
+        return jsonify({"msg": "User not found"}), 404
+
+    profile = account.classrooms.first()
+    if not profile:
+        return jsonify({"msg": "Profile not found"}), 404
+
+    message = Message.query.get(message_id)
+    if not message:
+        return jsonify({"msg": "Message not found"}), 404
+
+    # Verify user is in the conversation
+    if profile not in message.conversation.participants:
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    reactions = MessageReaction.query.filter_by(message_id=message_id).all()
+    
+    # Group reactions by emoji
+    reaction_groups = {}
+    for reaction in reactions:
+        if reaction.emoji not in reaction_groups:
+            reaction_groups[reaction.emoji] = {
+                "emoji": reaction.emoji,
+                "count": 0,
+                "profiles": []
+            }
+        reaction_groups[reaction.emoji]["count"] += 1
+        reaction_groups[reaction.emoji]["profiles"].append({
+            "id": reaction.profile_id,
+            "name": reaction.profile.name
+        })
+    
+    return jsonify({
+        "reactions": list(reaction_groups.values())
+    }), 200
