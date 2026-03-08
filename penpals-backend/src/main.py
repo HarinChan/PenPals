@@ -29,11 +29,12 @@ load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
 load_dotenv(dotenv_path=SRC_ROOT / '.env')
 
 from sqlalchemy import desc, inspect, text
-from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
+from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation, Conversation, Message, MessageRead
 from webex_service import WebexService
 
 from account import account_bp
 from classroom import classroom_bp
+from messaging import messaging_bp
 
 MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
@@ -311,6 +312,7 @@ webex_service = WebexService()
 
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
+application.register_blueprint(messaging_bp)
 
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 

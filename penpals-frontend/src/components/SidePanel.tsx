@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { ChevronRight, ChevronLeft, User, BookOpen, Calendar, Search, Phone, Heart } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, BookOpen, Calendar, Search, Phone, Heart, MessageCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -29,6 +29,7 @@ import InvitationsWidget from './sidepanel/InvitationsWidget';
 import RecentCallsWidget from './sidepanel/RecentCallsWidget';
 import FriendsWidget from './sidepanel/FriendsWidget';
 import ClassroomsList from './sidepanel/ClassroomsList';
+import MessagingPanel from './MessagingPanel';
 
 
 
@@ -564,12 +565,18 @@ export default function SidePanel({
       ) : (
         <Tabs defaultValue="controls" className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 p-2 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-slate-50 dark:bg-slate-900">
-            <TabsList className="flex-1 grid grid-cols-2 h-9 bg-transparent p-0 gap-1">
+            <TabsList className="flex-1 grid grid-cols-3 h-9 bg-transparent p-0 gap-1">
               <TabsTrigger
                 value="controls"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
                 Classrooms
+              </TabsTrigger>
+              <TabsTrigger
+                value="messages"
+                className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
+              >
+                Messages
               </TabsTrigger>
               <TabsTrigger
                 value="feed"
@@ -662,6 +669,11 @@ export default function SidePanel({
           </TabsContent>
 
 
+          <TabsContent value="messages" className="flex-1 m-0 p-0 overflow-hidden">
+            <div className="h-full p-6">
+              <MessagingPanel currentAccount={currentAccount} />
+            </div>
+          </TabsContent>
 
           <TabsContent value="feed" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
             <FeedPanel
