@@ -53,7 +53,7 @@ export const MessagingService = {
     return ApiClient.post<{ msg: string; conversation: Conversation }>('/conversations/start', { friendId });
   },
 
-  getMessages: async (conversationId: number, page = 1, perPage = 50) => {
+  getMessages: async (conversationId: number, page = 1, perPage = 30) => {
     return ApiClient.get<{ messages: Message[]; pagination: MessagesPagination }>(
       `/conversations/${conversationId}/messages?page=${page}&per_page=${perPage}`
     );

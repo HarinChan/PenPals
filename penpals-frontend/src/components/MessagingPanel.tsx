@@ -59,7 +59,8 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
 
   const loadMessages = async (conversationId: number) => {
     try {
-      const response = await MessagingService.getMessages(conversationId);
+      // Load latest 30 messages
+      const response = await MessagingService.getMessages(conversationId, 1, 30);
       setMessages(response.messages);
       
       // Mark all as read
@@ -226,17 +227,43 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
           <div className="p-4 border-t border-slate-200 dark:border-slate-700">
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Start a conversation:</p>
             <div className="flex flex-wrap gap-2">
-              {currentAccount.friends.slice(0, 3).map(friend => (
-                <Button
-                  key={friend.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleStartConversation(friend.classroomId)}
-                  className="text-xs"
-                >
-                  {friend.classroomName}
-                </Button>
-              ))}
+              {(() => {
+                // Get friend IDs that already have conversations
+                const conversationFriendIds = new Set(
+                  conversations.flatMap(conv => 
+                    conv.participants.map(p => p.id.toString())
+                  )
+                );
+                
+                // Filter out friends with existing conversations and remove duplicates
+                const availableFriends = currentAccount.friends
+                  .filter((friend, index, self) => 
+                    // Remove duplicates by classroomId
+                    index === self.findIndex(f => f.classroomId === friend.classroomId) &&
+                    // Exclude friends with existing conversations
+                    !conversationFriendIds.has(friend.classroomId)
+                  );
+                
+                if (availableFriends.length === 0) {
+                  return (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 italic">
+                      All friends have active conversations
+                    </p>
+                  );
+                }
+                
+                return availableFriends.map(friend => (
+                  <Button
+                    key={friend.classroomId}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleStartConversation(friend.classroomId)}
+                    className="text-xs"
+                  >
+                    {friend.classroomName}
+                  </Button>
+                ));
+              })()}
             </div>
           </div>
         )}
@@ -272,37 +299,39 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map(msg => {
-            const isMe = msg.senderId === currentUserId;
-            return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[70%] ${isMe ? 'order-2' : 'order-1'}`}>
-                  {!isMe && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-3">
-                      {msg.senderName}
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-4">
+            {messages.map(msg => {
+              const isMe = msg.senderId === currentUserId;
+              return (
+                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[70%] ${isMe ? 'order-2' : 'order-1'}`}>
+                    {!isMe && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 px-3">
+                        {msg.senderName}
+                      </p>
+                    )}
+                    <div
+                      className={`rounded-2xl px-4 py-2 ${
+                        isMe
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                    </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 px-3">
+                      {formatTime(msg.createdAt)}
                     </p>
-                  )}
-                  <div
-                    className={`rounded-2xl px-4 py-2 ${
-                      isMe
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                   </div>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 px-3">
-                    {formatTime(msg.createdAt)}
-                  </p>
                 </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Message input */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-700">

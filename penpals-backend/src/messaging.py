@@ -100,15 +100,15 @@ def get_messages(conversation_id):
     if profile not in conversation.participants:
         return jsonify({"msg": "Unauthorized"}), 403
 
-    # Pagination
+    # Pagination - get latest messages (newest first for pagination)
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
+    per_page = request.args.get('per_page', 30, type=int)
     
-    # Get messages ordered oldest first
+    # Get messages ordered newest first for proper pagination
     messages_query = Message.query.filter_by(
         conversation_id=conversation_id,
         deleted=False
-    ).order_by(Message.created_at.asc())
+    ).order_by(desc(Message.created_at))
     
     paginated = messages_query.paginate(page=page, per_page=per_page, error_out=False)
     
@@ -133,6 +133,9 @@ def get_messages(conversation_id):
             "editedAt": msg.edited_at.isoformat() if msg.edited_at else None,
             "isRead": is_read
         })
+    
+    # Reverse to show oldest first in UI
+    messages.reverse()
     
     return jsonify({
         "messages": messages,
