@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { Classroom } from '../../types';
 
 const mockFetchAllClassrooms = vi.fn();
@@ -89,6 +89,7 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof ClassroomDe
 
 describe('ClassroomDetailDialog', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
 
     mockFetchAllClassrooms.mockResolvedValue({
@@ -107,6 +108,10 @@ describe('ClassroomDetailDialog', () => {
       }
       return result;
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders classroom details and info sections', () => {
@@ -221,7 +226,8 @@ describe('ClassroomDetailDialog', () => {
     const searchInput = screen.getByPlaceholderText(/search classrooms by name or location/i);
     await user.type(searchInput, 'invite alpha');
 
-    await user.click(screen.getByRole('button', { name: /invite alpha • singapore/i }));
+    const inviteeButton = await screen.findByRole('button', { name: /invite alpha • singapore/i });
+    await user.click(inviteeButton);
 
     expect(screen.getByText('Invite Alpha ×')).toBeInTheDocument();
   });
