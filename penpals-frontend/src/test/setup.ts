@@ -33,3 +33,12 @@ if (!(globalThis as any).ResizeObserver) {
     disconnect() {}
   };
 }
+
+if (!(globalThis as any).IntersectionObserver) {
+  (globalThis as any).IntersectionObserver = class IntersectionObserver {
+    constructor() {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
