@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
-import { useForm } from 'react-hook-form@7.55.0';
+import { useForm } from 'react-hook-form';
 import {
   ChartContainer,
   ChartStyle,
@@ -388,13 +388,13 @@ describe('UI Components basic render', () => {
       <Pagination>
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious href="#" />
+            <PaginationPrevious href="#" size="default" />
           </PaginationItem>
           <PaginationItem>
-            <PaginationLink href="#">1</PaginationLink>
+            <PaginationLink href="#" size="icon">1</PaginationLink>
           </PaginationItem>
           <PaginationItem>
-            <PaginationNext href="#" />
+            <PaginationNext href="#" size="default" />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
@@ -563,7 +563,7 @@ describe('UI advanced coverage', () => {
       <ChartContainer config={config} id="advanced-chart">
         <div>
           <ChartTooltipContent active payload={tooltipPayload} />
-          <ChartLegendContent payload={legendPayload} />
+          <ChartLegendContent payload={legendPayload} verticalAlign="bottom" />
         </div>
       </ChartContainer>
     );
@@ -587,7 +587,7 @@ describe('UI advanced coverage', () => {
             <FormField
               control={methods.control}
               name="username"
-              render={({ field }) => (
+              render={({ field }: { field: any }) => (
                 <FormItem>
                   <FormLabel>Username</FormLabel>
                   <FormControl>

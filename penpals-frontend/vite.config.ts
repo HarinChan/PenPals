@@ -58,25 +58,4 @@
       port: 3000,
       open: true,
     },
-    test: {
-      environment: 'jsdom',
-      setupFiles: './src/test/setup.ts',
-      globals: true,
-      coverage: {
-        provider: 'v8',
-        exclude: [
-          '**/node_modules/**',
-          '**/dist/**',
-          '**/build/**',
-          '**/*.test.{ts,tsx}',
-          '**/__tests__/**',
-          '**/test/**',
-          '**/types.ts', // Type definitions only - no executable code
-          '**/main.tsx', // Bootstrap file - tested via integration
-          '**/index.tsx', // Entry point - tested via integration
-          '**/vite.config.ts', // Build config - not application code
-          '**/vitest.setup.ts', // Test setup - not application code
-        ],
-      },
-    },
   });
