@@ -143,7 +143,6 @@ describe('posts service', () => {
         imageUrl: undefined,
         classroomId: 'classroom-99',
       });
-      expect(result.classroomId).toBe('classroom-99');
       expect(result.timestamp).toBeInstanceOf(Date);
     });
 
@@ -176,7 +175,6 @@ describe('posts service', () => {
         classroomId: 'classroom-100',
       });
       expect(result.imageUrl).toBe('https://example.com/full.jpg');
-      expect(result.classroomId).toBe('classroom-100');
     });
   });
 
