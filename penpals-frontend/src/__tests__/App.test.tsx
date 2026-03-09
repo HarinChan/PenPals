@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import App from './App';
-import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
-import { fetchPosts, createPost, deletePost } from './services/posts';
+import App from '../App';
+import { ApiClient, AuthService, ClassroomService, WebexService } from '../services';
+import { fetchPosts, createPost, deletePost } from '../services/posts';
 import { toast } from 'sonner';
 
 // Mock all external dependencies
-vi.mock('./services', () => ({
+vi.mock('../services', () => ({
   ApiClient: {
     getSelectedBaseUrl: vi.fn(() => 'http://localhost:5000'),
     getBaseUrlHistory: vi.fn(() => ['http://localhost:5000']),
@@ -33,7 +33,7 @@ vi.mock('./services', () => ({
   },
 }));
 
-vi.mock('./services/posts', () => ({
+vi.mock('../services/posts', () => ({
   fetchPosts: vi.fn(() => Promise.resolve([])),
   createPost: vi.fn(),
   deletePost: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Mock child components to simplify testing
-vi.mock('./components/MapView', () => ({
+vi.mock('../components/MapView', () => ({
   default: ({ onClassroomSelect }: any) => (
     <div data-testid="map-view" onClick={() => onClassroomSelect?.({ id: '1', name: 'Test' })}>
       MapView
@@ -57,7 +57,7 @@ vi.mock('./components/MapView', () => ({
   ),
 }));
 
-vi.mock('./components/SidePanel', () => ({
+vi.mock('../components/SidePanel', () => ({
   default: ({ onAccountChange, onAccountUpdate, onAccountCreate, onAccountDelete, onCreatePost, onDeletePost }: any) => (
     <div data-testid="side-panel">
       <button onClick={() => onAccountChange?.('acc-123')}>Change Account</button>
@@ -72,7 +72,7 @@ vi.mock('./components/SidePanel', () => ({
   ),
 }));
 
-vi.mock('./components/LoginDialog', () => ({
+vi.mock('../components/LoginDialog', () => ({
   default: ({ onLogin, onSignup, onNetworkChange }: any) => (
     <div data-testid="login-dialog">
       <button onClick={() => onLogin?.('test@example.com', 'password123')}>Login</button>
@@ -84,7 +84,7 @@ vi.mock('./components/LoginDialog', () => ({
   ),
 }));
 
-vi.mock('./components/ChatBot', () => ({
+vi.mock('../components/ChatBot', () => ({
   default: ({ onClose }: any) => (
     <div data-testid="chatbot">
       <button onClick={onClose}>Close ChatBot</button>
@@ -92,17 +92,17 @@ vi.mock('./components/ChatBot', () => ({
   ),
 }));
 
-vi.mock('./components/AccountDialog', () => ({
+vi.mock('../components/AccountDialog', () => ({
   default: ({ open, onOpenChange }: any) => (
     open ? <div data-testid="account-dialog" onClick={() => onOpenChange(false)}>Account Dialog</div> : null
   ),
 }));
 
-vi.mock('./components/ErrorBoundary', () => ({
+vi.mock('../components/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: any) => <div data-testid="error-boundary">{children}</div>,
 }));
 
-vi.mock('./components/ThemeProvider', () => ({
+vi.mock('../components/ThemeProvider', () => ({
   ThemeProvider: ({ children }: any) => children,
   useTheme: () => ({ theme: 'light', toggleTheme: vi.fn() }),
 }));
