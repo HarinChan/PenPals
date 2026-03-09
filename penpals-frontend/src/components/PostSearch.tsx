@@ -4,7 +4,6 @@ import { Search, Loader2, X, Languages, RotateCcw } from 'lucide-react';
 import { queryPostsFromChromaDB } from '../services/chromadb';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
-import { ClassroomService } from '../services/classroom';
 import { FriendsService } from '../services/friends';
 import type { Classroom, Account } from '../types';
 import { toast } from 'sonner';
@@ -102,10 +101,11 @@ const resolveClassroomId = (resultId: string, metadata: Record<string, any>): st
 
 interface PostSearchProps {
   currentAccount: Account;
+  classrooms: Classroom[];
   onAccountUpdate: (account: Account) => void;
 }
 
-export default function PostSearch({ currentAccount, onAccountUpdate }: PostSearchProps) {
+export default function PostSearch({ currentAccount, classrooms, onAccountUpdate }: PostSearchProps) {
   const [query, setQuery]           = useState('');
   const [isSearching, setSearching] = useState(false);
   const [results, setResults]       = useState<SearchResult[]>([]);
@@ -216,60 +216,14 @@ export default function PostSearch({ currentAccount, onAccountUpdate }: PostSear
   const handleAvatarClick = async (authorId: string, authorName: string) => {
     const numericId = Number(authorId);
     if (isNaN(numericId) || numericId <= 0) return;
+    const classroom = classrooms.find(c => String(c.id) === String(authorId));
     setFetchingAvatarId(authorId);
     try {
-      const { classroom: cl } = await ClassroomService.getClassroom(numericId);
-      
-      // Transform availability from [{day, time}] to {[day]: [hours]}
-      const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
-        if (!backendAvailability) return {};
-
-        // Case 1: Already in the correct format { "Mon": [9, 10], ... }
-        if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
-          const cleanSchedule: { [day: string]: number[] } = {};
-          Object.entries(backendAvailability).forEach(([day, hours]) => {
-            if (Array.isArray(hours)) {
-              cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
-            }
-          });
-          return cleanSchedule;
-        }
-
-        // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...]
-        const schedule: { [day: string]: number[] } = {};
-        if (Array.isArray(backendAvailability)) {
-          backendAvailability.forEach(slot => {
-            if (slot.day && slot.time) {
-              const hour = parseInt(slot.time.split(':')[0], 10);
-              if (!isNaN(hour)) {
-                if (!schedule[slot.day]) {
-                  schedule[slot.day] = [];
-                }
-                if (!schedule[slot.day].includes(hour)) {
-                  schedule[slot.day].push(hour);
-                }
-              }
-            }
-          });
-        }
-        return schedule;
-      };
-
-      const availability = transformAvailability(cl.availability);
-      
-      const mapped: Classroom = {
-        id: String(cl.id),
-        name: cl.name,
-        location: cl.location || 'Unknown Location',
-        lat: cl.latitude ? parseFloat(cl.latitude) : 0,
-        lon: cl.longitude ? parseFloat(cl.longitude) : 0,
-        interests: cl.interests || [],
-        availability: availability,
-        size: cl.class_size,
-        description: cl.description || `Friends: ${cl.friends_count || 0}`,
-        avatar: cl.avatar || ''
-      };
-      setDialogClassroom(mapped);
+      if (!classroom) {
+        toast.error(`Could not load ${authorName}'s classroom.`);
+        return;
+      }
+      setDialogClassroom(classroom);
       setDialogOpen(true);
     } catch {
       toast.error(`Could not load ${authorName}'s classroom.`);

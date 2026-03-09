@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import PostCreator, { Post } from './PostCreator';
 import PostFeed from './PostFeed';
 import PostSearch from './PostSearch';
-import type { Account } from '../types';
+import type { Account, Classroom } from '../types';
 
 interface FeedPanelProps {
   currentUserName: string;
@@ -15,6 +15,7 @@ interface FeedPanelProps {
   onDeletePost: (postId: string) => void;
   isLoading?: boolean;
   currentAccount: Account;
+  classrooms: Classroom[];
   onAccountUpdate: (account: Account) => void;
 }
 
@@ -28,6 +29,7 @@ export default function FeedPanel({
   onDeletePost,
   isLoading,
   currentAccount,
+  classrooms,
   onAccountUpdate,
 }: FeedPanelProps) {
   return (
@@ -53,15 +55,15 @@ export default function FeedPanel({
           </TabsList>
 
           <TabsContent value="all" className="p-4">
-            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} onAccountUpdate={onAccountUpdate} />
+            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
 
           <TabsContent value="my" className="p-4">
-            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} onAccountUpdate={onAccountUpdate} />
+            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
 
           <TabsContent value="search" className="p-4">
-            <PostSearch currentAccount={currentAccount} onAccountUpdate={onAccountUpdate} />
+            <PostSearch currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
         </Tabs>
       </Card>

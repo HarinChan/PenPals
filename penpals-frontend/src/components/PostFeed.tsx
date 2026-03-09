@@ -6,7 +6,6 @@ import { Languages, Loader2, Trash2, RotateCcw } from 'lucide-react';
 import { Post } from './PostCreator';
 import { toast } from 'sonner';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
-import { ClassroomService } from '../services/classroom';
 import { FriendsService } from '../services/friends';
 import type { Classroom, Account } from '../types';
 
@@ -16,6 +15,7 @@ interface PostFeedProps {
   currentUserId?: string;
   onDeletePost?: (postId: string) => void;
   currentAccount: Account;
+  classrooms: Classroom[];
   onAccountUpdate: (account: Account) => void;
 }
 
@@ -65,7 +65,7 @@ interface TranslationState {
   isTranslating: boolean;
 }
 
-export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost, currentAccount, onAccountUpdate }: PostFeedProps) {
+export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost, currentAccount, classrooms, onAccountUpdate }: PostFeedProps) {
   const [translations, setTranslations] = useState<Record<string, TranslationState>>({});
   const [dialogClassroom, setDialogClassroom] = useState<Classroom | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -113,60 +113,14 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
   };
 
   const handleAvatarClick = async (authorId: string) => {
+    const classroom = classrooms.find(c => String(c.id) === String(authorId));
     setFetchingAvatarId(authorId);
     try {
-      const { classroom: cl } = await ClassroomService.getClassroom(Number(authorId));
-      
-      // Transform availability from [{day, time}] to {[day]: [hours]}
-      const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
-        if (!backendAvailability) return {};
-
-        // Case 1: Already in the correct format { "Mon": [9, 10], ... }
-        if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
-          const cleanSchedule: { [day: string]: number[] } = {};
-          Object.entries(backendAvailability).forEach(([day, hours]) => {
-            if (Array.isArray(hours)) {
-              cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
-            }
-          });
-          return cleanSchedule;
-        }
-
-        // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...]
-        const schedule: { [day: string]: number[] } = {};
-        if (Array.isArray(backendAvailability)) {
-          backendAvailability.forEach(slot => {
-            if (slot.day && slot.time) {
-              const hour = parseInt(slot.time.split(':')[0], 10);
-              if (!isNaN(hour)) {
-                if (!schedule[slot.day]) {
-                  schedule[slot.day] = [];
-                }
-                if (!schedule[slot.day].includes(hour)) {
-                  schedule[slot.day].push(hour);
-                }
-              }
-            }
-          });
-        }
-        return schedule;
-      };
-
-      const availability = transformAvailability(cl.availability);
-      
-      const mapped: Classroom = {
-        id: String(cl.id),
-        name: cl.name,
-        location: cl.location || 'Unknown Location',
-        lat: cl.latitude ? parseFloat(cl.latitude) : 0,
-        lon: cl.longitude ? parseFloat(cl.longitude) : 0,
-        interests: cl.interests || [],
-        availability: availability,
-        size: cl.class_size,
-        description: cl.description || `Friends: ${cl.friends_count || 0}`,
-        avatar: cl.avatar || ''
-      };
-      setDialogClassroom(mapped);
+      if (!classroom) {
+        toast.error('Could not load classroom details.');
+        return;
+      }
+      setDialogClassroom(classroom);
       setDialogOpen(true);
     } catch {
       toast.error('Could not load classroom details.');

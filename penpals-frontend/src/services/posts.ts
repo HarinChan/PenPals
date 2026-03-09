@@ -5,13 +5,20 @@ export interface PostResponse {
     posts: Post[];
 }
 
+const parseServerTimestamp = (value: string): Date => {
+    if (!value) return new Date();
+    const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value);
+    // Treat naive ISO strings from backend as UTC to avoid local-time skew.
+    return new Date(hasTimezone ? value : `${value}Z`);
+};
+
 export const fetchPosts = async (): Promise<Post[]> => {
     const data = await ApiClient.get<{ posts: any[] }>('/posts');
 
     // Map backend response to frontend Post interface
     return data.posts.map((p: any) => ({
         ...p,
-        timestamp: new Date(p.timestamp)
+        timestamp: parseServerTimestamp(p.timestamp)
     }));
 };
 
@@ -20,7 +27,7 @@ export const createPost = async (content: string, imageUrl?: string, classroomId
 
     return {
         ...data.post,
-        timestamp: new Date(data.post.timestamp)
+        timestamp: parseServerTimestamp(data.post.timestamp)
     };
 };
 
