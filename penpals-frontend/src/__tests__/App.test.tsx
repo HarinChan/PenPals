@@ -127,7 +127,7 @@ describe('App Component', () => {
       vi.mocked(AuthService.isAuthenticated).mockReturnValue(true);
       vi.mocked(AuthService.getCurrentUser).mockImplementation(() => 
         new Promise(resolve => setTimeout(() => resolve({
-          account: { email: 'test@example.com', notifications: [] },
+          account: { id: 1, email: 'test@example.com', created_at: '2026-01-01T00:00:00Z', classroom_count: 0, notifications: [] },
           classrooms: [],
         }), 100))
       );
@@ -152,7 +152,7 @@ describe('App Component', () => {
 
     it('loads user data when authenticated on mount', async () => {
       const mockUserData = {
-        account: { email: 'test@example.com', notifications: [] },
+        account: { id: 1, email: 'test@example.com', created_at: '2026-01-01T00:00:00Z', classroom_count: 1, notifications: [] },
         classrooms: [
           {
             id: 1,
@@ -199,7 +199,7 @@ describe('App Component', () => {
   describe('WebEx OAuth Callback Handling', () => {
     it('handles webex oauth callback on mount', async () => {
       (window as any).location.search = '?code=webex-auth-code-123';
-      vi.mocked(WebexService.connect).mockResolvedValue({ success: true });
+      vi.mocked(WebexService.connect).mockResolvedValue({ msg: 'connected' });
 
       render(<App />);
 
@@ -226,7 +226,7 @@ describe('App Component', () => {
     it('handles successful login', async () => {
       const user = userEvent.setup();
       const mockUserData = {
-        account: { email: 'test@example.com', notifications: [] },
+        account: { id: 1, email: 'test@example.com', created_at: '2026-01-01T00:00:00Z', classroom_count: 1, notifications: [] },
         classrooms: [
           {
             id: 1,
@@ -241,7 +241,7 @@ describe('App Component', () => {
         ],
       };
 
-      vi.mocked(AuthService.login).mockResolvedValue(undefined);
+      vi.mocked(AuthService.login).mockResolvedValue({ access_token: 'token', account_id: 1 });
       vi.mocked(AuthService.getCurrentUser).mockResolvedValue(mockUserData);
 
       render(<App />);
@@ -281,20 +281,21 @@ describe('App Component', () => {
     it('handles successful signup with classroom creation', async () => {
       const user = userEvent.setup();
       const mockClassroom = {
+        msg: 'Classroom created',
         classroom: {
           id: 10,
           name: 'My Classroom',
           location: 'NYC',
           class_size: 20,
           interests: [],
-          availability: {},
+          availability: [],
           latitude: '40.7',
           longitude: '-74',
         },
       };
 
-      vi.mocked(AuthService.register).mockResolvedValue(undefined);
-      vi.mocked(AuthService.login).mockResolvedValue(undefined);
+      vi.mocked(AuthService.register).mockResolvedValue({ account_id: 1, msg: 'registered' });
+      vi.mocked(AuthService.login).mockResolvedValue({ access_token: 'token', account_id: 1 });
       vi.mocked(ClassroomService.createClassroom).mockResolvedValue(mockClassroom);
 
       render(<App />);
@@ -412,7 +413,7 @@ describe('App Component', () => {
   describe('Classroom Fetching', () => {
     beforeEach(async () => {
       const mockUserData = {
-        account: { email: 'test@example.com', notifications: [] },
+        account: { id: 1, email: 'test@example.com', created_at: '2026-01-01T00:00:00Z', classroom_count: 1, notifications: [] },
         classrooms: [
           {
             id: 1,
@@ -438,11 +439,11 @@ describe('App Component', () => {
             latitude: '48.8566',
             longitude: '2.3522',
             interests: ['art'],
-            availability: {},
+            availability: [],
             class_size: 20,
           },
         ],
-        total: 1,
+        count: 1,
       });
     });
 
@@ -474,14 +475,14 @@ describe('App Component', () => {
             id: 3,
             name: 'No Location Classroom',
             location: 'Unknown',
-            latitude: null,
-            longitude: null,
+            latitude: undefined,
+            longitude: undefined,
             interests: [],
-            availability: {},
+            availability: [],
             class_size: 15,
           },
         ],
-        total: 1,
+        count: 1,
       });
 
       render(<App />);
