@@ -7,6 +7,7 @@ export { default as PublicMeetingsWidget } from './PublicMeetingsWidget';
 export { default as InvitationsWidget } from './InvitationsWidget';
 export { default as RecentCallsWidget } from './RecentCallsWidget';
 export { default as FriendsWidget } from './FriendsWidget';
+export { default as FriendRequestsWidget } from './FriendRequestsWidget';
 export { default as ClassroomsList } from './ClassroomsList';
 
 export * from './constants';

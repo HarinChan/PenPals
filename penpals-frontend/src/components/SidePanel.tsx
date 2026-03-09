@@ -28,6 +28,7 @@ import PublicMeetingsWidget from './sidepanel/PublicMeetingsWidget';
 import InvitationsWidget from './sidepanel/InvitationsWidget';
 import RecentCallsWidget from './sidepanel/RecentCallsWidget';
 import FriendsWidget from './sidepanel/FriendsWidget';
+import FriendRequestsWidget from './sidepanel/FriendRequestsWidget';
 import ClassroomsList from './sidepanel/ClassroomsList';
 import MessagingPanel from './MessagingPanel';
 
@@ -651,6 +652,12 @@ export default function SidePanel({
               currentAccount={currentAccount}
               classrooms={classrooms}
               onCallClick={handleClassroomClick}
+            />
+
+            <FriendRequestsWidget
+              currentAccount={currentAccount}
+              onAcceptRequest={acceptFriendRequest}
+              onRejectRequest={rejectFriendRequest}
             />
 
             <FriendsWidget
