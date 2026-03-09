@@ -404,8 +404,10 @@ export default function SidePanel({
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
     if (friend) return 'accepted';
 
-    // Check if we received a request from them
-    const received = (currentAccount.receivedFriendRequests || []).find(r => r.fromClassroomId === classroomId.toString());
+    // Check if we received a request from them (support both field names)
+    const received = (currentAccount.receivedFriendRequests || []).find(r => 
+      (r.fromClassroomId === classroomId.toString()) || (r.senderId === classroomId.toString())
+    );
     if (received) return 'received';
 
     // We don't track sent requests cleanly in frontend state yet without reload, 
@@ -436,20 +438,35 @@ export default function SidePanel({
     try {
       await FriendsService.acceptRequest(requestId, senderId);
 
-      // Optimistic Update
-      // Remove from requests
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
+      // Find the request to get sender details
+      const request = (currentAccount.receivedFriendRequests || []).find(r => 
+        ((r.fromClassroomId === senderId || r.senderId === senderId) || r.id === requestId)
+      );
 
-      // Add to friends
-      // We need classroom details for this. 
-      // If called from SidePanel list, we have `classroom` object. 
-      // If called from Notification, we might fetch it or just reload.
+      // Remove from requests (support both field names)
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => 
+        (r.fromClassroomId !== senderId && r.senderId !== senderId) && r.id !== requestId
+      );
 
-      // Easiest is to force reload user data if possible, or just update requests
-      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+      // Add to friends list
+      const newFriend = {
+        id: senderId,
+        classroomId: senderId,
+        classroomName: request?.senderName || request?.fromClassroomName || 'Unknown',
+        location: request?.location || request?.fromLocation || '',
+        addedDate: new Date().toISOString(),
+        friendshipStatus: 'accepted'
+      };
+
+      const updatedFriends = [...(currentAccount.friends || []), newFriend];
+
+      onAccountUpdate({ 
+        ...currentAccount, 
+        receivedFriendRequests: updatedRequests,
+        friends: updatedFriends
+      });
 
       toast.success("Friend request accepted!");
-      // Trigger a reload of user data in parent if possible, or we rely on next poll/action
 
     } catch (error) {
       console.error("Failed to accept request", error);
@@ -460,7 +477,9 @@ export default function SidePanel({
   const rejectFriendRequest = async (senderId: string, requestId?: string) => {
     try {
       await FriendsService.rejectRequest(requestId, senderId);
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => 
+        (r.fromClassroomId !== senderId && r.senderId !== senderId) && r.id !== requestId
+      );
       onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
       toast.success("Friend request rejected");
     } catch (error) {
