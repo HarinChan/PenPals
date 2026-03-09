@@ -656,8 +656,10 @@ export default function SidePanel({
 
             <FriendRequestsWidget
               currentAccount={currentAccount}
+              classrooms={classrooms}
               onAcceptRequest={acceptFriendRequest}
               onRejectRequest={rejectFriendRequest}
+              onClassroomClick={handleClassroomClick}
             />
 
             <FriendsWidget

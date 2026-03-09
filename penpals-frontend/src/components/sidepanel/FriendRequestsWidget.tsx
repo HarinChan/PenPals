@@ -8,14 +8,18 @@ import { Account } from '../../types';
 
 interface FriendRequestsWidgetProps {
   currentAccount: Account;
+  classrooms: any[]; // Add classrooms to find the sender
   onAcceptRequest: (senderId: string, requestId?: string) => void;
   onRejectRequest: (senderId: string, requestId?: string) => void;
+  onClassroomClick?: (classroom: any) => void; // Add click handler
 }
 
 export default function FriendRequestsWidget({
   currentAccount,
+  classrooms,
   onAcceptRequest,
   onRejectRequest,
+  onClassroomClick,
 }: FriendRequestsWidgetProps) {
   const [isOpen, setIsOpen] = useState(true);
   const requests = currentAccount.receivedFriendRequests || [];
@@ -40,45 +44,57 @@ export default function FriendRequestsWidget({
           <CollapsibleContent>
             <ScrollArea className="max-h-64">
               <div className="space-y-2 pr-4">
-                {requests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-slate-900 dark:text-slate-100 font-medium truncate">
-                          {request.fromClassroomName}
-                        </div>
-                        {request.fromLocation && (
-                          <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-                            {request.fromLocation}
+                {requests.map((request) => {
+                  const senderId = request.senderId || request.fromClassroomId;
+                  const senderClassroom = classrooms.find(c => c.id === senderId);
+                  
+                  return (
+                    <div
+                      key={request.id}
+                      className="p-3 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-650 transition-colors cursor-pointer"
+                      onClick={() => senderClassroom && onClassroomClick?.(senderClassroom)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-slate-900 dark:text-slate-100 font-medium truncate">
+                            {request.senderName || request.fromClassroomName || 'Unknown'}
                           </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => onAcceptRequest(request.fromClassroomId, request.id)}
-                          className="h-7 w-7 p-0 bg-green-600 hover:bg-green-700"
-                          title="Accept"
-                        >
-                          <Check size={14} />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onRejectRequest(request.fromClassroomId, request.id)}
-                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          title="Reject"
-                        >
-                          <X size={14} />
-                        </Button>
+                          {(request.location || request.fromLocation) && (
+                            <div className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+                              {request.location || request.fromLocation}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAcceptRequest(senderId, request.id);
+                            }}
+                            className="h-7 w-7 p-0 bg-green-600 hover:bg-green-700"
+                            title="Accept"
+                          >
+                            <Check size={14} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRejectRequest(senderId, request.id);
+                            }}
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Reject"
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ScrollArea>
           </CollapsibleContent>
