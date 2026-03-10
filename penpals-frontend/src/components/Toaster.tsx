@@ -1,4 +1,4 @@
-import { Toaster as SonnerToaster } from 'sonner@2.0.3';
+import { Toaster as SonnerToaster } from 'sonner';
 import { useTheme } from './ThemeProvider';
 
 export function Toaster() {

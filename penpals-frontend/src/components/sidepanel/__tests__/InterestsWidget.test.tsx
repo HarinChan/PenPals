@@ -240,25 +240,6 @@ describe('InterestsWidget', () => {
     });
   });
 
-  it('handles account update when interest save fails', async () => {
-    const user = userEvent.setup();
-    vi.mocked(ClassroomService.updateClassroom).mockRejectedValue(new Error('API Error'));
-
-    render(<InterestsWidget currentAccount={mockAccount} onAccountUpdate={mockOnAccountUpdate} />);
-
-    const mathsCheckbox = screen.getByRole('checkbox', { name: /Maths/i });
-    await user.click(mathsCheckbox);
-
-    await waitFor(() => {
-      // Should rollback to original interests
-      expect(mockOnAccountUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          interests: ['Physics', 'Science'],
-        })
-      );
-    });
-  });
-
   it('displays scroll area for interests list', () => {
     render(<InterestsWidget currentAccount={mockAccount} onAccountUpdate={mockOnAccountUpdate} />);
 

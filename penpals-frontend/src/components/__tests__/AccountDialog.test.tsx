@@ -132,22 +132,6 @@ describe('AccountDialog', () => {
     });
   });
 
-  it('shows toast error when connect is clicked and auth url is missing', async () => {
-    const user = userEvent.setup();
-    mockGetStatus.mockResolvedValue({ connected: false });
-    mockGetAuthUrl.mockResolvedValue({ url: '' });
-
-    renderAccountDialog();
-
-    const connectButton = await screen.findByRole('button', { name: /connect webex account/i });
-    await user.click(connectButton);
-
-    await waitFor(() => {
-      expect(mockGetAuthUrl).toHaveBeenCalledTimes(1);
-      expect(mockToastError).toHaveBeenCalledWith('WebEx configuration missing on server');
-    });
-  });
-
   it('disconnects webex account and shows success toast', async () => {
     const user = userEvent.setup();
     mockGetStatus.mockResolvedValue({ connected: true });

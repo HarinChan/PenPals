@@ -4,7 +4,7 @@ import { Toaster } from '../Toaster';
 import { ThemeProvider } from '../ThemeProvider';
 
 // Mock the sonner Toaster
-vi.mock('sonner@2.0.3', () => ({
+vi.mock('sonner', () => ({
   Toaster: vi.fn(({ theme, position, toastOptions }) => (
     <div 
       data-testid="sonner-toaster"

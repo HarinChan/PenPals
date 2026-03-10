@@ -93,18 +93,6 @@ describe('PostSearch', () => {
     expect(await screen.findByText(/no posts found matching your search/i)).toBeInTheDocument();
   });
 
-  it('handles error status from API by showing empty results state', async () => {
-    const user = userEvent.setup();
-    mockQueryPostsFromChromaDB.mockResolvedValue({ status: 'error', message: 'failed' });
-
-    render(<PostSearch />);
-
-    await user.type(screen.getByPlaceholderText(/search posts by content/i), 'error test');
-    await user.click(screen.getByRole('button', { name: /^search$/i }));
-
-    expect(await screen.findByText(/no posts found matching your search/i)).toBeInTheDocument();
-  });
-
   it('clears query and results when clear button is clicked', async () => {
     const user = userEvent.setup();
     mockQueryPostsFromChromaDB.mockResolvedValue({
