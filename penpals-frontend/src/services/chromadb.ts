@@ -1,6 +1,10 @@
 // API Service for ChromaDB operations
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use environment variable or default to localhost:5001
+const runtimeImportMeta = import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+};
+const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
 
 export interface ChromaDBUploadResponse {
   status: 'success' | 'error';
