@@ -36,7 +36,7 @@ export default function PostSearch() {
         const searchResults: SearchResult[] = response.results.map(result => ({
           id: result.id,
           content: result.document,
-          authorName: result.metadata.authorName || 'Unknown',
+          authorName: result.metadata.authorName || result.metadata.author || 'Unknown',
           timestamp: result.metadata.timestamp || new Date().toISOString(),
           similarity: result.similarity,
           imageUrl: result.metadata.imageUrl,

@@ -8,12 +8,16 @@ import {
     DialogDescription,
     DialogFooter,
 } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Calendar, Clock, Link as LinkIcon, Lock, Copy, Trash2, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
+import { ClassroomService } from '../services/classroom';
+import { MeetingsService } from '../services/meetings';
+import { ApiClient } from '../services/api';
 
 const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
@@ -42,12 +46,29 @@ interface MeetingDetailsDialogProps {
 interface MeetingDetails {
     id: number;
     title: string;
+    description?: string | null;
     start_time: string;
     end_time: string;
-    web_link: string;
-    password?: string;
+    web_link?: string | null;
+    password?: string | null;
     creator_name: string;
     is_creator: boolean;
+    is_participant?: boolean;
+    visibility?: 'private' | 'public';
+    max_participants?: number | null;
+    invited_classrooms?: Array<{
+        invitation_id?: number;
+        receiver_id: number;
+        receiver_name: string;
+        status: 'pending' | 'accepted';
+        can_withdraw?: boolean;
+    }>;
+}
+
+interface InviteClassroomOption {
+    id: number;
+    name: string;
+    location: string;
 }
 
 export default function MeetingDetailsDialog({
@@ -59,9 +80,20 @@ export default function MeetingDetailsDialog({
     const [meeting, setMeeting] = useState<MeetingDetails | null>(null);
     const [loading, setLoading] = useState(false);
     const [isRescheduling, setIsRescheduling] = useState(false);
+    const [newTitle, setNewTitle] = useState<string>('');
     const [newDate, setNewDate] = useState<string>('');
     const [newTime, setNewTime] = useState<string>('');
     const [durationMinutes, setDurationMinutes] = useState<number>(30);
+    const [newDescription, setNewDescription] = useState<string>('');
+    const [newVisibility, setNewVisibility] = useState<'private' | 'public'>('private');
+    const [newMaxParticipants, setNewMaxParticipants] = useState<string>('20');
+    const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
+    const [withdrawingInvitationId, setWithdrawingInvitationId] = useState<number | null>(null);
+    const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
+    const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
+    const [inviteSearch, setInviteSearch] = useState<string>('');
+    const [selectedInviteeIds, setSelectedInviteeIds] = useState<number[]>([]);
+    const [isInviting, setIsInviting] = useState<boolean>(false);
 
     useEffect(() => {
         if (open && meetingId) {
@@ -70,33 +102,62 @@ export default function MeetingDetailsDialog({
         }
     }, [open, meetingId]);
 
+    useEffect(() => {
+        if (!open || !meeting?.is_creator) return;
+
+        let isCancelled = false;
+        const loadClassrooms = async () => {
+            setIsLoadingInvitees(true);
+            try {
+                const response = await ClassroomService.fetchAllClassrooms();
+                if (isCancelled) return;
+
+                const parsedClassrooms = response.classrooms
+                    .map((item) => ({
+                        id: Number.parseInt(String(item.id), 10),
+                        name: item.name,
+                        location: item.location || '',
+                    }))
+                    .filter((item) => Number.isFinite(item.id));
+
+                setAvailableInvitees(parsedClassrooms);
+            } catch (error) {
+                if (!isCancelled) {
+                    toast.error('Failed to load classrooms for invitations');
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsLoadingInvitees(false);
+                }
+            }
+        };
+
+        loadClassrooms();
+        return () => {
+            isCancelled = true;
+        };
+    }, [open, meeting?.is_creator]);
+
     const fetchMeetingDetails = async (id: number) => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('penpals_token');
-            if (!token) return;
-
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setMeeting(data);
-                // Initialize Reschedule inputs
-                const startDate = new Date(data.start_time);
-                const endDate = new Date(data.end_time);
-                const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
-                setNewDate(startDate.toISOString().split('T')[0]);
-                setNewTime(startDate.toTimeString().slice(0, 5));
-                setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
-            } else {
-                toast.error("Failed to load meeting details");
-                onOpenChange(false);
-            }
+            const data = await ApiClient.get(`/webex/meeting/${id}`);
+            setMeeting(data);
+            // Initialize Reschedule inputs
+            const startDate = new Date(data.start_time);
+            const endDate = new Date(data.end_time);
+            const duration = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+            setNewTitle(data.title || '');
+            setNewDescription(data.description || '');
+            setNewDate(startDate.toISOString().split('T')[0]);
+            setNewTime(startDate.toTimeString().slice(0, 5));
+            setDurationMinutes(ALLOWED_DURATIONS.includes(duration) ? duration : 30);
+            setNewVisibility(data.visibility === 'public' ? 'public' : 'private');
+            setNewMaxParticipants(data.max_participants ? String(data.max_participants) : '20');
         } catch (error) {
             console.error(error);
-            toast.error("Error loading meeting details");
+            toast.error("Failed to load meeting details");
+            onOpenChange(false);
         } finally {
             setLoading(false);
         }
@@ -112,27 +173,22 @@ export default function MeetingDetailsDialog({
         if (!confirm("Are you sure you want to cancel this meeting? This action cannot be undone.")) return;
 
         try {
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                toast.success("Meeting cancelled successfully");
-                onMeetingUpdated();
-                onOpenChange(false);
-            } else {
-                const error = await response.json();
-                toast.error(error.msg || "Failed to cancel meeting");
-            }
-        } catch (error) {
-            toast.error("Error cancelling meeting");
+            await ApiClient.delete(`/webex/meeting/${meeting.id}`);
+            toast.success("Meeting cancelled successfully");
+            onMeetingUpdated();
+            onOpenChange(false);
+        } catch (err: any) {
+            toast.error(err.message || "Error cancelling meeting");
         }
     };
 
     const handleReschedule = async () => {
         if (!meeting || !newDate || !newTime) return;
+        const trimmedTitle = newTitle.trim();
+        if (!trimmedTitle) {
+            toast.error('Meeting title cannot be empty.');
+            return;
+        }
 
         try {
             const startDateTime = new Date(`${newDate}T${newTime}`);
@@ -148,33 +204,137 @@ export default function MeetingDetailsDialog({
                 return;
             }
 
+            let parsedCapacity: number | undefined;
+            if (newVisibility === 'public') {
+                parsedCapacity = Number.parseInt(newMaxParticipants, 10);
+                if (!Number.isFinite(parsedCapacity) || parsedCapacity < 2) {
+                    toast.error('Public meetings require a capacity of at least 2.');
+                    return;
+                }
+            }
+
             const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
 
-            const token = localStorage.getItem('penpals_token');
-            const response = await fetch(`http://127.0.0.1:5001/api/webex/meeting/${meeting.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    start_time: startDateTime.toISOString(),
-                    end_time: endDateTime.toISOString()
-                })
+            await ApiClient.put(`/webex/meeting/${meeting.id}`, {
+                title: trimmedTitle,
+                description: newDescription.trim(),
+                start_time: startDateTime.toISOString(),
+                end_time: endDateTime.toISOString(),
+                visibility: newVisibility,
+                max_participants: newVisibility === 'public' ? parsedCapacity : null,
             });
+            toast.success("Meeting rescheduled successfully");
+            onMeetingUpdated();
+            fetchMeetingDetails(meeting.id);
+            setIsRescheduling(false);
+        } catch (err: any) {
+            toast.error(err.message || "Error rescheduling meeting");
+        }
+    };
 
-            if (response.ok) {
-                toast.success("Meeting rescheduled successfully");
-                onMeetingUpdated();
-                // Refresh details
-                fetchMeetingDetails(meeting.id);
-                setIsRescheduling(false);
-            } else {
-                const error = await response.json();
-                toast.error(error.msg || "Failed to reschedule meeting");
+    const handleSaveSettings = async () => {
+        if (!meeting) return;
+
+        const trimmedTitle = newTitle.trim();
+        if (!trimmedTitle) {
+            toast.error('Meeting title cannot be empty.');
+            return;
+        }
+
+        let parsedCapacity: number | null = null;
+        if (newVisibility === 'public') {
+            const parsed = Number.parseInt(newMaxParticipants, 10);
+            if (!Number.isFinite(parsed) || parsed < 2) {
+                toast.error('Public meetings require a capacity of at least 2.');
+                return;
             }
-        } catch (error) {
-            toast.error("Error rescheduling meeting");
+            parsedCapacity = parsed;
+        }
+
+        try {
+            setIsSavingSettings(true);
+            await ApiClient.put(`/webex/meeting/${meeting.id}`, {
+                title: trimmedTitle,
+                description: newDescription.trim(),
+                visibility: newVisibility,
+                max_participants: parsedCapacity,
+            });
+            toast.success('Meeting settings updated');
+            onMeetingUpdated();
+            await fetchMeetingDetails(meeting.id);
+        } catch (err: any) {
+            toast.error(err.message || 'Error updating meeting settings');
+        } finally {
+            setIsSavingSettings(false);
+        }
+    };
+
+    const handleJoinMeeting = async () => {
+        if (!meeting) return;
+
+        if (meeting.visibility === 'public' && !meeting.is_creator && !meeting.is_participant) {
+            try {
+                const data = await ApiClient.post(`/meetings/${meeting.id}/join`);
+                const link = data?.meeting?.web_link;
+                toast.success(data?.msg || 'Joined meeting');
+                onMeetingUpdated();
+                await fetchMeetingDetails(meeting.id);
+                if (link) window.open(link, '_blank');
+                return;
+            } catch (err: any) {
+                toast.error(err.message || 'Error joining meeting');
+                return;
+            }
+        }
+
+        if (meeting.web_link) {
+            window.open(meeting.web_link, '_blank');
+            return;
+        }
+
+        toast.error('Meeting link is not available yet');
+    };
+
+    const handleInviteClassrooms = async () => {
+        if (!meeting || selectedInviteeIds.length === 0) {
+            toast.error('Select at least one classroom to invite.');
+            return;
+        }
+
+        try {
+            setIsInviting(true);
+            const response = await MeetingsService.inviteToMeeting(meeting.id, selectedInviteeIds);
+
+            if (response.invitations.length > 0) {
+                toast.success(`${response.invitations.length} invitation(s) sent`);
+            } else {
+                toast.error(response.msg || 'No new invitations were created');
+            }
+
+            setSelectedInviteeIds([]);
+            setInviteSearch('');
+            await fetchMeetingDetails(meeting.id);
+            onMeetingUpdated();
+        } catch (error: any) {
+            toast.error(error?.message || 'Failed to send invitations');
+        } finally {
+            setIsInviting(false);
+        }
+    };
+
+    const handleWithdrawInvitation = async (invitationId: number) => {
+        if (!meeting) return;
+
+        try {
+            setWithdrawingInvitationId(invitationId);
+            await ApiClient.post(`/webex/invitations/${invitationId}/cancel`);
+            toast.success('Invitation withdrawn');
+            await fetchMeetingDetails(meeting.id);
+            onMeetingUpdated();
+        } catch (err: any) {
+            toast.error(err.message || 'Error withdrawing invitation');
+        } finally {
+            setWithdrawingInvitationId(null);
         }
     };
 
@@ -186,9 +346,11 @@ export default function MeetingDetailsDialog({
     const latestDate = new Date();
     latestDate.setDate(today.getDate() + SCHEDULE_WINDOW_DAYS);
 
+    const inviteQuery = inviteSearch.trim().toLowerCase();
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+            <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                         <Calendar className="text-purple-600" size={24} />
@@ -200,9 +362,10 @@ export default function MeetingDetailsDialog({
                 </DialogHeader>
 
                 {loading ? (
-                    <div className="py-8 text-center text-slate-500">Loading details...</div>
+                    <div className="px-6 pb-6 py-8 text-center text-slate-500">Loading details...</div>
                 ) : (
-                    <div className="space-y-6 py-4">
+                    <ScrollArea className="max-h-[600px]">
+                        <div className="space-y-6 py-4 pr-4">
 
                         {/* Time Display */}
                         <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
@@ -227,13 +390,14 @@ export default function MeetingDetailsDialog({
                                 <div className="flex gap-2">
                                     <Input
                                         readOnly
-                                        value={meeting.web_link}
+                                        value={meeting.web_link || 'Link will be created when the first participant joins'}
                                         className="bg-slate-50 dark:bg-slate-800 font-mono text-xs"
                                     />
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        onClick={() => handleCopy(meeting.web_link, "Link")}
+                                        onClick={() => meeting.web_link && handleCopy(meeting.web_link, "Link")}
+                                        disabled={!meeting.web_link}
                                     >
                                         <Copy size={16} />
                                     </Button>
@@ -261,16 +425,168 @@ export default function MeetingDetailsDialog({
                                     </div>
                                 </div>
                             )}
+
+                            <div className="space-y-2">
+                                <Label className="text-slate-700 dark:text-slate-300">Currently invited</Label>
+                                {meeting.invited_classrooms && meeting.invited_classrooms.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {meeting.invited_classrooms.map((invitee) => (
+                                            <div key={invitee.receiver_id} className="flex items-center justify-between gap-2 rounded border border-slate-200 dark:border-slate-700 px-2 py-1">
+                                                <Badge variant="secondary" className="gap-1">
+                                                    {invitee.receiver_name} ({invitee.status})
+                                                </Badge>
+                                                {meeting.is_creator && invitee.can_withdraw && invitee.invitation_id && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-6 text-xs text-red-600 hover:text-red-700"
+                                                        disabled={withdrawingInvitationId === invitee.invitation_id}
+                                                        onClick={() => handleWithdrawInvitation(invitee.invitation_id!)}
+                                                    >
+                                                        {withdrawingInvitationId === invitee.invitation_id ? 'Withdrawing...' : 'Withdraw'}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">No active invitations yet.</p>
+                                )}
+                            </div>
                         </div>
 
                         {/* Actions for Creator */}
                         {meeting.is_creator && (
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+                                <div className="space-y-2 mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <Label className="text-xs">Meeting settings</Label>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Title</Label>
+                                        <Input
+                                            value={newTitle}
+                                            onChange={(e) => setNewTitle(e.target.value)}
+                                            className="bg-white dark:bg-slate-900"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Description</Label>
+                                        <textarea
+                                            value={newDescription}
+                                            onChange={(e) => setNewDescription(e.target.value)}
+                                            placeholder="Add meeting details for participants"
+                                            className="w-full min-h-[72px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
+                                        />
+                                    </div>
+                                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={newVisibility === 'public'}
+                                            onChange={(e) => setNewVisibility(e.target.checked ? 'public' : 'private')}
+                                            className="rounded border-slate-400"
+                                        />
+                                        Make this meeting public
+                                    </label>
+                                    {newVisibility === 'public' && (
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Maximum participants</Label>
+                                            <Input
+                                                type="number"
+                                                min={2}
+                                                value={newMaxParticipants}
+                                                onChange={(e) => setNewMaxParticipants(e.target.value)}
+                                                className="bg-white dark:bg-slate-900"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleSaveSettings}
+                                            disabled={isSavingSettings}
+                                        >
+                                            {isSavingSettings ? 'Saving...' : 'Save Settings'}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 mb-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                                    <Label className="text-xs">Invite classrooms</Label>
+                                    <Input
+                                        value={inviteSearch}
+                                        onChange={(e) => setInviteSearch(e.target.value)}
+                                        placeholder="Search classrooms by name or location"
+                                        className="bg-white dark:bg-slate-900"
+                                    />
+
+                                    {selectedInviteeIds.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {selectedInviteeIds.map((id) => {
+                                                const invitee = availableInvitees.find((item) => item.id === id);
+                                                if (!invitee) return null;
+                                                return (
+                                                    <Badge
+                                                        key={id}
+                                                        className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-pointer"
+                                                        onClick={() => setSelectedInviteeIds((prev) => prev.filter((value) => value !== id))}
+                                                    >
+                                                        {invitee.name} ×
+                                                    </Badge>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <div className="max-h-32 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+                                        {isLoadingInvitees ? (
+                                            <div className="text-xs text-slate-500">Loading classrooms...</div>
+                                        ) : !inviteQuery ? (
+                                            <div className="text-xs text-slate-500">Start typing to search classrooms.</div>
+                                        ) : (
+                                            availableInvitees
+                                                .filter((item) => {
+                                                    if (selectedInviteeIds.includes(item.id)) return false;
+                                                    return item.name.toLowerCase().includes(inviteQuery) || item.location.toLowerCase().includes(inviteQuery);
+                                                })
+                                                .slice(0, 8)
+                                                .map((item) => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => setSelectedInviteeIds((prev) => [...prev, item.id])}
+                                                        className="w-full text-left px-2 py-1 rounded text-xs bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
+                                                    >
+                                                        {item.name}
+                                                        {item.location ? ` • ${item.location}` : ''}
+                                                    </button>
+                                                ))
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleInviteClassrooms}
+                                            disabled={isInviting || selectedInviteeIds.length === 0}
+                                        >
+                                            {isInviting ? 'Sending...' : 'Send Invites'}
+                                        </Button>
+                                    </div>
+                                </div>
+
                                 {isRescheduling ? (
                                     <div className="space-y-4 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                                         <h4 className="font-medium text-blue-900 dark:text-blue-100 flex items-center gap-2">
                                             <CalendarClock size={16} /> Reschedule Meeting
                                         </h4>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">Title</Label>
+                                            <Input
+                                                value={newTitle}
+                                                onChange={e => setNewTitle(e.target.value)}
+                                                className="bg-white dark:bg-slate-900"
+                                            />
+                                        </div>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Date</Label>
@@ -304,6 +620,30 @@ export default function MeetingDetailsDialog({
                                                 ))}
                                             </div>
                                         </div>
+                                        <div className="space-y-2 p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                            <Label className="text-xs">Meeting Visibility</Label>
+                                            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newVisibility === 'public'}
+                                                    onChange={(e) => setNewVisibility(e.target.checked ? 'public' : 'private')}
+                                                    className="rounded border-slate-400"
+                                                />
+                                                Make this meeting public
+                                            </label>
+                                            {newVisibility === 'public' && (
+                                                <div className="space-y-1">
+                                                    <Label className="text-xs">Maximum participants</Label>
+                                                    <Input
+                                                        type="number"
+                                                        min={2}
+                                                        value={newMaxParticipants}
+                                                        onChange={(e) => setNewMaxParticipants(e.target.value)}
+                                                        className="bg-white dark:bg-slate-900"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                         <div className="flex gap-2 justify-end">
                                             <Button variant="ghost" size="sm" onClick={() => setIsRescheduling(false)}>Cancel</Button>
                                             <Button size="sm" onClick={handleReschedule}>Save Changes</Button>
@@ -326,7 +666,13 @@ export default function MeetingDetailsDialog({
                                         </Button>
                                         <Button
                                             className="bg-purple-600 hover:bg-purple-700"
-                                            onClick={() => window.open(meeting.web_link, '_blank')}
+                                            onClick={() => {
+                                                if (meeting.web_link) {
+                                                    window.open(meeting.web_link, '_blank');
+                                                } else {
+                                                    toast.error('Meeting link is not available yet');
+                                                }
+                                            }}
                                         >
                                             Join Now
                                         </Button>
@@ -338,13 +684,14 @@ export default function MeetingDetailsDialog({
                         {!meeting.is_creator && (
                             <Button
                                 className="w-full bg-purple-600 hover:bg-purple-700"
-                                onClick={() => window.open(meeting.web_link, '_blank')}
+                                onClick={handleJoinMeeting}
                             >
-                                Join Meeting
+                                {meeting.visibility === 'public' && !meeting.is_participant ? 'Join Meeting' : 'Open Meeting'}
                             </Button>
                         )}
 
-                    </div>
+                        </div>
+                    </ScrollArea>
                 )}
             </DialogContent>
         </Dialog >

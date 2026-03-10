@@ -15,14 +15,19 @@ export const fetchPosts = async (): Promise<Post[]> => {
     }));
 };
 
-export const createPost = async (content: string, imageUrl?: string, quotedPostId?: string): Promise<Post> => {
-    const data = await ApiClient.post<{ msg: string; post: any }>('/posts', { content, imageUrl, quotedPostId });
+export const createPost = async (content: string, imageUrl?: string, classroomId?: string): Promise<Post> => {
+    const data = await ApiClient.post<{ msg: string; post: any }>('/posts', { content, imageUrl, classroomId });
 
     return {
         ...data.post,
         timestamp: new Date(data.post.timestamp)
     };
 };
+
+export const deletePost = async (postId: string): Promise<void> => {
+    await ApiClient.delete(`/posts/${postId}`);
+};
+
 
 export const likePost = async (postId: string): Promise<number> => {
     const data = await ApiClient.post<{ msg: string; likes: number }>(`/posts/${postId}/like`);

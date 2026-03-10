@@ -16,7 +16,8 @@
         "width": 800,
         "height": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "useHttpsScheme": true
       }
     ],
     "security": {
@@ -32,6 +33,9 @@
     },
     "active": true,
     "targets": "all",
+    "macOS": {
+      "infoPlist": "Info.plist"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

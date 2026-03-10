@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react';
+import logoImage from './assets/PenPals_Logo.png';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import MapView from './components/MapView';
 import SidePanel from './components/SidePanel';
 import LoginDialog from './components/LoginDialog';
 import ChatBot from './components/ChatBot';
+import AccountDialog from './components/AccountDialog';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
 import { Account, Classroom } from './types';
-import { GraduationCap, Moon, Sun, LogOut, Menu, RotateCw, MessageCircle } from 'lucide-react';
+import { GraduationCap, LogOut, Menu, RotateCw, MessageCircle } from 'lucide-react';
 import { Post } from './components/PostCreator';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from './components/ui/sheet';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
-import { AuthService, ClassroomService, WebexService } from './services';
-import { fetchPosts, createPost, likePost, unlikePost, PostResponse } from './services/posts';
+import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
+import { fetchPosts, createPost, deletePost } from './services/posts';
 import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
 
@@ -69,10 +71,15 @@ function AppContent() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [showChatBot, setShowChatBot] = useState(false);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
   const [loginError, setLoginError] = useState<string>('');
   const [signupError, setSignupError] = useState<string>('');
   const [authLoading, setAuthLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [selectedNetworkUrl, setSelectedNetworkUrl] = useState<string | null>(() => ApiClient.getSelectedBaseUrl());
+  const [networkHistory, setNetworkHistory] = useState<string[]>(() => ApiClient.getBaseUrlHistory());
+
+  const defaultNetworkUrl = ApiClient.getDefaultBaseUrl();
 
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | undefined>();
   const [accounts, setAccounts] = useState<Account[]>([EMPTY_ACCOUNT]);
@@ -84,7 +91,6 @@ function AppContent() {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [loadingClassrooms, setLoadingClassrooms] = useState(true);
 
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
   const currentAccount = accounts.find(acc => acc.id === currentAccountId) || EMPTY_ACCOUNT;
 
@@ -111,7 +117,8 @@ function AppContent() {
                 interests: c.interests || [],
                 availability: availability,
                 size: c.class_size,
-                description: `Friends: ${c.friends_count || 0}`
+                description: c.description || `Friends: ${c.friends_count || 0}`,
+                avatar: c.avatar || ''
               };
             });
 
@@ -154,6 +161,11 @@ function AppContent() {
     handleWebExCallback();
 
     const checkAuthStatus = async () => {
+      if (!selectedNetworkUrl) {
+        setInitialLoading(false);
+        return;
+      }
+
       if (AuthService.isAuthenticated()) {
         setAuthLoading(true);
         try {
@@ -166,7 +178,8 @@ function AppContent() {
             classroomName: classroom.name,
             location: classroom.location || 'Unknown',
             size: classroom.class_size || 20,
-            description: `Classroom managed by ${userData.account.email}`,
+            description: classroom.description || `Classroom managed by ${userData.account.email}`,
+            avatar: classroom.avatar || '',
             interests: classroom.interests || [],
             schedule: transformAvailability(classroom.availability),
             // Use coordinates from backend if available, otherwise use default location (London)
@@ -208,14 +221,6 @@ function AppContent() {
         const fetchedPosts = await fetchPosts();
         setPosts(fetchedPosts);
 
-        // Initialize likedPosts set based on backend data
-        const initialLikedPosts = new Set<string>();
-        fetchedPosts.forEach(p => {
-          if (p.isLiked) {
-            initialLikedPosts.add(p.id);
-          }
-        });
-        setLikedPosts(initialLikedPosts);
       } catch (error) {
         console.error("Failed to fetch posts:", error);
         toast.error("Failed to load posts");
@@ -227,6 +232,14 @@ function AppContent() {
     checkAuthStatus();
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedNetworkUrl) {
+      return;
+    }
+
+    ApiClient.setBaseUrl(selectedNetworkUrl);
+  }, [selectedNetworkUrl]);
 
   const handleClassroomSelect = (classroom: Classroom) => {
     setSelectedClassroom(classroom);
@@ -287,45 +300,66 @@ function AppContent() {
     setCurrentAccountId(newAccount.id);
   };
 
-  const handleAccountDelete = (accountId: string) => {
-    const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
-    const deletedAccount = accounts.find(acc => acc.id === accountId);
+  const handleAccountDelete = async (accountId: string) => {
+    try {
+      // Call backend to actually delete the classroom
+      const numericId = parseInt(accountId, 10);
+      if (!isNaN(numericId)) {
+        await ClassroomService.deleteClassroom(numericId);
+      }
 
-    // If we're deleting the last classroom, create a new empty one
-    if (filteredAccounts.length === 0) {
-      const newAccount: Account = {
-        id: `account-${Date.now()}`,
-        classroomName: 'New Classroom',
-        location: 'Unknown',
-        size: 10,
-        description: '',
-        interests: [],
-        schedule: {},
-        // Inherit coordinates from the deleted account, or use default if not available
-        x: deletedAccount?.x ?? -0.1278,
-        y: deletedAccount?.y ?? 51.5074,
-      };
-      setAccounts([newAccount]);
-      setCurrentAccountId(newAccount.id);
-      toast.success('Classroom deleted. New classroom created.');
-    } else {
-      // Sort remaining classrooms alphabetically and switch to the first one
-      const sortedAccounts = [...filteredAccounts].sort((a, b) =>
-        a.classroomName.localeCompare(b.classroomName)
-      );
-      setAccounts(filteredAccounts);
-      setCurrentAccountId(sortedAccounts[0].id);
-      toast.success('Classroom deleted.');
+      const filteredAccounts = accounts.filter(acc => acc.id !== accountId);
+      const deletedAccount = accounts.find(acc => acc.id === accountId);
+
+      // If we're deleting the last classroom, create a new empty one
+      if (filteredAccounts.length === 0) {
+        const newAccount: Account = {
+          id: `account-${Date.now()}`,
+          classroomName: 'New Classroom',
+          location: 'Unknown',
+          size: 10,
+          description: '',
+          avatar: '',
+          interests: [],
+          schedule: {},
+          // Inherit coordinates from the deleted account, or use default if not available
+          x: deletedAccount?.x ?? -0.1278,
+          y: deletedAccount?.y ?? 51.5074,
+        };
+        setAccounts([newAccount]);
+        setCurrentAccountId(newAccount.id);
+        toast.success('Classroom deleted. Default local classroom created.');
+      } else {
+        // Sort remaining classrooms alphabetically and switch to the first one
+        const sortedAccounts = [...filteredAccounts].sort((a, b) =>
+          a.classroomName.localeCompare(b.classroomName)
+        );
+        setAccounts(filteredAccounts);
+        setCurrentAccountId(sortedAccounts[0].id);
+        toast.success('Classroom deleted.');
+      }
+    } catch (error: any) {
+      console.error('Failed to delete classroom:', error);
+      toast.error(error.message || 'Failed to delete classroom. Please try again.');
     }
   };
 
   const handleLogin = async (email: string, password: string) => {
+    if (!selectedNetworkUrl) {
+      setLoginError('Please choose a network before logging in.');
+      return;
+    }
+
     setLoginError(''); // Clear previous errors
     setAuthLoading(true);
 
     try {
+      ApiClient.setBaseUrl(selectedNetworkUrl);
+
       // Call real backend authentication
       await AuthService.login({ email, password });
+      ApiClient.saveBaseUrlToHistory(selectedNetworkUrl);
+      setNetworkHistory(ApiClient.getBaseUrlHistory());
 
       // Get user data after successful login
       const userData = await AuthService.getCurrentUser();
@@ -336,7 +370,8 @@ function AppContent() {
         classroomName: classroom.name,
         location: classroom.location || 'Unknown',
         size: classroom.class_size || 20,
-        description: `Classroom managed by ${userData.account.email}`,
+        description: classroom.description || `Classroom managed by ${userData.account.email}`,
+        avatar: classroom.avatar || '',
         interests: classroom.interests || [],
         schedule: transformAvailability(classroom.availability),
         // Use coordinates from backend if available, otherwise use default location (London)
@@ -387,15 +422,24 @@ function AppContent() {
   };
 
   const handleSignup = async (email: string, password: string, classroomName: string, location?: SelectedLocation) => {
+    if (!selectedNetworkUrl) {
+      setSignupError('Please choose a network before signing up.');
+      return;
+    }
+
     setSignupError(''); // Clear previous errors
     setAuthLoading(true);
 
     try {
+      ApiClient.setBaseUrl(selectedNetworkUrl);
+
       // Register account with backend
       await AuthService.register({ email, password });
 
       // Login with new account
       await AuthService.login({ email, password });
+      ApiClient.saveBaseUrlToHistory(selectedNetworkUrl);
+      setNetworkHistory(ApiClient.getBaseUrlHistory());
 
       // Create first classroom with provided location
       const classroomResult = await ClassroomService.createClassroom({
@@ -465,13 +509,30 @@ function AppContent() {
     toast.success('Logged out successfully');
   };
 
+  const handleNetworkChange = (baseUrl: string) => {
+    const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+    const hasChanged = selectedNetworkUrl !== normalizedBaseUrl;
+
+    if (hasChanged && AuthService.isAuthenticated()) {
+      AuthService.logout();
+      setIsAuthenticated(false);
+    }
+
+    ApiClient.setBaseUrl(normalizedBaseUrl);
+    setSelectedNetworkUrl(normalizedBaseUrl);
+    setNetworkHistory(ApiClient.getBaseUrlHistory());
+    setLoginError('');
+    setSignupError('');
+  };
+
   const handleReload = () => {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string, quotedPost?: Post['quotedPost']) => {
+  const handleCreatePost = async (content: string, imageUrl?: string) => {
     try {
-      const newPost = await createPost(content, imageUrl, quotedPost?.id);
+      const newPost = await createPost(content, imageUrl, currentAccountId);
+
 
       // Update local state
       setPosts([newPost, ...posts]);
@@ -499,76 +560,18 @@ function AppContent() {
     }
   };
 
-  const handleLikePost = async (postId: string) => {
-    // Determine current state
-    const isLiked = likedPosts.has(postId);
-
-    if (isLiked) {
-      // UNLIKE FLOW
-
-      // Optimistic update
-      setPosts(prevPosts => prevPosts.map(post =>
-        post.id === postId ? { ...post, likes: Math.max(0, post.likes - 1) } : post
-      ));
-
-      setLikedPosts(prev => {
-        const next = new Set(prev);
-        next.delete(postId);
-        return next;
-      });
-
-      try {
-        const newLikes = await unlikePost(postId);
-        // Update with server truth
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: newLikes } : post
-        ));
-      } catch (error: any) {
-        // Revert on error
-        console.error("Failed to unlike post:", error);
-
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: post.likes + 1 } : post
-        ));
-
-        setLikedPosts(prev => new Set([...prev, postId]));
-
-        toast.error(`Failed to unlike post: ${error.message || 'Unknown error'}`);
-      }
-
-    } else {
-      // LIKE FLOW
-
-      // Update UI immediately (optimistic)
-      setPosts(prevPosts => prevPosts.map(post =>
-        post.id === postId ? { ...post, likes: post.likes + 1 } : post
-      ));
-      setLikedPosts(prev => new Set([...prev, postId]));
-
-      try {
-        const newLikes = await likePost(postId);
-        // Update with server truth
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: newLikes } : post
-        ));
-      } catch (error: any) {
-        // Revert on error
-        console.error("Failed to like post:", error);
-
-        setPosts(prevPosts => prevPosts.map(post =>
-          post.id === postId ? { ...post, likes: post.likes - 1 } : post
-        ));
-
-        setLikedPosts(prev => {
-          const next = new Set(prev);
-          next.delete(postId);
-          return next;
-        });
-
-        toast.error(`Failed to like post: ${error.message || 'Unknown error'}`);
-      }
+  const handleDeletePost = async (postId: string) => {
+    const snapshot = posts;
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    try {
+      await deletePost(postId);
+      toast.success('Post deleted');
+    } catch (error: any) {
+      setPosts(snapshot); // revert
+      toast.error(error.message || 'Failed to delete post');
     }
   };
+
 
   const myPosts = posts.filter(post => post.authorId === currentAccountId);
 
@@ -577,9 +580,7 @@ function AppContent() {
     return (
       <div className="h-screen w-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center animate-pulse">
-            <GraduationCap className="w-6 h-6 text-white" />
-          </div>
+          <img src={logoImage} alt="PenPals Logo" className="w-[200px] h-auto animate-pulse" />
           <p className="text-slate-600 dark:text-slate-400">Loading...</p>
         </div>
       </div>
@@ -600,6 +601,10 @@ function AppContent() {
           }}
           onLogin={handleLogin}
           onSignup={handleSignup}
+          selectedNetworkUrl={selectedNetworkUrl}
+          defaultNetworkUrl={defaultNetworkUrl}
+          previousNetworks={networkHistory}
+          onNetworkChange={handleNetworkChange}
           loginError={loginError}
           signupError={signupError}
           isLoading={authLoading}
@@ -614,11 +619,8 @@ function AppContent() {
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 md:px-6 py-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-slate-900 dark:text-slate-100 text-xl hidden sm:block">PenPals AI</h1>
-            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block">powered by MirrorMirror</span>
+            <img src={logoImage} alt="PenPals" className="h-10 w-auto" />
+            <span className="text-sm text-slate-600 dark:text-slate-400 hidden md:block font-medium">powered by MirrorMirror</span>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <Button
@@ -639,18 +641,14 @@ function AppContent() {
             >
               <MessageCircle className="w-5 h-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-              title="Toggle Theme"
+
+            <button 
+              onClick={() => setShowAccountDialog(true)}
+              className="w-8 h-8 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:focus:ring-offset-slate-800"
+              title="Account Settings"
             >
-              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </Button>
-            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-300 text-sm">
-              {currentAccount.classroomName.charAt(0)}
-            </div>
+              {currentAccount.avatar || currentAccount.classroomName.charAt(0)}
+            </button>
             <Button
               variant="ghost"
               size="icon"
@@ -695,8 +693,7 @@ function AppContent() {
             allPosts={posts}
             myPosts={myPosts}
             onCreatePost={handleCreatePost}
-            onLikePost={handleLikePost}
-            likedPosts={likedPosts}
+            onDeletePost={handleDeletePost}
             loadingPosts={loadingPosts}
           />
         </div>
@@ -726,8 +723,7 @@ function AppContent() {
                   allPosts={posts}
                   myPosts={myPosts}
                   onCreatePost={handleCreatePost}
-                  onLikePost={handleLikePost}
-                  likedPosts={likedPosts}
+                  onDeletePost={handleDeletePost}
                   loadingPosts={loadingPosts}
                 />
               </div>
@@ -775,6 +771,14 @@ function AppContent() {
           />
         </DialogContent>
       </Dialog>
+
+      <AccountDialog 
+        open={showAccountDialog} 
+        onOpenChange={setShowAccountDialog} 
+        currentAccount={currentAccount} 
+        accounts={accounts} 
+        onAccountUpdate={handleAccountUpdate} 
+      />
 
       <Toaster />
     </div>

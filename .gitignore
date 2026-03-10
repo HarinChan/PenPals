@@ -26,9 +26,10 @@ penpals-backend/src/build/*
 penpals-backend/src/app.spec
 penpals-frontend/src-tauri/build
 penpals-frontend/build
-penpals-frontend/src-tauri/gen/*
-penpals-frontend/src-tauri/target/*
+penpals-frontend/src-tauri/gen/
+penpals-frontend/src-tauri/target/
 penpals-frontend/src-tauri/Cargo.toml
+penpals-frontend/src-tauri/Cargo.lock
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*

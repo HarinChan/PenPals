@@ -67,6 +67,7 @@ def create_classroom():
         classroom = Profile(
             account_id=account.id,
             name=name,
+            description=data.get('description'), # Added description
             location=data.get('location', '').strip() or None,
             lattitude=latitude,  # keeping original typo for consistency
             longitude=longitude,
@@ -143,6 +144,8 @@ def get_classroom(classroom_id):
         if not classroom:
             return jsonify({"msg": "Classroom not found"}), 404
         
+        # The instruction implies 'description' should be in the formatted output.
+        # Assuming PenpalsHelper.format_classroom_response is updated to include it.
         classroom_data = PenpalsHelper.format_classroom_response(classroom, include_friends=True)
         
         return jsonify({"classroom": classroom_data}), 200
@@ -179,6 +182,12 @@ def update_classroom(classroom_id):
             if len(name) > 100:
                 return jsonify({"msg": "Classroom name too long (max 100 characters)"}), 400
             classroom.name = name
+        
+        if 'description' in data: # Added description update
+            classroom.description = data['description']
+        
+        if 'avatar' in data:
+            classroom.avatar = data['avatar']
         
         if 'location' in data:
             location = data['location']

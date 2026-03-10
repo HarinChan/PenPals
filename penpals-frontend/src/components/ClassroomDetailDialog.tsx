@@ -9,9 +9,12 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
+import { Input } from './ui/input';
 import { Calendar, MapPin, Users, Phone, Clock, Heart, Globe } from 'lucide-react';
 import type { Classroom } from '../types';
 import { toast } from 'sonner';
+import { ClassroomService } from '../services/classroom';
+import { ApiClient } from '../services/api';
 
 interface ClassroomDetailDialogProps {
   classroom: Classroom | null;
@@ -21,6 +24,7 @@ interface ClassroomDetailDialogProps {
   friendshipStatus: 'none' | 'pending' | 'accepted' | 'received';
   onToggleFriend?: (classroom: Classroom) => void;
   accountLon?: number;
+  onMeetingCreated?: () => void;
 }
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,6 +32,12 @@ const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
 const CURRENT_HOUR = new Date().getHours();
 const CURRENT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()];
+
+interface InviteClassroomOption {
+  id: number;
+  name: string;
+  location: string;
+}
 
 // Helper function to get timezone from coordinates
 import tzLookup from 'tz-lookup';
@@ -121,6 +131,7 @@ export default function ClassroomDetailDialog({
   friendshipStatus = 'none',
   onToggleFriend,
   accountLon = 0,
+  onMeetingCreated,
 }: ClassroomDetailDialogProps) {
   const [showScheduleCall, setShowScheduleCall] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -128,6 +139,14 @@ export default function ClassroomDetailDialog({
   const [selectedStartMinutes, setSelectedStartMinutes] = useState<number | null>(null);
   const [localTime, setLocalTime] = useState<string>('');
   const [localDate, setLocalDate] = useState<string>('');
+  const [isPublicMeeting, setIsPublicMeeting] = useState<boolean>(false);
+  const [maxParticipants, setMaxParticipants] = useState<string>('20');
+  const [customMeetingTitle, setCustomMeetingTitle] = useState<string>('');
+  const [customMeetingDescription, setCustomMeetingDescription] = useState<string>('');
+  const [availableInvitees, setAvailableInvitees] = useState<InviteClassroomOption[]>([]);
+  const [isLoadingInvitees, setIsLoadingInvitees] = useState<boolean>(false);
+  const [inviteSearch, setInviteSearch] = useState<string>('');
+  const [selectedInviteeIds, setSelectedInviteeIds] = useState<number[]>([]);
 
   // Update local time every second
   useEffect(() => {
@@ -144,7 +163,45 @@ export default function ClassroomDetailDialog({
     }
   }, [classroom]);
 
+  useEffect(() => {
+    if (!open || !showScheduleCall) return;
+
+    let isCancelled = false;
+    const loadClassrooms = async () => {
+      setIsLoadingInvitees(true);
+      try {
+        const response = await ClassroomService.fetchAllClassrooms();
+        if (isCancelled) return;
+
+        const parsedClassrooms = response.classrooms
+          .map((item) => ({
+            id: Number.parseInt(String(item.id), 10),
+            name: item.name,
+            location: item.location || '',
+          }))
+          .filter((item) => Number.isFinite(item.id));
+
+        setAvailableInvitees(parsedClassrooms);
+      } catch (error) {
+        if (!isCancelled) {
+          toast.error('Failed to load classrooms for invitations');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingInvitees(false);
+        }
+      }
+    };
+
+    loadClassrooms();
+    return () => {
+      isCancelled = true;
+    };
+  }, [open, showScheduleCall]);
+
   if (!classroom) return null;
+
+  const primaryInviteeId = Number.parseInt(String(classroom.id), 10);
 
   // Get classroom timezone for display
   const classroomTimezone = getClassroomTimezone(classroom.lat, classroom.lon);
@@ -217,12 +274,19 @@ export default function ClassroomDetailDialog({
 
   const allStartTimes = getAllStartTimes();
   const hasValidTimeRange = allStartTimes.some(m => isTimeSelectable(m));
+  const inviteQuery = inviteSearch.trim().toLowerCase();
 
   // Get account timezone for display
   const accountTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const handleScheduleCall = () => {
     setShowScheduleCall(true);
+    setIsPublicMeeting(false);
+    setMaxParticipants('20');
+    setCustomMeetingTitle('');
+    setCustomMeetingDescription('');
+    setInviteSearch('');
+    setSelectedInviteeIds([]);
     if (dateOptions.length > 0) {
       setSelectedDate(dateOptions[0].value);
       setDurationMinutes(30);
@@ -233,42 +297,29 @@ export default function ClassroomDetailDialog({
     }
   };
 
-  const createMeeting = async (title: string, start: Date | null, end: Date | null) => {
+  const createMeeting = async (
+    title: string,
+    start: Date | null,
+    end: Date | null,
+    options?: { isPublic?: boolean; maxParticipants?: number; classroomIds?: number[]; description?: string }
+  ) => {
     try {
-      const token = localStorage.getItem('penpals_token');
-      if (!token) {
-        toast.error("You must be logged in to schedule a meeting");
-        return;
-      }
-
-      const response = await fetch('http://127.0.0.1:5001/api/webex/meeting', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          title,
-          start_time: start?.toISOString(),
-          end_time: end?.toISOString(),
-          classroom_id: classroom.id
-        })
+      const data = await ApiClient.post('/webex/meeting', {
+        title,
+        start_time: start?.toISOString(),
+        end_time: end?.toISOString(),
+        description: options?.description,
+        classroom_ids: options?.classroomIds,
+        is_public: !!options?.isPublic,
+        max_participants: options?.maxParticipants,
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        if (response.status === 403) {
-          toast.error("Please connect WebEx in Account settings first");
-          return null;
-        }
-        throw new Error(error.msg || 'Failed to schedule meeting');
-      }
-
-      const data = await response.json();
-      return data.invitation;
-
+      return data;
     } catch (error: any) {
-      toast.error(error.message);
+      if (error.status === 403) {
+        toast.error("Please connect WebEx in Account settings first");
+        return null;
+      }
+      toast.error(error.message || 'Failed to schedule meeting');
       return null;
     }
   };
@@ -298,13 +349,46 @@ export default function ClassroomDetailDialog({
       return;
     }
 
-    toast.promise(createMeeting(`Call with ${classroom.name}`, startTime, endTime), {
+    let parsedCapacity: number | undefined = undefined;
+    if (isPublicMeeting) {
+      parsedCapacity = Number.parseInt(maxParticipants, 10);
+      if (!Number.isFinite(parsedCapacity) || parsedCapacity < 2) {
+        toast.error('Public meetings require a capacity of at least 2.');
+        return;
+      }
+    }
+
+    const meetingTitle = customMeetingTitle.trim() || `Call with ${classroom.name}`;
+    const inviteeIds = new Set<number>();
+    if (!isPublicMeeting && Number.isFinite(primaryInviteeId)) {
+      inviteeIds.add(primaryInviteeId);
+    }
+    selectedInviteeIds.forEach((id) => {
+      if (Number.isFinite(id)) {
+        inviteeIds.add(id);
+      }
+    });
+
+    if (!isPublicMeeting && inviteeIds.size === 0) {
+      toast.error('Select at least one classroom to invite.');
+      return;
+    }
+
+    toast.promise(createMeeting(meetingTitle, startTime, endTime, {
+      isPublic: isPublicMeeting,
+      maxParticipants: parsedCapacity,
+      classroomIds: Array.from(inviteeIds),
+      description: customMeetingDescription.trim(),
+    }), {
       loading: 'Sending meeting invitation...',
       success: (data) => {
         if (data) {
           setShowScheduleCall(false);
           setSelectedStartMinutes(null);
-          return `Meeting invitation sent to ${classroom.name}!`;
+          onMeetingCreated?.();
+          return isPublicMeeting
+            ? 'Public meeting published successfully!'
+            : `Meeting invitation sent to ${classroom.name}!`;
         }
         throw new Error('Failed');
       },
@@ -400,6 +484,26 @@ export default function ClassroomDetailDialog({
 
                 {dateOptions.length > 0 ? (
                   <>
+                    <div className="space-y-2">
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Meeting Title (optional)</label>
+                      <Input
+                        value={customMeetingTitle}
+                        onChange={(event) => setCustomMeetingTitle(event.target.value)}
+                        placeholder={`Call with ${classroom.name}`}
+                        className="bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm text-slate-700 dark:text-slate-300">Meeting Description (optional)</label>
+                      <textarea
+                        value={customMeetingDescription}
+                        onChange={(event) => setCustomMeetingDescription(event.target.value)}
+                        placeholder="What is this meeting about?"
+                        className="w-full min-h-[72px] rounded-md border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"
+                      />
+                    </div>
+
                     <div className="space-y-2">
                       <label className="text-sm text-slate-700 dark:text-slate-300">Select Day (up to 2 weeks)</label>
                       <div className="flex gap-2 flex-wrap">
@@ -505,6 +609,90 @@ export default function ClassroomDetailDialog({
                             </p>
                           </div>
                         )}
+
+                        <div className="space-y-3 p-3 rounded-lg border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-800">
+                          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={isPublicMeeting}
+                              onChange={(e) => setIsPublicMeeting(e.target.checked)}
+                              className="rounded border-slate-400"
+                            />
+                            Make this meeting public (any logged-in classroom can join)
+                          </label>
+
+                          {isPublicMeeting && (
+                            <div className="space-y-1">
+                              <label className="text-xs text-slate-600 dark:text-slate-400">Maximum participants</label>
+                              <input
+                                type="number"
+                                min={2}
+                                value={maxParticipants}
+                                onChange={(e) => setMaxParticipants(e.target.value)}
+                                className="w-full h-9 px-3 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                              />
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-slate-600 dark:text-slate-400">Invite classrooms (search)</label>
+                            {!isPublicMeeting && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                Primary invitee: {classroom.name}
+                              </div>
+                            )}
+                            <Input
+                              value={inviteSearch}
+                              onChange={(event) => setInviteSearch(event.target.value)}
+                              placeholder="Search classrooms by name or location"
+                              className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100"
+                            />
+
+                            {selectedInviteeIds.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {selectedInviteeIds.map((id) => {
+                                  const invitee = availableInvitees.find((item) => item.id === id);
+                                  if (!invitee) return null;
+                                  return (
+                                    <Badge
+                                      key={id}
+                                      className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-pointer"
+                                      onClick={() => setSelectedInviteeIds((prev) => prev.filter((value) => value !== id))}
+                                    >
+                                      {invitee.name} ×
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div className="max-h-36 overflow-y-auto space-y-1 rounded border border-slate-200 dark:border-slate-600 p-2">
+                              {isLoadingInvitees ? (
+                                <div className="text-xs text-slate-500 dark:text-slate-400">Loading classrooms...</div>
+                              ) : !inviteQuery ? (
+                                <div className="text-xs text-slate-500 dark:text-slate-400">Start typing to search classrooms.</div>
+                              ) : (
+                                availableInvitees
+                                  .filter((item) => {
+                                    if (!isPublicMeeting && item.id === primaryInviteeId) return false;
+                                    if (selectedInviteeIds.includes(item.id)) return false;
+                                    return item.name.toLowerCase().includes(inviteQuery) || item.location.toLowerCase().includes(inviteQuery);
+                                  })
+                                  .slice(0, 8)
+                                  .map((item) => (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => setSelectedInviteeIds((prev) => [...prev, item.id])}
+                                      className="w-full text-left px-2 py-1 rounded text-xs bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200"
+                                    >
+                                      {item.name}
+                                      {item.location ? ` • ${item.location}` : ''}
+                                    </button>
+                                  ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -576,15 +764,14 @@ export default function ClassroomDetailDialog({
               disabled={!isCurrentlyAvailable()}
               onClick={async () => {
                 toast.promise(createMeeting(`Instant Call with ${classroom.name}`, null, null), {
-                  loading: 'Starting call...',
+                  loading: 'Sending instant meeting invitation...',
                   success: (data) => {
                     if (data) {
-                      window.open(data.web_link, '_blank');
-                      return 'Call started in new tab';
+                      return 'Invitation sent. The call starts after acceptance.';
                     }
                     throw new Error("Failed");
                   },
-                  error: 'Failed to start call'
+                  error: 'Failed to send invitation'
                 });
               }}
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed"

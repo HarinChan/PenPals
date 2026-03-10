@@ -83,6 +83,7 @@ export async function queryPostsFromChromaDB(
       body: JSON.stringify({
         query,
         n_results: nResults,
+        where: { source: 'post' },
       }),
     });
 
