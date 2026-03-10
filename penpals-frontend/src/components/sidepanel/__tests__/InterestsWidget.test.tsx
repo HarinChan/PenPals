@@ -24,6 +24,8 @@ describe('InterestsWidget', () => {
     id: '1',
     classroomName: 'Physics Lab',
     location: 'Building A',
+    x: 0,
+    y: 0,
     size: 30,
     description: 'Physics experiments',
     avatar: '🔬',
