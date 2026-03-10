@@ -3,7 +3,7 @@
 **PenPals AI** is a **video portal and social network** designed for classrooms, enabling instant meaningful conversation betweeen students and teachers worldwide. Built for primary and secondary schools (including SEND), PenPals AI simplifies global collaboration by automating matchmaking, integrating real-time meetings via **Webex**, and providing **live translations powered by Intels OpenVino platform** -- al throgh an intuitive, map-based interface.
 
 Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngine) is the scalable, general-purpose engine that powers PenPals AI. It handles user profiles, friend networks, posts, ands real-time interactions, kaing it adaptable for other collaborative applications.
-
+python -m nuitka --standalone --onefile --include-package-data=my_app --enable-plugin=anti-bloat --output-dir=dist run.py
 ---
 
 ## Key Features
