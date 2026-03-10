@@ -7,8 +7,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
 load_dotenv(dotenv_path=SRC_ROOT / '.env')
-from main import application, db
-from models import Account, Profile, Post, Notification, RecentCall, FriendRequest, Relation
+from src.main import application, db
+from src.models import Account, Profile, Post, Notification, RecentCall, FriendRequest, Relation
 import bcrypt
 import hashlib
 import os

@@ -6,9 +6,9 @@ and automatic bidirectional connections between classrooms.
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Account, Profile, Relation
-from chromadb_service import ChromaDBService
-from penpals_helper import PenpalsHelper
+from src.models import db, Account, Profile, Relation
+from src.chromadb_service import ChromaDBService
+from src.penpals_helper import PenpalsHelper
 import json
 
 classroom_bp = Blueprint('classroom', __name__)

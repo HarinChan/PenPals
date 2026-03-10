@@ -29,11 +29,11 @@ load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
 load_dotenv(dotenv_path=SRC_ROOT / '.env')
 
 from sqlalchemy import desc, inspect, text
-from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
-from webex_service import WebexService
+from src.models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
+from src.webex_service import WebexService
 
-from account import account_bp
-from classroom import classroom_bp
+from src.account import account_bp
+from src.classroom import classroom_bp
 
 MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
@@ -271,8 +271,8 @@ def print_tables():
     with application.app_context():
         print("Registered tables:", [table.name for table in db.metadata.sorted_tables])
 
-from chromadb_service import ChromaDBService
-from openvino_chat import generate_reply
+from src.chromadb_service import ChromaDBService
+from src.openvino_chat import generate_reply
 
 application = Flask(__name__)
 CORS(application)

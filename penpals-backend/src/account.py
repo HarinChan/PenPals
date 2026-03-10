@@ -6,8 +6,8 @@ Handles account CRUD operations, password updates, and multi-classroom managemen
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash
-from models import db, Account, Profile
-from penpals_helper import PenpalsHelper
+from src.models import db, Account, Profile
+from src.penpals_helper import PenpalsHelper
 
 account_bp = Blueprint('account', __name__)
 
