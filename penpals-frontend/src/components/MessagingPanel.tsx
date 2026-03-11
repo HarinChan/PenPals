@@ -34,6 +34,7 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
 
   // Load conversations
   useEffect(() => {
@@ -47,9 +48,12 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
     }
   }, [selectedConversation]);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom only when new messages are added (not on reactions/edits)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > prevMessageCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   const loadConversations = async () => {
@@ -74,7 +78,8 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
     try {
       // Load latest 30 messages
       const response = await MessagingService.getMessages(conversationId, 1, 30);
-      setMessages(response.messages);
+      // Reverse to show oldest first (newest at bottom)
+      setMessages(response.messages.reverse());
       
       // Mark all as read
       await MessagingService.markAllRead(conversationId);
@@ -203,8 +208,6 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
       // Update message reactions locally
       setMessages(prev => prev.map(msg => {
         if (msg.id !== messageId) return msg;
-        
-        const reactions = msg.reactions || [];
         
         if (response.action === 'removed') {
           // Remove reaction

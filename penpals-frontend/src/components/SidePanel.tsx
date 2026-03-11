@@ -383,19 +383,34 @@ export default function SidePanel({
     try {
       await FriendsService.sendRequest(classroom.id);
 
-      // Optimistically add to some local state or just notify user
-      // Since it's pending, we might not show it in "Friends" list yet, 
-      // but maybe show "Pending Sent" button state.
-      // For now, let's just show success message.
-      toast.success(`Friend request sent to ${classroom.name}`);
+      // Optimistically update local state to show sent request immediately
+      const newSentRequest: FriendRequest = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        fromClassroomId: currentAccount.id,
+        fromClassroomName: currentAccount.classroomName,
+        toClassroomId: classroom.id,
+        toClassroomName: classroom.name,
+        timestamp: new Date(),
+        location: classroom.location,
+        status: 'pending'
+      };
 
-      // If we want to show it as "Pending" immediately without reload:
-      // We would need a "sentRequests" array in user state, which we don't strictly have deep implemented yet.
-      // But we can reload user data.
+      onAccountUpdate({
+        ...currentAccount,
+        sentFriendRequests: [...(currentAccount.sentFriendRequests || []), newSentRequest]
+      });
+
+      toast.success(`Friend request sent to ${classroom.name}`);
 
     } catch (error: any) {
       console.error("Failed to send friend request", error);
       toast.error(error.message || "Failed to send request");
+      
+      // Revert optimistic update on error
+      onAccountUpdate({
+        ...currentAccount,
+        sentFriendRequests: (currentAccount.sentFriendRequests || []).filter(r => !r.id.startsWith('temp-'))
+      });
     }
   };
 
@@ -410,9 +425,12 @@ export default function SidePanel({
     );
     if (received) return 'received';
 
-    // We don't track sent requests cleanly in frontend state yet without reload, 
-    // unless we add 'sentRequests' to Account interface. 
-    // For now, 'none' is safe fallback.
+    // Check if we sent a request to them
+    const sent = (currentAccount.sentFriendRequests || []).find(r => 
+      r.toClassroomId === classroomId.toString()
+    );
+    if (sent) return 'pending';
+
     return 'none';
   };
 
