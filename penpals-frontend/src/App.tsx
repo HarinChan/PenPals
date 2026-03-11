@@ -17,45 +17,8 @@ import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
 import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
 import { fetchPosts, createPost, deletePost } from './services/posts';
-import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
-
-// Helper to transform backend availability to frontend schedule format
-const transformAvailability = (backendAvailability: any): { [day: string]: number[] } => {
-  if (!backendAvailability) return {};
-
-  // Case 1: Already in the correct format { "Mon": [9, 10], ... }
-  if (typeof backendAvailability === 'object' && !Array.isArray(backendAvailability)) {
-    // Basic validation to ensure values are arrays
-    const cleanSchedule: { [day: string]: number[] } = {};
-    Object.entries(backendAvailability).forEach(([day, hours]) => {
-      if (Array.isArray(hours)) {
-        cleanSchedule[day] = hours.map(h => Number(h)).filter(h => !isNaN(h));
-      }
-    });
-    return cleanSchedule;
-  }
-
-  // Case 2: Array format [{day: 'Mon', time: '10:00'}, ...] (Legacy/Alternative)
-  const schedule: { [day: string]: number[] } = {};
-  if (Array.isArray(backendAvailability)) {
-    backendAvailability.forEach(slot => {
-      // Handle both string time "10:00" and potential other formats if they exist
-      if (slot.day && slot.time) {
-        const hour = parseInt(slot.time.split(':')[0], 10);
-        if (!isNaN(hour)) {
-          if (!schedule[slot.day]) {
-            schedule[slot.day] = [];
-          }
-          if (!schedule[slot.day].includes(hour)) {
-            schedule[slot.day].push(hour);
-          }
-        }
-      }
-    });
-  }
-  return schedule;
-};
+import { mapClassroomDetailsToClassroom, transformAvailability } from './utils/classroomMapping';
 
 export default function App() {
   return (
@@ -104,23 +67,7 @@ function AppContent() {
           // Transform backend data to frontend model
           const mappedClassrooms: Classroom[] = response.classrooms
             .filter(c => c.latitude && c.longitude) // Only show classrooms with location
-            .map(c => {
-              // Transform availability from [{day, time}] to {[day]: [hours]}
-              const availability = transformAvailability(c.availability);
-
-              return {
-                id: String(c.id),
-                name: c.name,
-                location: c.location || 'Unknown Location',
-                lat: parseFloat(c.latitude || '0'),
-                lon: parseFloat(c.longitude || '0'),
-                interests: c.interests || [],
-                availability: availability,
-                size: c.class_size,
-                description: c.description || `Friends: ${c.friends_count || 0}`,
-                avatar: c.avatar || ''
-              };
-            });
+            .map(mapClassroomDetailsToClassroom);
 
           setClassrooms(mappedClassrooms);
         } catch (error) {
@@ -193,9 +140,11 @@ function AppContent() {
 
           if (convertedAccounts.length > 0) {
             setAccounts(convertedAccounts);
-            setCurrentAccountId(convertedAccounts[0].id);
+            // Restore last-selected classroom from localStorage, fall back to first
+            const saved = localStorage.getItem('penpals_currentAccountId');
+            const restored = saved && convertedAccounts.find(a => a.id === saved);
+            setCurrentAccountId(restored ? saved! : convertedAccounts[0].id);
           } else {
-            // No classrooms yet, keep default state
             setAccounts([EMPTY_ACCOUNT]);
             setCurrentAccountId(EMPTY_ACCOUNT.id);
           }
@@ -247,6 +196,7 @@ function AppContent() {
 
   const handleAccountChange = (accountId: string) => {
     setCurrentAccountId(accountId);
+    localStorage.setItem('penpals_currentAccountId', accountId);
   };
 
   const handleAccountUpdate = (updatedAccount: Account) => {
@@ -385,9 +335,11 @@ function AppContent() {
 
       if (convertedAccounts.length > 0) {
         setAccounts(convertedAccounts);
-        setCurrentAccountId(convertedAccounts[0].id);
+        // Restore last-selected classroom, fall back to first
+        const saved = localStorage.getItem('penpals_currentAccountId');
+        const restored = saved && convertedAccounts.find(a => a.id === saved);
+        setCurrentAccountId(restored ? saved! : convertedAccounts[0].id);
       } else {
-        // No classrooms yet, keep default state
         setAccounts([EMPTY_ACCOUNT]);
         setCurrentAccountId(EMPTY_ACCOUNT.id);
       }

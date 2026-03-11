@@ -293,6 +293,7 @@ export default function SidePanel({
         latitude: currentAccount.y.toString(),
         longitude: currentAccount.x.toString(),
         class_size: newClassroomData.size,
+        description: newClassroomData.description.trim() || undefined,
         interests: [],
       });
 
@@ -673,6 +674,9 @@ export default function SidePanel({
               onCreatePost={onCreatePost}
               onDeletePost={onDeletePost}
               isLoading={loadingPosts}
+              currentAccount={currentAccount}
+              classrooms={classrooms}
+              onAccountUpdate={onAccountUpdate}
             />
           </TabsContent>
 

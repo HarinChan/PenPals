@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import PostCreator, { Post } from './PostCreator';
 import PostFeed from './PostFeed';
 import PostSearch from './PostSearch';
+import type { Account, Classroom } from '../types';
 
 interface FeedPanelProps {
   currentUserName: string;
@@ -13,6 +14,9 @@ interface FeedPanelProps {
   onCreatePost: (content: string, imageUrl?: string) => void;
   onDeletePost: (postId: string) => void;
   isLoading?: boolean;
+  currentAccount: Account;
+  classrooms: Classroom[];
+  onAccountUpdate: (account: Account) => void;
 }
 
 export default function FeedPanel({
@@ -24,6 +28,9 @@ export default function FeedPanel({
   onCreatePost,
   onDeletePost,
   isLoading,
+  currentAccount,
+  classrooms,
+  onAccountUpdate,
 }: FeedPanelProps) {
   return (
     <div className="space-y-4">
@@ -48,15 +55,15 @@ export default function FeedPanel({
           </TabsList>
 
           <TabsContent value="all" className="p-4">
-            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
+            <PostFeed posts={allPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
 
           <TabsContent value="my" className="p-4">
-            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} />
+            <PostFeed posts={myPosts} isLoading={isLoading} currentUserId={currentUserId} onDeletePost={onDeletePost} currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
 
           <TabsContent value="search" className="p-4">
-            <PostSearch />
+            <PostSearch currentAccount={currentAccount} classrooms={classrooms} onAccountUpdate={onAccountUpdate} />
           </TabsContent>
         </Tabs>
       </Card>
