@@ -57,16 +57,25 @@
       },
       "devDependencies": {
             "@tauri-apps/cli": "^2.9.4",
+            "@vitest/coverage-v8": "^2.1.8",
+            "@testing-library/jest-dom": "^6.6.3",
+            "@testing-library/react": "^16.2.0",
+            "@testing-library/user-event": "^14.6.1",
             "@types/node": "^20.10.0",
             "@types/react": "^19.2.7",
             "@types/react-dom": "^19.2.3",
             "@types/tz-lookup": "^6.1.2",
             "@vitejs/plugin-react-swc": "^3.10.2",
-            "vite": "6.3.5"
+            "jsdom": "^25.0.1",
+            "vite": "6.3.5",
+            "vitest": "^2.1.8"
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
+            "build": "vite build",
+            "test": "vitest run",
+            "test:watch": "vitest",
+            "test:coverage": "vitest run --coverage"
       },
       "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
