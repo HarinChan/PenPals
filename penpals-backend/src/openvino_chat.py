@@ -2,6 +2,7 @@ import os
 import threading
 import queue
 from typing import Any, Dict, Iterable, List
+import openvino_tokenizers
 
 try:
     import openvino_genai as ov_genai
