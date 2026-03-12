@@ -3,6 +3,7 @@ __pycache__
 .env
 .idea
 .venv
+venv
 .vscode
 *.local
 *.log
