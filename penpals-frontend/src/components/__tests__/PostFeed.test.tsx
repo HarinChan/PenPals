@@ -3,19 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Post } from '../PostCreator';
+import type { Account, Classroom } from '../../types';
 
-const mockGetClassroom = vi.fn();
 const mockToastError = vi.fn();
-
-vi.mock('../../services/classroom', () => ({
-  ClassroomService: {
-    getClassroom: (...args: any[]) => mockGetClassroom(...args),
-  },
-}));
 
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: any[]) => mockToastError(...args),
+    success: vi.fn(),
   },
 }));
 
@@ -43,6 +38,30 @@ const makePost = (overrides: Partial<Post> = {}): Post => ({
   ...overrides,
 });
 
+const mockAccount: Account = {
+  id: '999',
+  classroomName: 'My Class',
+  location: 'London',
+  x: 0,
+  y: 0,
+  size: 20,
+  description: 'Test class',
+  interests: [],
+  schedule: {},
+  friends: [],
+};
+
+const makeClassroom = (overrides: Partial<Classroom> = {}): Classroom => ({
+  id: '101',
+  name: 'Classroom 101',
+  location: 'Paris',
+  lat: 48.85,
+  lon: 2.35,
+  interests: ['math'],
+  availability: { Mon: [9] },
+  ...overrides,
+});
+
 const renderPostFeed = (overrides: Partial<React.ComponentProps<typeof PostFeed>> = {}) => {
   const onDeletePost = vi.fn();
 
@@ -51,6 +70,9 @@ const renderPostFeed = (overrides: Partial<React.ComponentProps<typeof PostFeed>
       posts={[makePost()]}
       currentUserId="999"
       onDeletePost={onDeletePost}
+      currentAccount={mockAccount}
+      classrooms={[]}
+      onAccountUpdate={vi.fn()}
       {...overrides}
     />,
   );
@@ -84,36 +106,31 @@ describe('PostFeed', () => {
 
   it('loads classroom details when clicking another author avatar', async () => {
     const user = userEvent.setup();
-    mockGetClassroom.mockResolvedValue({
-      classroom: {
-        id: 101,
-        name: 'Classroom 101',
-        location: 'Paris',
-        latitude: '48.85',
-        longitude: '2.35',
-        interests: ['math'],
-        availability: [{ day: 'Mon', time: '09:00' }],
-        class_size: 25,
-        description: 'A class',
-      },
-    });
+    const classroom = makeClassroom({ id: '101', name: 'Classroom 101' });
 
-    renderPostFeed({ posts: [makePost({ authorId: '101', authorName: 'Alice' })], currentUserId: '999' });
+    renderPostFeed({
+      posts: [makePost({ authorId: '101', authorName: 'Alice' })],
+      currentUserId: '999',
+      classrooms: [classroom],
+    });
 
     const avatarButton = screen.getByTitle("View Alice's classroom");
     await user.click(avatarButton);
 
     await waitFor(() => {
-      expect(mockGetClassroom).toHaveBeenCalledWith(101);
       expect(screen.getByTestId('classroom-dialog')).toHaveTextContent('Classroom 101');
     });
   });
 
   it('shows toast error when classroom details fetch fails', async () => {
     const user = userEvent.setup();
-    mockGetClassroom.mockRejectedValue(new Error('failed'));
 
-    renderPostFeed({ posts: [makePost({ authorName: 'Bob', authorId: '202' })], currentUserId: '999' });
+    // No matching classroom in the list → should show error
+    renderPostFeed({
+      posts: [makePost({ authorName: 'Bob', authorId: '202' })],
+      currentUserId: '999',
+      classrooms: [],
+    });
 
     await user.click(screen.getByTitle("View Bob's classroom"));
 

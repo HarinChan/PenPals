@@ -39,7 +39,7 @@ describe('chromadb service', () => {
 
       const result = await uploadPostToChromaDB('post-123', 'Hello world!', metadata);
 
-      expect(fetch).toHaveBeenCalledWith('http://localhost:5001/api/documents/upload', {
+      expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:5001/api/documents/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +141,7 @@ describe('chromadb service', () => {
 
       const result = await queryPostsFromChromaDB('search term');
 
-      expect(fetch).toHaveBeenCalledWith('http://localhost:5001/api/documents/query', {
+      expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:5001/api/documents/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,7 +170,7 @@ describe('chromadb service', () => {
 
       const result = await queryPostsFromChromaDB('custom query', 10);
 
-      expect(fetch).toHaveBeenCalledWith('http://localhost:5001/api/documents/query', {
+      expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:5001/api/documents/query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -236,7 +236,7 @@ describe('chromadb service', () => {
 
       const result = await deletePostFromChromaDB('post-123');
 
-      expect(fetch).toHaveBeenCalledWith('http://localhost:5001/api/documents/delete', {
+      expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:5001/api/documents/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
