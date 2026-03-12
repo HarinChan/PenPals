@@ -11,7 +11,7 @@ interface FeedPanelProps {
   currentUserAvatar?: string;
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string) => void;
+  onCreatePost: (content: string, files?: File[]) => Promise<void> | void;
   onDeletePost: (postId: string) => void;
   isLoading?: boolean;
   currentAccount: Account;

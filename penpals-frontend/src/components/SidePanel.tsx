@@ -45,7 +45,7 @@ interface SidePanelProps {
   // Feed props
   allPosts: Post[];
   myPosts: Post[];
-  onCreatePost: (content: string, imageUrl?: string) => void;
+  onCreatePost: (content: string, files?: File[]) => Promise<void> | void;
   onDeletePost: (postId: string) => void;
   loadingPosts?: boolean;
 }

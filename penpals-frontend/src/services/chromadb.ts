@@ -1,4 +1,5 @@
 // API Service for ChromaDB operations
+import { ApiClient } from './api';
 
 // Use environment variable or default to localhost:5001
 const runtimeImportMeta = import.meta as ImportMeta & {
@@ -33,7 +34,7 @@ export interface PostMetadata {
   timestamp: string;
   likes: number;
   comments: number;
-  imageUrl?: string;
+  attachmentCount?: number;
 }
 
 /**
@@ -45,7 +46,7 @@ export async function uploadPostToChromaDB(
   metadata: PostMetadata
 ): Promise<ChromaDBUploadResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+    const response = await fetch(`${getApiBaseUrl()}/documents/upload`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +80,7 @@ export async function queryPostsFromChromaDB(
   nResults: number = 5
 ): Promise<ChromaDBQueryResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/query`, {
+    const response = await fetch(`${getApiBaseUrl()}/documents/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +115,7 @@ export async function deletePostFromChromaDB(postId: string): Promise<{
   deleted_ids?: string[];
 }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/delete`, {
+    const response = await fetch(`${getApiBaseUrl()}/documents/delete`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

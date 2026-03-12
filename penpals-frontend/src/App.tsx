@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 import { Toaster } from './components/Toaster';
 import { ApiClient, AuthService, ClassroomService, WebexService } from './services';
-import { fetchPosts, createPost, deletePost } from './services/posts';
+import { fetchPosts, createPost, deletePost, uploadPostAttachments } from './services/posts';
+import type { ClassroomMapData } from './services/classroom';
 import type { SelectedLocation } from './services/location';
 import { mapClassroomDetailsToClassroom, transformAvailability } from './utils/classroomMapping';
 
@@ -481,9 +482,10 @@ function AppContent() {
     window.location.reload();
   };
 
-  const handleCreatePost = async (content: string, imageUrl?: string) => {
+  const handleCreatePost = async (content: string, files?: File[]) => {
     try {
-      const newPost = await createPost(content, imageUrl, currentAccountId);
+      const uploadedAttachments = files?.length ? await uploadPostAttachments(files) : undefined;
+      const newPost = await createPost(content, uploadedAttachments);
 
 
       // Update local state
@@ -500,7 +502,7 @@ function AppContent() {
           timestamp: newPost.timestamp.toISOString(),
           likes: newPost.likes,
           comments: newPost.comments,
-          imageUrl: newPost.imageUrl,
+          attachmentCount: newPost.attachments.length,
         });
       } catch (dbError) {
         console.warn('ChromaDB indexing failed:', dbError);
