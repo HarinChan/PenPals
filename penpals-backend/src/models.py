@@ -268,7 +268,7 @@ class Message(db.Model):
     content = db.Column(db.Text, nullable=False)
     message_type = db.Column(db.String(20), default='text', nullable=False)  # text, image, file, system
     attachment_url = db.Column(db.String(500), nullable=True)  # For images/files
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     edited_at = db.Column(db.DateTime, nullable=True)
     deleted = db.Column(db.Boolean, default=False)
     

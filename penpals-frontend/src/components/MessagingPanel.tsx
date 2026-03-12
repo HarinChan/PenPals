@@ -39,12 +39,30 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
   // Load conversations
   useEffect(() => {
     loadConversations();
+    
+    // Poll conversations list every 5 seconds
+    const interval = setInterval(() => {
+      loadConversations();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Load messages when conversation selected
   useEffect(() => {
     if (selectedConversation) {
       loadMessages(selectedConversation.id);
+    }
+  }, [selectedConversation]);
+
+  // Poll for new messages when in a conversation
+  useEffect(() => {
+    if (selectedConversation) {
+      const interval = setInterval(() => {
+        loadMessages(selectedConversation.id);
+      }, 3000); // Poll every 3 seconds
+
+      return () => clearInterval(interval);
     }
   }, [selectedConversation]);
 
@@ -76,10 +94,9 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
 
   const loadMessages = async (conversationId: number) => {
     try {
-      // Load latest 30 messages
+      // Load latest 30 messages (backend already returns oldest first)
       const response = await MessagingService.getMessages(conversationId, 1, 30);
-      // Reverse to show oldest first (newest at bottom)
-      setMessages(response.messages.reverse());
+      setMessages(response.messages);
       
       // Mark all as read
       await MessagingService.markAllRead(conversationId);
@@ -203,31 +220,12 @@ export default function MessagingPanel({ currentAccount }: MessagingPanelProps) 
 
   const handleReaction = async (messageId: number, emoji: string) => {
     try {
-      const response = await MessagingService.addReaction(messageId, emoji);
+      await MessagingService.addReaction(messageId, emoji);
       
-      // Update message reactions locally
-      setMessages(prev => prev.map(msg => {
-        if (msg.id !== messageId) return msg;
-        
-        if (response.action === 'removed') {
-          // Remove reaction
-          return {
-            ...msg,
-            reactions: []
-          };
-        } else {
-          // Add reaction (replace any existing)
-          return {
-            ...msg,
-            reactions: [{
-              emoji,
-              count: 1,
-              profiles: [{ id: parseInt(currentAccount.id), name: currentAccount.classroomName }],
-              hasReacted: true
-            }]
-          };
-        }
-      }));
+      // Reload messages to get correct reactions from backend
+      if (selectedConversation) {
+        await loadMessages(selectedConversation.id);
+      }
     } catch (error: any) {
       console.error('Failed to add reaction:', error);
       toast.error('Failed to add reaction');
