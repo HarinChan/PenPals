@@ -73,8 +73,7 @@ Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngin
 
 ## Roadmap
 
-- [ ] Add live translation
-- [ ] Add support for group calls
+- [x] Add support for group calls
 - [x] Add WebEx integration
 - [x] Add real-time video
 - [x] Add matchmaking
