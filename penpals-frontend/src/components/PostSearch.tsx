@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Search, Loader2, X } from 'lucide-react';
+import { Search, Loader2, X, Languages, RotateCcw } from 'lucide-react';
 import { queryPostsFromChromaDB } from '../services/chromadb';
 import { Badge } from './ui/badge';
 import type { Attachment } from './PostCreator';
+import type { Account, Classroom } from '../types';
+import { FriendsService } from '../services/friends';
+import ClassroomDetailDialog from './ClassroomDetailDialog';
+import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 interface SearchResult {
   id: string;
@@ -171,6 +174,7 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
       if (response.status === 'success' && response.results) {
         const searchResults: SearchResult[] = response.results.map(result => ({
           id: result.id,
+          authorId: resolveClassroomId(result.id, result.metadata),
           content: result.document,
           authorName: result.metadata.authorName || result.metadata.author || 'Unknown',
           timestamp: result.metadata.timestamp || new Date().toISOString(),
@@ -307,49 +311,7 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
               <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                 {isSearching ? 'Searching...' : 'No posts found matching your search.'}
               </div>
-            ) : (
-              <div className="space-y-3">
-                {results.map((result) => (
-                  <Card
-                    key={result.id}
-                    className="p-3 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm shrink-0">
-                              {result.authorName.charAt(0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-slate-900 dark:text-slate-100 block truncate">
-                                {result.authorName}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {formatTimestamp(result.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <Badge
-                          className={`${getSimilarityColor(result.similarity)} text-white text-xs shrink-0`}
-                        >
-                          {(result.similarity * 100).toFixed(0)}% match
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                        {result.content}
-                      </p>
-                      {result.attachments.length > 0 && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400 italic">
-                          {result.attachments.length} attachment{result.attachments.length === 1 ? '' : 's'}
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
+            ) : null}
 
             {results.map(result => {
               const tx = getTx(result.id);
@@ -464,7 +426,7 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
                           </span>
                         )}
 
-                        {result.imageUrl && (
+                        {result.attachments.some((a) => a.mimeType?.startsWith('image/')) && (
                           <span className="inline-flex items-center gap-1 mt-2 text-xs text-slate-400 dark:text-slate-500
                             bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                             📷 Contains image
