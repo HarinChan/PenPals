@@ -29,11 +29,12 @@ load_dotenv(dotenv_path=BACKEND_ROOT / '.env')
 load_dotenv(dotenv_path=SRC_ROOT / '.env')
 
 from sqlalchemy import desc, inspect, text
-from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation
+from models import db, Account, Profile, Relation, Post, Meeting, FriendRequest, Notification, RecentCall, MeetingInvitation, Conversation, Message, MessageRead
 from webex_service import WebexService
 
 from account import account_bp
 from classroom import classroom_bp
+from messaging import messaging_bp
 
 MEETING_MIN_DURATION_MINUTES = 15
 MEETING_MAX_DURATION_MINUTES = 60
@@ -311,6 +312,7 @@ webex_service = WebexService()
 
 application.register_blueprint(account_bp)
 application.register_blueprint(classroom_bp)
+application.register_blueprint(messaging_bp)
 
 chroma_service = ChromaDBService(persist_directory="./chroma_db", collection_name="penpals_documents")
 
@@ -782,12 +784,14 @@ def get_current_user():
         # Fetch friends (relations)
         # We look for accepted relations where this classroom is either sender or receiver
         friends = []
+        seen_friend_ids = set()  # Track to avoid duplicates
         
         # Sent accepted requests (my friends)
         sent_relations = Relation.query.filter_by(from_profile_id=classroom.id, status='accepted').all()
         for rel in sent_relations:
             friend_profile = Profile.query.get(rel.to_profile_id)
-            if friend_profile:
+            if friend_profile and friend_profile.id not in seen_friend_ids:
+                seen_friend_ids.add(friend_profile.id)
                 friends.append({
                     "id": str(friend_profile.id),
                     "classroomId": str(friend_profile.id),
@@ -801,7 +805,8 @@ def get_current_user():
         received_relations = Relation.query.filter_by(to_profile_id=classroom.id, status='accepted').all()
         for rel in received_relations:
             friend_profile = Profile.query.get(rel.from_profile_id)
-            if friend_profile:
+            if friend_profile and friend_profile.id not in seen_friend_ids:
+                seen_friend_ids.add(friend_profile.id)
                 friends.append({
                     "id": str(friend_profile.id),
                     "classroomId": str(friend_profile.id),
@@ -2244,9 +2249,28 @@ def accept_friend_request():
         
     friend_request.status = 'accepted'
     
-    # Create two-way relation
-    rel1 = Relation(from_profile_id=friend_request.sender_profile_id, to_profile_id=friend_request.receiver_profile_id)
-    rel2 = Relation(from_profile_id=friend_request.receiver_profile_id, to_profile_id=friend_request.sender_profile_id)
+    # Check if relations already exist (update status if they do)
+    rel1 = Relation.query.filter_by(
+        from_profile_id=friend_request.sender_profile_id,
+        to_profile_id=friend_request.receiver_profile_id
+    ).first()
+    
+    rel2 = Relation.query.filter_by(
+        from_profile_id=friend_request.receiver_profile_id,
+        to_profile_id=friend_request.sender_profile_id
+    ).first()
+    
+    if rel1:
+        rel1.status = 'accepted'
+    else:
+        rel1 = Relation(from_profile_id=friend_request.sender_profile_id, to_profile_id=friend_request.receiver_profile_id, status='accepted')
+        db.session.add(rel1)
+    
+    if rel2:
+        rel2.status = 'accepted'
+    else:
+        rel2 = Relation(from_profile_id=friend_request.receiver_profile_id, to_profile_id=friend_request.sender_profile_id, status='accepted')
+        db.session.add(rel2)
     
     # Notify sender
     notif = Notification(
@@ -2257,7 +2281,7 @@ def accept_friend_request():
         related_id=str(receiver_profile.id)
     )
     
-    db.session.add_all([rel1, rel2, notif])
+    db.session.add(notif)
     db.session.commit()
     
     return jsonify({"msg": "Friend request accepted"}), 200

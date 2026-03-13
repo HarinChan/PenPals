@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { ChevronRight, ChevronLeft, User, BookOpen, Calendar, Search, Phone, Heart } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, BookOpen, Calendar, Search, Phone, Heart, MessageCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -28,7 +28,9 @@ import PublicMeetingsWidget from './sidepanel/PublicMeetingsWidget';
 import InvitationsWidget from './sidepanel/InvitationsWidget';
 import RecentCallsWidget from './sidepanel/RecentCallsWidget';
 import FriendsWidget from './sidepanel/FriendsWidget';
+import FriendRequestsWidget from './sidepanel/FriendRequestsWidget';
 import ClassroomsList from './sidepanel/ClassroomsList';
+import MessagingPanel from './MessagingPanel';
 
 
 
@@ -382,19 +384,34 @@ export default function SidePanel({
     try {
       await FriendsService.sendRequest(classroom.id);
 
-      // Optimistically add to some local state or just notify user
-      // Since it's pending, we might not show it in "Friends" list yet, 
-      // but maybe show "Pending Sent" button state.
-      // For now, let's just show success message.
-      toast.success(`Friend request sent to ${classroom.name}`);
+      // Optimistically update local state to show sent request immediately
+      const newSentRequest: FriendRequest = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        fromClassroomId: currentAccount.id,
+        fromClassroomName: currentAccount.classroomName,
+        toClassroomId: classroom.id,
+        toClassroomName: classroom.name,
+        timestamp: new Date(),
+        location: classroom.location,
+        status: 'pending'
+      };
 
-      // If we want to show it as "Pending" immediately without reload:
-      // We would need a "sentRequests" array in user state, which we don't strictly have deep implemented yet.
-      // But we can reload user data.
+      onAccountUpdate({
+        ...currentAccount,
+        sentFriendRequests: [...(currentAccount.sentFriendRequests || []), newSentRequest]
+      });
+
+      toast.success(`Friend request sent to ${classroom.name}`);
 
     } catch (error: any) {
       console.error("Failed to send friend request", error);
       toast.error(error.message || "Failed to send request");
+      
+      // Revert optimistic update on error
+      onAccountUpdate({
+        ...currentAccount,
+        sentFriendRequests: (currentAccount.sentFriendRequests || []).filter(r => !r.id.startsWith('temp-'))
+      });
     }
   };
 
@@ -403,13 +420,18 @@ export default function SidePanel({
     const friend = (currentAccount.friends || []).find(f => f.classroomId === classroomId);
     if (friend) return 'accepted';
 
-    // Check if we received a request from them
-    const received = (currentAccount.receivedFriendRequests || []).find(r => r.fromClassroomId === classroomId.toString());
+    // Check if we received a request from them (support both field names)
+    const received = (currentAccount.receivedFriendRequests || []).find(r => 
+      (r.fromClassroomId === classroomId.toString()) || (r.senderId === classroomId.toString())
+    );
     if (received) return 'received';
 
-    // We don't track sent requests cleanly in frontend state yet without reload, 
-    // unless we add 'sentRequests' to Account interface. 
-    // For now, 'none' is safe fallback.
+    // Check if we sent a request to them
+    const sent = (currentAccount.sentFriendRequests || []).find(r => 
+      r.toClassroomId === classroomId.toString()
+    );
+    if (sent) return 'pending';
+
     return 'none';
   };
 
@@ -435,20 +457,35 @@ export default function SidePanel({
     try {
       await FriendsService.acceptRequest(requestId, senderId);
 
-      // Optimistic Update
-      // Remove from requests
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
+      // Find the request to get sender details
+      const request = (currentAccount.receivedFriendRequests || []).find(r => 
+        ((r.fromClassroomId === senderId || r.senderId === senderId) || r.id === requestId)
+      );
 
-      // Add to friends
-      // We need classroom details for this. 
-      // If called from SidePanel list, we have `classroom` object. 
-      // If called from Notification, we might fetch it or just reload.
+      // Remove from requests (support both field names)
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => 
+        (r.fromClassroomId !== senderId && r.senderId !== senderId) && r.id !== requestId
+      );
 
-      // Easiest is to force reload user data if possible, or just update requests
-      onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
+      // Add to friends list
+      const newFriend = {
+        id: senderId,
+        classroomId: senderId,
+        classroomName: request?.senderName || request?.fromClassroomName || 'Unknown',
+        location: request?.location || request?.fromLocation || '',
+        addedDate: new Date().toISOString(),
+        friendshipStatus: 'accepted'
+      };
+
+      const updatedFriends = [...(currentAccount.friends || []), newFriend];
+
+      onAccountUpdate({ 
+        ...currentAccount, 
+        receivedFriendRequests: updatedRequests,
+        friends: updatedFriends
+      });
 
       toast.success("Friend request accepted!");
-      // Trigger a reload of user data in parent if possible, or we rely on next poll/action
 
     } catch (error) {
       console.error("Failed to accept request", error);
@@ -459,7 +496,9 @@ export default function SidePanel({
   const rejectFriendRequest = async (senderId: string, requestId?: string) => {
     try {
       await FriendsService.rejectRequest(requestId, senderId);
-      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => r.fromClassroomId !== senderId && r.id !== requestId);
+      const updatedRequests = (currentAccount.receivedFriendRequests || []).filter(r => 
+        (r.fromClassroomId !== senderId && r.senderId !== senderId) && r.id !== requestId
+      );
       onAccountUpdate({ ...currentAccount, receivedFriendRequests: updatedRequests });
       toast.success("Friend request rejected");
     } catch (error) {
@@ -565,12 +604,18 @@ export default function SidePanel({
       ) : (
         <Tabs defaultValue="controls" className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 p-2 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-slate-50 dark:bg-slate-900">
-            <TabsList className="flex-1 grid grid-cols-2 h-9 bg-transparent p-0 gap-1">
+            <TabsList className="flex-1 grid grid-cols-3 h-9 bg-transparent p-0 gap-1">
               <TabsTrigger
                 value="controls"
                 className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
               >
                 Classrooms
+              </TabsTrigger>
+              <TabsTrigger
+                value="messages"
+                className="text-slate-700 dark:text-slate-300 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-slate-100 data-[state=active]:shadow-sm rounded-md"
+              >
+                Messages
               </TabsTrigger>
               <TabsTrigger
                 value="feed"
@@ -647,6 +692,14 @@ export default function SidePanel({
               onCallClick={handleClassroomClick}
             />
 
+            <FriendRequestsWidget
+              currentAccount={currentAccount}
+              classrooms={classrooms}
+              onAcceptRequest={acceptFriendRequest}
+              onRejectRequest={rejectFriendRequest}
+              onClassroomClick={handleClassroomClick}
+            />
+
             <FriendsWidget
               currentAccount={currentAccount}
               classrooms={classrooms}
@@ -663,6 +716,11 @@ export default function SidePanel({
           </TabsContent>
 
 
+          <TabsContent value="messages" className="flex-1 m-0 p-0 overflow-hidden">
+            <div className="h-full p-6">
+              <MessagingPanel currentAccount={currentAccount} />
+            </div>
+          </TabsContent>
 
           <TabsContent value="feed" className="flex-1 m-0 p-6 space-y-6 overflow-y-auto">
             <FeedPanel

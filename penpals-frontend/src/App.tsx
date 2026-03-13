@@ -84,6 +84,43 @@ function AppContent() {
     }
   }, [isAuthenticated]);
 
+  // Poll for account updates (friend requests, notifications, etc.)
+  useEffect(() => {
+    if (isAuthenticated) {
+      const refreshAccountData = async () => {
+        try {
+          const userData = await AuthService.getCurrentUser();
+          
+          // Update accounts with fresh data (friend requests, notifications, etc.)
+          const convertedAccounts = userData.classrooms.map(classroom => ({
+            id: classroom.id.toString(),
+            classroomName: classroom.name,
+            location: classroom.location || 'Unknown',
+            size: classroom.class_size || 20,
+            description: classroom.description || `Classroom managed by ${userData.account.email}`,
+            avatar: classroom.avatar || '',
+            interests: classroom.interests || [],
+            schedule: transformAvailability(classroom.availability),
+            x: classroom.longitude ? parseFloat(classroom.longitude) : -0.1278,
+            y: classroom.latitude ? parseFloat(classroom.latitude) : 51.5074,
+            recentCalls: classroom.recent_calls || [],
+            friends: classroom.friends || [],
+            receivedFriendRequests: classroom.receivedFriendRequests || [],
+            notifications: userData.account.notifications || [],
+          }));
+
+          setAccounts(convertedAccounts);
+        } catch (error) {
+          console.error("Failed to refresh account data", error);
+        }
+      };
+
+      // Poll every 10 seconds for real-time updates
+      const interval = setInterval(refreshAccountData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
   // Check for existing authentication on component mount
   useEffect(() => {
     const handleWebExCallback = async () => {

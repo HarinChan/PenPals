@@ -8,6 +8,7 @@ export * from './chromadb';
 export * from './chat';
 export * from './webex';
 export * from './meetings';
+export * from './messaging';
 
 // Re-export commonly used types
 export type {
