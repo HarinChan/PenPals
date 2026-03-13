@@ -52,11 +52,28 @@ Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngin
 ```
 
 ---
+## Run Frontend Tests
+
+1. **Install Dependencies:**
+```bash
+    cd PenPals/penpals-frontend
+    npm install
+```
+
+2. **Run Tests:**
+```bash
+    npm run test
+```
+
+3. **Run Tests for Coverage
+```bash
+    npm run test:coverage
+```
+---
 
 ## Roadmap
 
-- [ ] Add live translation
-- [ ] Add support for group calls
+- [x] Add support for group calls
 - [x] Add WebEx integration
 - [x] Add real-time video
 - [x] Add matchmaking
