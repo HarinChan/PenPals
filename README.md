@@ -50,6 +50,19 @@ Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngin
     cd penpals-frontend
     npx tauri dev
 ```
+---
+## **Build the App:**
+1. **Follow the instructions to [Run the App](#getting-started)**
+2. **Compile the App**
+```bash
+    cd penpals-frontend
+    npx tauri build
+```
+3. **Run/Fetch your Executable**
+```bash
+    cd ..
+    ./penpals-frontend/src-tauri/target/release/app.exe
+```
 
 ---
 ## Run Frontend Tests
