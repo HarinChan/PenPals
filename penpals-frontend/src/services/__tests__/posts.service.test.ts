@@ -1,12 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchPosts, createPost, deletePost, likePost, unlikePost } from '../posts';
-import { ApiClient } from '../api';
+import {
+  fetchPosts,
+  createPost,
+  deletePost,
+  likePost,
+  unlikePost,
+  uploadPostAttachmentFile,
+  uploadPostAttachments,
+} from '../posts';
+import { ApiClient, ApiError } from '../api';
 
 vi.mock('../api', () => ({
+  ApiError: class MockApiError extends Error {
+    status: number;
+
+    constructor(message: string, status: number) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+    }
+  },
   ApiClient: {
     get: vi.fn(),
     post: vi.fn(),
     delete: vi.fn(),
+    request: vi.fn(),
   },
 }));
 
@@ -62,6 +80,35 @@ describe('posts service', () => {
       expect(ApiClient.get).toHaveBeenCalledWith('/posts');
       expect(result).toEqual([]);
     });
+
+    it('normalizes missing attachment arrays in post and quoted post', async () => {
+      vi.mocked(ApiClient.get).mockResolvedValue({
+        posts: [
+          {
+            id: 'post-with-quote',
+            content: 'Main post',
+            authorId: 'user-1',
+            timestamp: '2026-03-09T12:00:00Z',
+            likes: 0,
+            comments: 0,
+            quotedPost: {
+              id: 'quoted-1',
+              content: 'Quoted post',
+              authorId: 'user-2',
+              timestamp: '2026-03-09T10:00:00Z',
+              likes: 0,
+              comments: 0,
+            },
+          },
+        ],
+      } as any);
+
+      const [post] = await fetchPosts();
+
+      expect(post.attachments).toEqual([]);
+      expect(post.quotedPost?.attachments).toEqual([]);
+      expect(post.timestamp).toBeInstanceOf(Date);
+    });
   });
 
   describe('createPost', () => {
@@ -84,8 +131,7 @@ describe('posts service', () => {
 
       expect(ApiClient.post).toHaveBeenCalledWith('/posts', {
         content: 'New post content',
-        imageUrl: undefined,
-        classroomId: undefined,
+        attachments: [],
       });
       expect(result.id).toBe('new-post-1');
       expect(result.content).toBe('New post content');
@@ -93,7 +139,14 @@ describe('posts service', () => {
       expect(result.timestamp.toISOString()).toBe('2026-03-09T14:00:00.000Z');
     });
 
-    it('creates post with content and imageUrl', async () => {
+    it('creates post with content and attachments', async () => {
+      const mockAttachment = {
+        filename: 'image.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+        storageKey: 'tests/image.jpg',
+        url: 'https://example.com/image.jpg',
+      };
       const mockResponse = {
         msg: 'Post created',
         post: {
@@ -101,7 +154,7 @@ describe('posts service', () => {
           content: 'Post with image',
           authorId: 'user-1',
           timestamp: '2026-03-09T15:00:00Z',
-          imageUrl: 'https://example.com/image.jpg',
+          attachments: [mockAttachment],
           likes: 0,
           comments: 0,
         },
@@ -109,72 +162,127 @@ describe('posts service', () => {
 
       vi.mocked(ApiClient.post).mockResolvedValue(mockResponse as any);
 
-      const result = await createPost('Post with image', 'https://example.com/image.jpg');
+      const result = await createPost('Post with image', [mockAttachment]);
 
       expect(ApiClient.post).toHaveBeenCalledWith('/posts', {
         content: 'Post with image',
-        imageUrl: 'https://example.com/image.jpg',
-        classroomId: undefined,
+        attachments: [mockAttachment],
       });
-      expect(result.imageUrl).toBe('https://example.com/image.jpg');
+      expect(result.attachments).toEqual([mockAttachment]);
       expect(result.timestamp).toBeInstanceOf(Date);
     });
 
-    it('creates post with content, imageUrl, and classroomId', async () => {
-      const mockResponse = {
+    it('normalizes missing attachments in created post payload', async () => {
+      vi.mocked(ApiClient.post).mockResolvedValue({
         msg: 'Post created',
         post: {
           id: 'new-post-3',
-          content: 'Classroom post',
+          content: 'No attachments key',
           authorId: 'user-1',
-          classroomId: 'classroom-99',
           timestamp: '2026-03-09T16:00:00Z',
           likes: 0,
           comments: 0,
         },
-      };
+      } as any);
 
-      vi.mocked(ApiClient.post).mockResolvedValue(mockResponse as any);
+      const result = await createPost('No attachments key');
 
-      const result = await createPost('Classroom post', undefined, 'classroom-99');
+      expect(result.attachments).toEqual([]);
+      expect(result.timestamp.toISOString()).toBe('2026-03-09T16:00:00.000Z');
+    });
+  });
 
-      expect(ApiClient.post).toHaveBeenCalledWith('/posts', {
-        content: 'Classroom post',
-        imageUrl: undefined,
-        classroomId: 'classroom-99',
+  describe('uploadPostAttachmentFile', () => {
+    it('uploads file and maps response to CreateAttachment', async () => {
+      const file = new File(['img-bytes'], 'my photo.jpg', { type: 'image/jpeg' });
+      vi.mocked(ApiClient.request).mockResolvedValue({
+        attachment: {
+          publicUrl: 'https://cdn.example.com/my-photo.jpg',
+          key: 'uploads/my-photo.jpg',
+          sizeBytes: 9,
+          contentType: 'image/jpeg',
+        },
+      } as any);
+
+      const result = await uploadPostAttachmentFile(file);
+
+      expect(ApiClient.request).toHaveBeenCalledWith(
+        '/posts/attachments/upload',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) })
+      );
+      expect(result).toEqual({
+        filename: 'my photo.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 9,
+        storageKey: 'uploads/my-photo.jpg',
+        url: 'https://cdn.example.com/my-photo.jpg',
       });
-      expect(result.timestamp).toBeInstanceOf(Date);
     });
 
-    it('creates post with all optional parameters', async () => {
-      const mockResponse = {
-        msg: 'Post created',
-        post: {
-          id: 'new-post-4',
-          content: 'Full post',
-          authorId: 'user-1',
-          classroomId: 'classroom-100',
-          timestamp: '2026-03-09T17:00:00Z',
-          imageUrl: 'https://example.com/full.jpg',
-          likes: 0,
-          comments: 0,
-        },
-      };
+    it('falls back to second endpoint on 404 from first endpoint', async () => {
+      const file = new File(['doc'], 'notes.txt', { type: 'text/plain' });
 
-      vi.mocked(ApiClient.post).mockResolvedValue(mockResponse as any);
+      vi.mocked(ApiClient.request)
+        .mockRejectedValueOnce(new ApiError('Not Found', 404))
+        .mockResolvedValueOnce({
+          url: 'https://cdn.example.com/notes.txt',
+          name: 'notes.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 3,
+          storageKey: 'uploads/notes.txt',
+        } as any);
 
-      const result = await createPost(
-        'Full post',
-        'https://example.com/full.jpg',
-        'classroom-100'
+      const result = await uploadPostAttachmentFile(file);
+
+      expect(ApiClient.request).toHaveBeenNthCalledWith(
+        1,
+        '/posts/attachments/upload',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) })
       );
+      expect(ApiClient.request).toHaveBeenNthCalledWith(
+        2,
+        '/posts/attachments',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) })
+      );
+      expect(result.url).toBe('https://cdn.example.com/notes.txt');
+    });
 
-      expect(ApiClient.post).toHaveBeenCalledWith('/posts', {
-        content: 'Full post',
-        imageUrl: 'https://example.com/full.jpg',
-        classroomId: 'classroom-100',
+    it('throws when upload response has no valid URL', async () => {
+      const file = new File(['bad'], 'bad.png', { type: 'image/png' });
+      vi.mocked(ApiClient.request).mockResolvedValue({ attachment: {} } as any);
+
+      await expect(uploadPostAttachmentFile(file)).rejects.toThrow(
+        'Upload response did not include an attachment URL.'
+      );
+    });
+
+    it('throws non-404 errors without trying fallback endpoint', async () => {
+      const file = new File(['x'], 'x.txt', { type: 'text/plain' });
+      vi.mocked(ApiClient.request).mockRejectedValue(new ApiError('Server Error', 500));
+
+      await expect(uploadPostAttachmentFile(file)).rejects.toMatchObject({
+        message: 'Server Error',
+        status: 500,
       });
-      expect(result.imageUrl).toBe('https://example.com/full.jpg');
+      expect(ApiClient.request).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('uploadPostAttachments', () => {
+    it('uploads all files and resolves mapped attachments', async () => {
+      const first = new File(['a'], 'first.png', { type: 'image/png' });
+      const second = new File(['b'], 'second.png', { type: 'image/png' });
+
+      vi.mocked(ApiClient.request)
+        .mockResolvedValueOnce({ url: 'https://cdn.example.com/first.png', storageKey: 'k1' } as any)
+        .mockResolvedValueOnce({ url: 'https://cdn.example.com/second.png', storageKey: 'k2' } as any);
+
+      const result = await uploadPostAttachments([first, second]);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].url).toBe('https://cdn.example.com/first.png');
+      expect(result[1].url).toBe('https://cdn.example.com/second.png');
+      expect(ApiClient.request).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -27,16 +27,21 @@ vi.mock('../ui/popover', () => ({
 
 import PostFeed from '../PostFeed';
 
-const makePost = (overrides: Partial<Post> = {}): Post => ({
-  id: 'p-1',
-  authorId: '101',
-  authorName: 'Alice',
-  content: 'Original post content',
-  timestamp: new Date(Date.now() - 10 * 60 * 1000),
-  likes: 0,
-  comments: 0,
-  ...overrides,
-});
+const makePost = (overrides: Partial<Post> = {}): Post => {
+  const { attachments, ...restOverrides } = overrides;
+
+  return {
+    id: 'p-1',
+    authorId: '101',
+    authorName: 'Alice',
+    content: 'Original post content',
+    attachments: attachments ?? [],
+    timestamp: new Date(Date.now() - 10 * 60 * 1000),
+    likes: 0,
+    comments: 0,
+    ...restOverrides,
+  };
+};
 
 const mockAccount: Account = {
   id: '999',
