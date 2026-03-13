@@ -24,6 +24,21 @@ const hashPassword = async (plainText: string): Promise<string> => {
     .join('');
 };
 
+/**
+ * Truncates a string to a specified length and adds an ellipsis.
+ * @param {string} str - The input string.
+ * @param {number} limit - The character threshold (default 30).
+ * @returns {string}
+ */
+const truncateString = (str?: string, limit = 46): string => {
+  if (!str) return '';
+  if (typeof str !== 'string') return '';
+  
+  return str.length > limit 
+    ? str.slice(0, limit) + '...' 
+    : str;
+};
+
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -179,7 +194,7 @@ export default function LoginDialog({
                       !selectedNetworkUrl && 'text-slate-500 dark:text-slate-400',
                     )}
                   >
-                    {selectedNetworkUrl || 'Select a network'}
+                    {truncateString(selectedNetworkUrl) || 'Select a network'}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
                 </Button>
@@ -210,7 +225,7 @@ export default function LoginDialog({
                             selectedNetworkUrl === defaultNetworkUrl ? 'opacity-100' : 'opacity-0',
                           )}
                         />
-                        Default network ({defaultNetworkUrl})
+                        Default network ({truncateString(defaultNetworkUrl)})
                       </CommandItem>
                     </CommandGroup>
                     {previousNetworkOptions.length > 0 && (
@@ -223,7 +238,7 @@ export default function LoginDialog({
                                 selectedNetworkUrl === networkUrl ? 'opacity-100' : 'opacity-0',
                               )}
                             />
-                            <span className="truncate">{networkUrl}</span>
+                            <span className="truncate">{truncateString(networkUrl)}</span>
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -237,7 +252,7 @@ export default function LoginDialog({
                               selectedNetworkUrl === networkInput.trim() ? 'opacity-100' : 'opacity-0',
                             )}
                           />
-                          <span className="truncate">Use {networkInput.trim()}</span>
+                          <span className="truncate">Use {truncateString(networkInput.trim())}</span>
                         </CommandItem>
                       </CommandGroup>
                     )}
