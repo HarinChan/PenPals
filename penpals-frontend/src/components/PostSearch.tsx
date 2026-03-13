@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import React from 'react';
+import { Card } from './ui/card';
 import { Search, Loader2, X, Languages, RotateCcw } from 'lucide-react';
 import { queryPostsFromChromaDB } from '../services/chromadb';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import ClassroomDetailDialog from './ClassroomDetailDialog';
+import { Badge } from './ui/badge';
+import type { Attachment } from './PostCreator';
+import type { Account, Classroom } from '../types';
 import { FriendsService } from '../services/friends';
-import type { Classroom, Account } from '../types';
+import ClassroomDetailDialog from './ClassroomDetailDialog';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 interface SearchResult {
   id: string;
@@ -15,7 +17,7 @@ interface SearchResult {
   authorName: string;
   timestamp: string;
   similarity: number;
-  imageUrl?: string;
+  attachments: Attachment[];
 }
 
 interface TranslationState {
@@ -170,15 +172,18 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
     try {
       const response = await queryPostsFromChromaDB(query, 10);
       if (response.status === 'success' && response.results) {
-        setResults(response.results.map(r => ({
-          id: r.id,
-          authorId: resolveClassroomId(r.id, r.metadata || {}),
-          content: r.document,
-          authorName: r.metadata.authorName || r.metadata.author || 'Unknown',
-          timestamp: r.metadata.timestamp || new Date().toISOString(),
-          similarity: r.similarity,
-          imageUrl: r.metadata.imageUrl,
-        })));
+        const searchResults: SearchResult[] = response.results.map(result => ({
+          id: result.id,
+          authorId: resolveClassroomId(result.id, result.metadata),
+          content: result.document,
+          authorName: result.metadata.authorName || result.metadata.author || 'Unknown',
+          timestamp: result.metadata.timestamp || new Date().toISOString(),
+          similarity: result.similarity,
+          attachments: Array.isArray(result.metadata.attachments)
+            ? result.metadata.attachments
+            : [],
+        }));
+        setResults(searchResults);
       } else {
         setResults([]);
       }
@@ -302,12 +307,11 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
               )}
             </div>
 
-            {!isSearching && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-14 gap-2">
-                <span className="text-3xl">🔍</span>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">No posts matched your search</p>
+            {results.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                {isSearching ? 'Searching...' : 'No posts found matching your search.'}
               </div>
-            )}
+            ) : null}
 
             {results.map(result => {
               const tx = getTx(result.id);
@@ -422,7 +426,7 @@ export default function PostSearch({ currentAccount, classrooms, onAccountUpdate
                           </span>
                         )}
 
-                        {result.imageUrl && (
+                        {result.attachments.some((a) => a.mimeType?.startsWith('image/')) && (
                           <span className="inline-flex items-center gap-1 mt-2 text-xs text-slate-400 dark:text-slate-500
                             bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                             📷 Contains image

@@ -1,10 +1,12 @@
 // API Service for ChromaDB operations
+import { ApiClient } from './api';
 
 // Use environment variable or default to localhost:5001
 const runtimeImportMeta = import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 };
 const API_BASE_URL = runtimeImportMeta.env?.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5001/api';
+const getApiBaseUrl = () => API_BASE_URL;
 
 export interface ChromaDBUploadResponse {
   status: 'success' | 'error';
@@ -33,7 +35,7 @@ export interface PostMetadata {
   timestamp: string;
   likes: number;
   comments: number;
-  imageUrl?: string;
+  attachmentCount?: number;
 }
 
 /**
@@ -45,7 +47,7 @@ export async function uploadPostToChromaDB(
   metadata: PostMetadata
 ): Promise<ChromaDBUploadResponse> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+    const response = await fetch(`${getApiBaseUrl()}/documents/upload`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -76,33 +78,23 @@ export async function uploadPostToChromaDB(
  */
 export async function queryPostsFromChromaDB(
   query: string,
-  nResults: number = 5
+  nResults: number = 10
 ): Promise<ChromaDBQueryResponse> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/documents/query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        n_results: nResults,
-        where: { source: 'post' },
-      }),
-    });
+  const token = localStorage.getItem('access_token') || localStorage.getItem('penpals_token');
+  const response = await fetch(`${ApiClient.getBaseUrl()}/documents/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ query, n_results: nResults }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error querying ChromaDB:', error);
-    return {
-      status: 'error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    };
+  if (!response.ok) {
+    throw new Error(`Query failed: ${response.status}`);
   }
+
+  return response.json() as Promise<ChromaDBQueryResponse>;
 }
 
 /**
@@ -114,7 +106,7 @@ export async function deletePostFromChromaDB(postId: string): Promise<{
   deleted_ids?: string[];
 }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/documents/delete`, {
+    const response = await fetch(`${getApiBaseUrl()}/documents/delete`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

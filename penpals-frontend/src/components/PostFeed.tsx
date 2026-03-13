@@ -199,6 +199,7 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
         {posts.map((post) => {
           const state = getPostState(post.id);
           const isOwn = post.authorId === currentUserId;
+          const attachments = Array.isArray(post.attachments) ? post.attachments : [];
 
           return (
             <article
@@ -323,14 +324,40 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
                       </span>
                     )}
 
-                    {/* Post image */}
-                    {post.imageUrl && (
-                      <div className="mt-3 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700">
-                        <ImageWithFallback
-                          src={post.imageUrl}
-                          alt="Post image"
-                          className="w-full max-h-80 object-cover"
-                        />
+                    {/* Attachments */}
+                    {attachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {attachments.map((attachment, index) => {
+                          const isImage = attachment.mimeType.startsWith('image/');
+                          const attachmentKey = attachment.id || `${post.id}-attachment-${index}`;
+                          if (isImage) {
+                            return (
+                              <div
+                                key={attachmentKey}
+                                className="rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700"
+                              >
+                                <ImageWithFallback
+                                  src={attachment.url}
+                                  alt={attachment.filename}
+                                  className="w-full max-h-80 object-cover"
+                                />
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <a
+                              key={attachmentKey}
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2
+                                text-sm text-blue-700 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                            >
+                              {attachment.filename}
+                            </a>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
