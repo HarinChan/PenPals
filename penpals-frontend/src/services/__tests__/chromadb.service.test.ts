@@ -34,7 +34,7 @@ describe('chromadb service', () => {
         timestamp: '2026-03-09T12:00:00Z',
         likes: 5,
         comments: 2,
-        imageUrl: 'https://example.com/image.png',
+        attachmentCount: 1,
       };
 
       const result = await uploadPostToChromaDB('post-123', 'Hello world!', metadata);
@@ -148,8 +148,7 @@ describe('chromadb service', () => {
         },
         body: JSON.stringify({
           query: 'search term',
-          n_results: 5,
-          where: { source: 'post' },
+          n_results: 10,
         }),
       });
       expect(result).toEqual(mockResponse);
@@ -178,46 +177,30 @@ describe('chromadb service', () => {
         body: JSON.stringify({
           query: 'custom query',
           n_results: 10,
-          where: { source: 'post' },
         }),
       });
       expect(result).toEqual(mockResponse);
     });
 
-    it('returns error response when fetch response is not ok', async () => {
+    it('throws error when fetch response is not ok', async () => {
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
         status: 404,
       } as Response);
 
-      const result = await queryPostsFromChromaDB('test query');
-
-      expect(result).toEqual({
-        status: 'error',
-        message: 'HTTP error! status: 404',
-      });
+      await expect(queryPostsFromChromaDB('test query')).rejects.toThrow('Query failed: 404');
     });
 
-    it('catches and returns error when fetch throws', async () => {
+    it('catches and throws error when fetch throws', async () => {
       vi.mocked(fetch).mockRejectedValue(new Error('Connection refused'));
 
-      const result = await queryPostsFromChromaDB('test');
-
-      expect(result).toEqual({
-        status: 'error',
-        message: 'Connection refused',
-      });
+      await expect(queryPostsFromChromaDB('test')).rejects.toThrow('Connection refused');
     });
 
     it('handles non-Error thrown values gracefully', async () => {
       vi.mocked(fetch).mockRejectedValue(42);
 
-      const result = await queryPostsFromChromaDB('numeric error');
-
-      expect(result).toEqual({
-        status: 'error',
-        message: 'Unknown error',
-      });
+      await expect(queryPostsFromChromaDB('numeric error')).rejects.toEqual(42);
     });
   });
 

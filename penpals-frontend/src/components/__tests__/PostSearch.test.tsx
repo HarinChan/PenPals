@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Account } from '../../types';
@@ -63,7 +64,7 @@ describe('PostSearch', () => {
           metadata: {
             authorName: 'Alice',
             timestamp: '2026-03-08T12:00:00.000Z',
-            imageUrl: 'https://example.com/1.jpg',
+            attachments: [{ mimeType: 'image/jpeg' }],
           },
           similarity: 0.83,
         },
@@ -120,7 +121,7 @@ describe('PostSearch', () => {
     await user.type(screen.getByPlaceholderText(/search posts/i), 'nothing');
     await user.click(screen.getByRole('button', { name: /^search$/i }));
 
-    expect(await screen.findByText(/no posts matched your search/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no posts found matching your search/i)).toBeInTheDocument();
   });
 
   it('clears query and results when clear button is clicked', async () => {
