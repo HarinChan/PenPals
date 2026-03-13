@@ -91,7 +91,11 @@ export class ClassroomService {
     msg: string;
     classroom: ClassroomDetails;
   }> {
-    return ApiClient.post('/classrooms', data);
+    const response = await ApiClient.post<any>('/classrooms', data);
+    return {
+      msg: response.msg,
+      classroom: response.profile || response.classroom
+    };
   }
 
   /**
@@ -100,7 +104,10 @@ export class ClassroomService {
   static async getClassroom(classroomId: number): Promise<{
     classroom: ClassroomDetails;
   }> {
-    return ApiClient.get(`/classrooms/${classroomId}`);
+    const response = await ApiClient.get<any>(`/classrooms/${classroomId}`);
+    return {
+      classroom: response.profile || response.classroom
+    };
   }
 
   /**
@@ -113,7 +120,11 @@ export class ClassroomService {
     msg: string;
     classroom: ClassroomDetails;
   }> {
-    return ApiClient.put(`/classrooms/${classroomId}`, data);
+    const response = await ApiClient.put<any>(`/classrooms/${classroomId}`, data);
+    return {
+      msg: response.msg,
+      classroom: response.profile || response.classroom
+    };
   }
 
   /**
@@ -147,7 +158,12 @@ export class ClassroomService {
    * Search for classrooms by interests
    */
   static async searchClassrooms(data: SearchClassroomsData): Promise<SearchResponse> {
-    return ApiClient.post<SearchResponse>('/classrooms/search', data);
+    const response = await ApiClient.post<any>('/classrooms/search', data);
+    return {
+      matched_classrooms: response.matched_profiles || response.matched_classrooms || [],
+      search_query: response.search_query,
+      total_results: response.total_results || 0
+    };
   }
 
   /**
@@ -164,7 +180,15 @@ export class ClassroomService {
       connected_at: string;
     };
   }> {
-    return ApiClient.post(`/classrooms/${targetClassroomId}/connect`, data);
+    const response = await ApiClient.post<any>(`/classrooms/${targetClassroomId}/connect`, data);
+    return {
+      msg: response.msg,
+      connection: {
+        from_classroom: response.connection?.from_profile || response.connection?.from_classroom,
+        to_classroom: response.connection?.to_profile || response.connection?.to_classroom,
+        connected_at: response.connection?.connected_at
+      }
+    };
   }
 
   /**
@@ -176,7 +200,13 @@ export class ClassroomService {
     friends: ClassroomFriend[];
     friends_count: number;
   }> {
-    return ApiClient.get(`/classrooms/${classroomId}/friends`);
+    const response = await ApiClient.get<any>(`/classrooms/${classroomId}/friends`);
+    return {
+      classroom_id: response.profile_id || response.classroom_id,
+      classroom_name: response.profile_name || response.classroom_name,
+      friends: response.friends || [],
+      friends_count: response.friends_count || 0
+    };
   }
 
   /**
