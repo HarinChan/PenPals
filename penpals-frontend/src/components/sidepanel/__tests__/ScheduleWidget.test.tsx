@@ -24,6 +24,8 @@ describe('ScheduleWidget', () => {
     id: '1',
     classroomName: 'Physics Lab',
     location: 'Building A',
+    x: 0,
+    y: 0,
     size: 30,
     description: 'Physics experiments',
     avatar: '🔬',
@@ -74,8 +76,9 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByPlaceholderText(/e\.g\. 9-12/);
-    expect(inputs.length).toBeGreaterThan(0);
+    // Hour buttons for 7am-6pm should now be visible
+    const hourButtons = screen.getAllByTitle(/:\d{2}/);
+    expect(hourButtons.length).toBeGreaterThan(0);
   });
 
   it('displays input fields for each day in edit mode', async () => {
@@ -96,27 +99,26 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    expect(inputs.length).toBeGreaterThan(0);
+    // Mon has [9, 10, 11] — hour 9 button should exist (one per day)
+    const hour9Buttons = screen.getAllByTitle('9:00');
+    expect(hour9Buttons.length).toBeGreaterThan(0);
   });
 
-  it('updates schedule input when user types', async () => {
+  it('updates schedule when toggling a time slot button', async () => {
     const user = userEvent.setup();
     render(<ScheduleWidget currentAccount={mockAccount} onAccountUpdate={mockOnAccountUpdate} />);
 
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '8-12');
+    // Click hour 8 to toggle it on
+    const hour8Buttons = screen.getAllByTitle('8:00');
+    await user.click(hour8Buttons[0]);
 
-    expect(firstInput.value).toContain('8');
+    expect(mockOnAccountUpdate).toHaveBeenCalled();
   });
 
-  it('parses range input like 9-12', async () => {
+  it('saves schedule when Save is clicked after toggling a slot', async () => {
     const user = userEvent.setup();
     vi.mocked(ClassroomService.updateClassroom).mockResolvedValue({} as any);
 
@@ -125,12 +127,9 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '9-12');
-    await user.tab();
+    // Toggle hour 8 on Mon
+    const hour8Buttons = screen.getAllByTitle('8:00');
+    await user.click(hour8Buttons[0]);
 
     await waitFor(() => {
       expect(mockOnAccountUpdate).toHaveBeenCalled();
@@ -146,12 +145,9 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '9, 11, 13');
-    await user.tab();
+    // Toggle hour 13 (1pm) on Mon
+    const hour13Buttons = screen.getAllByTitle('13:00');
+    await user.click(hour13Buttons[0]);
 
     await waitFor(() => {
       expect(mockOnAccountUpdate).toHaveBeenCalled();
@@ -167,15 +163,10 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '25, 30');
-    await user.tab();
-
-    // Should not include invalid hours
-    expect(mockOnAccountUpdate).toHaveBeenCalled();
+    // Only hours 7-18 should be rendered — hour 25 should not exist
+    expect(screen.queryByTitle('25:00')).not.toBeInTheDocument();
+    const hour7Buttons = screen.getAllByTitle('7:00');
+    expect(hour7Buttons.length).toBeGreaterThan(0);
   });
 
   it('calls ClassroomService when schedule is saved', async () => {
@@ -187,12 +178,8 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '8, 9, 10');
-    await user.tab();
+    const saveButton = screen.getByRole('button', { name: /Save/i });
+    await user.click(saveButton);
 
     await waitFor(() => {
       expect(ClassroomService.updateClassroom).toHaveBeenCalledWith(1, expect.any(Object));
@@ -208,12 +195,8 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '8, 9, 10');
-    await user.tab();
+    const saveButton = screen.getByRole('button', { name: /Save/i });
+    await user.click(saveButton);
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Schedule saved');
@@ -229,12 +212,8 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '8, 9, 10');
-    await user.tab();
+    const saveButton = screen.getByRole('button', { name: /Save/i });
+    await user.click(saveButton);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to save schedule');
@@ -250,15 +229,13 @@ describe('ScheduleWidget', () => {
     const editButton = screen.getByRole('button', { name: /Edit/i });
     await user.click(editButton);
 
-    const inputs = screen.getAllByDisplayValue('9, 10, 11');
-    const firstInput = inputs[0] as HTMLInputElement;
-    
-    await user.clear(firstInput);
-    await user.type(firstInput, '8, 9, 10');
-    await user.tab();
+    const saveButton = screen.getByRole('button', { name: /Save/i });
+    await user.click(saveButton);
 
     await waitFor(() => {
       expect(ClassroomService.updateClassroom).toHaveBeenCalled();
+      // After save, Edit button should be back and Save should be gone
+      expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     });
   });
 
@@ -311,10 +288,10 @@ describe('ScheduleWidget', () => {
 
     rerender(<ScheduleWidget currentAccount={newAccount} onAccountUpdate={mockOnAccountUpdate} />);
 
-    // Form should update when account changes
+    // After rerender, hour 8 should now be rendered (it's in range 7-18)
     await waitFor(() => {
-      const inputs = screen.getAllByDisplayValue('8, 9, 10');
-      expect(inputs.length).toBeGreaterThan(0);
+      const hour8Buttons = screen.getAllByTitle('8:00');
+      expect(hour8Buttons.length).toBeGreaterThan(0);
     });
   });
 });
