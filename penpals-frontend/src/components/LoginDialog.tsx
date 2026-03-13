@@ -30,7 +30,7 @@ const hashPassword = async (plainText: string): Promise<string> => {
  * @param {number} limit - The character threshold (default 30).
  * @returns {string}
  */
-const truncateString = (str?: string, limit = 46): string => {
+const truncateString = (str?: string, limit = 42): string => {
   if (!str) return '';
   if (typeof str !== 'string') return '';
   
