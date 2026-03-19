@@ -38,13 +38,6 @@ Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngin
     npm install
 ```
 
-3. **Run the backend (alternatively run MirrorMirror):**
-```bash
-    cd penpals-backend
-    pip install -r requirements.txt
-    python src/app.py
-```
-
 4. **Run the app:**
 ```bash
     cd penpals-frontend
@@ -63,6 +56,12 @@ Under the hood, [MirrorMirror](https://github.com/YodaImperium/MirrorMirrorEngin
     cd ..
     ./penpals-frontend/src-tauri/target/release/app.exe
 ```
+---
+## **Connecting to a server:**
+To use PenPals you must connect to a MirrorMirror engine server. If you don't have access to a publicly available instance, you can host your own. For this follow [https://github.com/HarinChan/MirrorMirrorEngine](https://github.com/HarinChan/MirrorMirrorEngine).
+Alternatively, you can also run `penpals-backend`. For this you should: `cd penpals-backend`, then `pip -r requirements.txt`, and finally `python src/app.py`.
+
+Important Note: `penpals-backend` was intended for development only and may not fully support all functions of the PenPals AI application. It is now fully replaced by the MirrorMirror engine: [https://github.com/HarinChan/MirrorMirrorEngine](https://github.com/HarinChan/MirrorMirrorEngine).
 
 ---
 ## Run Frontend Tests
