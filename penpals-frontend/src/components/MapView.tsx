@@ -8,6 +8,9 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useTheme } from './ThemeProvider';
 
+const normalizeInterestKey = (interest: string): string =>
+  interest.trim().toLowerCase().replace(/\s+/g, ' ');
+
 // Fix Leaflet's default icon path issues in Vite/Webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -228,8 +231,11 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
       }
     }
 
-    const matchingInterests = classroom.interests.filter(interest =>
-      (myClassroom as any).interests?.includes(interest)
+    const myInterestKeys = new Set(
+      (((myClassroom as any).interests || []) as string[]).map((interest) => normalizeInterestKey(interest))
+    );
+    const matchingInterests = classroom.interests.filter((interest) =>
+      myInterestKeys.has(normalizeInterestKey(interest))
     );
     const interestMatchRatio = (myClassroom as any).interests?.length > 0
       ? matchingInterests.length / (myClassroom as any).interests.length
@@ -551,7 +557,7 @@ export default function MapView({ onClassroomSelect, selectedClassroom, myClassr
                             className={`flex flex-col text-left p-2 rounded-md text-xs transition-colors border
                               ${selectedClassroom?.id === c.id 
                                 ? (theme === 'dark' ? 'bg-blue-900/40 border-blue-700/50' : 'bg-blue-50 border-blue-200')
-                                : (theme === 'dark' ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-white hover:bg-slate-50 border-slate-200')
+                                : (theme === 'dark' ? 'bg-slate-800/70 border-slate-700/60 hover:bg-slate-700/80' : 'bg-white border-slate-200 hover:bg-slate-50')
                               }`}
                           >
                             <span className="font-medium truncate block w-full">

@@ -12,6 +12,9 @@ import { toTitleCase } from './helpers';
 import { toast } from 'sonner';
 import { ClassroomService } from '../../services';
 
+const normalizeInterestKey = (interest: string): string =>
+  interest.trim().toLowerCase().replace(/\s+/g, ' ');
+
 interface InterestsWidgetProps {
   currentAccount: Account;
   onAccountUpdate: (account: Account) => void;
@@ -25,48 +28,79 @@ export default function InterestsWidget({
   const [customInterest, setCustomInterest] = useState('');
   const [isSavingInterests, setIsSavingInterests] = useState(false);
 
+  const canonicalSubjectMap = useMemo(() => {
+    const map = new Map<string, string>();
+    AVAILABLE_SUBJECTS.forEach((subject) => {
+      map.set(normalizeInterestKey(subject), subject);
+    });
+    return map;
+  }, []);
+
+  const toDisplayInterest = (interest: string) => {
+    const normalized = normalizeInterestKey(interest);
+    return canonicalSubjectMap.get(normalized) || toTitleCase(normalized);
+  };
+
+  const selectedInterestKeys = useMemo(
+    () => new Set((currentAccount.interests || []).map((interest) => normalizeInterestKey(interest))),
+    [currentAccount.interests]
+  );
+
   const cleanedInterests = useMemo(() => {
     const normalized = new Map<string, string>();
     (currentAccount.interests || []).forEach((interest) => {
-      const trimmed = interest.trim();
-      if (trimmed) {
-        const lowercase = trimmed.toLowerCase();
-        normalized.set(lowercase, trimmed);
+      const normalizedKey = normalizeInterestKey(interest);
+      if (normalizedKey) {
+        normalized.set(normalizedKey, toDisplayInterest(interest));
       }
     });
     return Array.from(normalized.values());
-  }, [currentAccount.interests]);
+  }, [currentAccount.interests, canonicalSubjectMap]);
 
   const allInterests = useMemo(() => {
-    const combined = new Set([...AVAILABLE_SUBJECTS, ...cleanedInterests]);
-    return Array.from(combined);
+    const combined = new Map<string, string>();
+    AVAILABLE_SUBJECTS.forEach((subject) => {
+      combined.set(normalizeInterestKey(subject), subject);
+    });
+    cleanedInterests.forEach((interest) => {
+      combined.set(normalizeInterestKey(interest), toDisplayInterest(interest));
+    });
+    return Array.from(combined.values());
   }, [cleanedInterests]);
 
   const sortedInterests = useMemo(() => {
     return [...allInterests].sort((a, b) => {
-      const aChecked = currentAccount.interests.includes(a);
-      const bChecked = currentAccount.interests.includes(b);
+      const aChecked = selectedInterestKeys.has(normalizeInterestKey(a));
+      const bChecked = selectedInterestKeys.has(normalizeInterestKey(b));
       if (aChecked !== bChecked) return aChecked ? -1 : 1;
       return a.localeCompare(b);
     });
-  }, [allInterests, currentAccount.interests]);
+  }, [allInterests, selectedInterestKeys]);
 
   const toggleInterest = async (interest: string) => {
-    const newInterests = currentAccount.interests.includes(interest)
-      ? currentAccount.interests.filter(i => i !== interest)
-      : [...currentAccount.interests, interest];
+    const previousInterests = [...(currentAccount.interests || [])];
+    const toggledKey = normalizeInterestKey(interest);
+    const nextKeys = new Set(previousInterests.map((item) => normalizeInterestKey(item)));
+
+    if (nextKeys.has(toggledKey)) {
+      nextKeys.delete(toggledKey);
+    } else {
+      nextKeys.add(toggledKey);
+    }
+
+    const newInterests = Array.from(nextKeys).map((key) => canonicalSubjectMap.get(key) || toTitleCase(key));
 
     onAccountUpdate({ ...currentAccount, interests: newInterests });
 
     setIsSavingInterests(true);
     try {
-      const titleCaseInterests = newInterests.map(toTitleCase);
+      const titleCaseInterests = newInterests.map((item) => toTitleCase(normalizeInterestKey(item)));
       await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: titleCaseInterests });
       toast.success('Interest updated');
     } catch (error) {
       console.error('Failed to save interest:', error);
       toast.error('Failed to save interest');
-      onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
+      onAccountUpdate({ ...currentAccount, interests: previousInterests });
     } finally {
       setIsSavingInterests(false);
     }
@@ -77,27 +111,29 @@ export default function InterestsWidget({
     if (!trimmedInput) return;
 
     const titleCaseInput = toTitleCase(trimmedInput);
-    
-    const existingInterest = allInterests.find(
-      (interest) => interest.toLowerCase() === titleCaseInput.toLowerCase()
+
+    const existingInterest = allInterests.find((interest) =>
+      normalizeInterestKey(interest) === normalizeInterestKey(titleCaseInput)
     );
 
     if (existingInterest) {
       await toggleInterest(existingInterest);
     } else {
-      const newInterests = [...currentAccount.interests, titleCaseInput];
+      const previousInterests = [...(currentAccount.interests || [])];
+      const newInterests = [...previousInterests, toDisplayInterest(titleCaseInput)];
 
       onAccountUpdate({ ...currentAccount, interests: newInterests });
       setCustomInterest('');
 
       setIsSavingInterests(true);
       try {
-        await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: newInterests });
+        const normalizedForSave = newInterests.map((item) => toTitleCase(normalizeInterestKey(item)));
+        await ClassroomService.updateClassroom(Number(currentAccount.id), { interests: normalizedForSave });
         toast.success('Interest added');
       } catch (error) {
         console.error('Failed to save custom interest:', error);
         toast.error('Failed to save interest');
-        onAccountUpdate({ ...currentAccount, interests: currentAccount.interests });
+        onAccountUpdate({ ...currentAccount, interests: previousInterests });
       } finally {
         setIsSavingInterests(false);
       }
@@ -151,7 +187,7 @@ export default function InterestsWidget({
                     <div key={subject} className="flex items-center gap-3">
                       <Checkbox
                         id={subject}
-                        checked={currentAccount.interests.includes(subject)}
+                        checked={selectedInterestKeys.has(normalizeInterestKey(subject))}
                         onCheckedChange={() => !isSavingInterests && toggleInterest(subject)}
                         disabled={isSavingInterests}
                       />
