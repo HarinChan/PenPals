@@ -7,6 +7,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { ChevronDown, Search } from 'lucide-react';
 import { Account, Classroom } from '../../types';
 
+const normalizeInterestKey = (interest: string): string =>
+  interest.trim().toLowerCase().replace(/\s+/g, ' ');
+
 interface ClassroomsListProps {
   classrooms: Classroom[];
   currentAccount: Account;
@@ -43,8 +46,9 @@ export default function ClassroomsList({
       }
     }
 
-    const matchingInterests = classroom.interests.filter(interest =>
-      currentAccount.interests.includes(interest)
+    const myInterestKeys = new Set((currentAccount.interests || []).map((interest) => normalizeInterestKey(interest)));
+    const matchingInterests = classroom.interests.filter((interest) =>
+      myInterestKeys.has(normalizeInterestKey(interest))
     );
     const interestMatchRatio = currentAccount.interests.length > 0
       ? matchingInterests.length / currentAccount.interests.length
