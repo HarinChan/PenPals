@@ -5,6 +5,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { ChevronDown, Video, Clock } from 'lucide-react';
 import { formatMeetingDateTime } from './helpers';
+import { openExternalLink } from '../../utils/openExternalLink';
 
 interface UpcomingMeetingsWidgetProps {
   upcomingMeetings: any[];
@@ -56,7 +57,9 @@ export default function UpcomingMeetingsWidget({
                           size="sm"
                           onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();
-                            meeting.web_link && window.open(meeting.web_link, '_blank');
+                            if (meeting.web_link) {
+                              void openExternalLink(meeting.web_link);
+                            }
                           }}
                           disabled={!meeting.web_link}
                           className="h-7 text-xs bg-green-600 hover:bg-green-700 ml-2 disabled:opacity-50 disabled:cursor-not-allowed"

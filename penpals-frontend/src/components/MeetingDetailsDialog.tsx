@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { ClassroomService } from '../services/classroom';
 import { MeetingsService } from '../services/meetings';
 import { ApiClient } from '../services/api';
+import { openExternalLink } from '../utils/openExternalLink';
 
 const SCHEDULE_WINDOW_DAYS = 14;
 const ALLOWED_DURATIONS = [15, 30, 45, 60];
@@ -199,12 +200,13 @@ export default function MeetingDetailsDialog({
                 toast.error('Meetings can be scheduled up to 2 weeks in advance.');
                 return;
             }
+
             if (!ALLOWED_DURATIONS.includes(durationMinutes)) {
                 toast.error('Meeting duration must be between 15 and 60 minutes.');
                 return;
             }
 
-            let parsedCapacity: number | undefined;
+            let parsedCapacity: number | null = null;
             if (newVisibility === 'public') {
                 parsedCapacity = Number.parseInt(newMaxParticipants, 10);
                 if (!Number.isFinite(parsedCapacity) || parsedCapacity < 2) {
@@ -279,7 +281,9 @@ export default function MeetingDetailsDialog({
                 toast.success(data?.msg || 'Joined meeting');
                 onMeetingUpdated();
                 await fetchMeetingDetails(meeting.id);
-                if (link) window.open(link, '_blank');
+                if (link) {
+                    await openExternalLink(link);
+                }
                 return;
             } catch (err: any) {
                 toast.error(err.message || 'Error joining meeting');
@@ -288,7 +292,7 @@ export default function MeetingDetailsDialog({
         }
 
         if (meeting.web_link) {
-            window.open(meeting.web_link, '_blank');
+            await openExternalLink(meeting.web_link);
             return;
         }
 
@@ -666,9 +670,9 @@ export default function MeetingDetailsDialog({
                                         </Button>
                                         <Button
                                             className="bg-purple-600 hover:bg-purple-700"
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 if (meeting.web_link) {
-                                                    window.open(meeting.web_link, '_blank');
+                                                    await openExternalLink(meeting.web_link);
                                                 } else {
                                                     toast.error('Meeting link is not available yet');
                                                 }
