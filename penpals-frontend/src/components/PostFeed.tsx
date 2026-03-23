@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import ClassroomDetailDialog from './ClassroomDetailDialog';
 import { FriendsService } from '../services/friends';
 import type { Classroom, Account } from '../types';
+import { openExternalLink } from '../utils/openExternalLink';
 
 interface PostFeedProps {
   posts: Post[];
@@ -351,6 +352,10 @@ export default function PostFeed({ posts, isLoading, currentUserId, onDeletePost
                               href={attachment.url}
                               target="_blank"
                               rel="noreferrer"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                void openExternalLink(attachment.url);
+                              }}
                               className="block rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2
                                 text-sm text-blue-700 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
                             >
