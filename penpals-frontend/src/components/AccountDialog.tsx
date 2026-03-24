@@ -9,6 +9,7 @@ import { WebexService, ClassroomService } from '../services';
 import { toast } from 'sonner';
 import { Account } from '../types';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { isTauri } from '@tauri-apps/api/core';
 
 const COMMON_EMOJIS = ['🏫', '🎒', '📚', '🍎', '🎓', '🎨', '⚽️', '🌍', '⛺', '🚀', '💡', '🎵', '🎭', '💻', '🎮', '🌟', '🦄', '🦖'];
 
@@ -30,6 +31,46 @@ export default function AccountDialog({
   const [editingAccountLocation, setEditingAccountLocation] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [webexConnected, setWebexConnected] = useState(false);
+
+  const adaptWebexAuthUrlForTauri = (authUrl: string): string => {
+    if (!isTauri()) {
+      return authUrl;
+    }
+
+    try {
+      const webexAuthUrl = new URL(authUrl);
+      const redirectUri = webexAuthUrl.searchParams.get('redirect_uri');
+
+      if (!redirectUri) {
+        return authUrl;
+      }
+
+      const targetRedirect = new URL(redirectUri);
+      const appOrigin = new URL(window.location.origin);
+
+      targetRedirect.protocol = appOrigin.protocol;
+      targetRedirect.host = appOrigin.host;
+
+      webexAuthUrl.searchParams.set('redirect_uri', targetRedirect.toString());
+      return webexAuthUrl.toString();
+    } catch {
+      return authUrl;
+    }
+  };
+
+  const startWebexAuthFlow = async (failureMessage: string) => {
+    try {
+      const { url } = await WebexService.getAuthUrl();
+      if (url) {
+        window.location.href = adaptWebexAuthUrlForTauri(url);
+      } else {
+        toast.error("WebEx configuration missing on server");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(failureMessage);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -160,17 +201,7 @@ export default function AccountDialog({
                           variant="outline"
                           className="flex-1"
                           onClick={async () => {
-                            try {
-                              const { url } = await WebexService.getAuthUrl();
-                              if (url) {
-                                window.location.href = url;
-                              } else {
-                                toast.error("WebEx configuration missing on server");
-                              }
-                            } catch (e) {
-                              console.error(e);
-                              toast.error("Failed to initiate WebEx reconnection");
-                            }
+                            await startWebexAuthFlow("Failed to initiate WebEx reconnection");
                           }}
                         >
                           Reconnect
@@ -197,16 +228,7 @@ export default function AccountDialog({
                     <Button
                       className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={async () => {
-                        try {
-                          const { url } = await WebexService.getAuthUrl();
-                          if (url) {
-                            window.location.href = url;
-                          } else {
-                            toast.error("WebEx configuration missing on server");
-                          }
-                        } catch (e) {
-                          toast.error("Failed to initiate WebEx connection");
-                        }
+                        await startWebexAuthFlow("Failed to initiate WebEx connection");
                       }}
                     >
                       <Video size={16} />
