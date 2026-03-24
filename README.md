@@ -77,7 +77,7 @@ Important Note: `penpals-backend` was intended for development only and may not 
     npm run test
 ```
 
-3. **Run Tests for Coverage
+3. **Run Tests for Coverage**
 ```bash
     npm run test:coverage
 ```
